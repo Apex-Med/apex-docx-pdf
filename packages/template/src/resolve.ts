@@ -75,7 +75,7 @@ function lookup(
         message: `Missing value for ${path}`,
       }
     }
-    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+    if (!Object.hasOwn(current, segment)) {
       return {
         found: false,
         code: "TEMPLATE_VALUE_MISSING",

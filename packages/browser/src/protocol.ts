@@ -33,7 +33,7 @@ export type BrowserCompileResult = Readonly<{
 }>
 
 export type BrowserRenderResult = Readonly<{
-  pdf: Uint8Array
+  pdf: Uint8Array<ArrayBuffer>
   pageCount: number
   diagnostics: readonly Diagnostic[]
   timings: RenderTimings
@@ -60,15 +60,15 @@ export type CancelWorkerRequest = Readonly<{
 }>
 
 export type RendererWorkerRequest =
-  | CompileWorkerRequest
-  | RenderWorkerRequest
-  | CancelWorkerRequest
+  CompileWorkerRequest | RenderWorkerRequest | CancelWorkerRequest
 
 export type WorkerSuccessResponse = Readonly<{
   type: "success"
   requestId: string
   operation: "compile" | "render"
-  result: BrowserCompileResult | Omit<BrowserRenderResult, "pdf"> & { pdf: ArrayBuffer }
+  result:
+    | BrowserCompileResult
+    | (Omit<BrowserRenderResult, "pdf"> & { pdf: ArrayBuffer })
 }>
 
 export type WorkerFailureResponse = Readonly<{
@@ -85,6 +85,4 @@ export type WorkerProgressResponse = Readonly<{
 }>
 
 export type RendererWorkerResponse =
-  | WorkerSuccessResponse
-  | WorkerFailureResponse
-  | WorkerProgressResponse
+  WorkerSuccessResponse | WorkerFailureResponse | WorkerProgressResponse

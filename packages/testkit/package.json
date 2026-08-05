@@ -1,0 +1,22 @@
+{
+  "name": "@apex-docx-pdf/testkit",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apex-docx-pdf/core": "workspace:*",
+    "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "@apex-docx-pdf/pdf": "workspace:*",
+    "typescript": "^6"
+  }
+}

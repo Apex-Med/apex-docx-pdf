@@ -1,0 +1,71 @@
+name: Bug report
+description: Report reproducible incorrect behavior in the supported profile
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include confidential documents or security vulnerabilities. Use private GitHub security advisories for security reports.
+  - type: input
+    id: commit
+    attributes:
+      label: Version or commit
+      description: Give the exact commit SHA, branch, or package version.
+      placeholder: 0123456789abcdef...
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Bun
+        - Node.js
+        - Browser worker / playground
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Bun 1.3.14, browser name/version if relevant, and operating system. Do not include secrets.
+      placeholder: Bun 1.3.14; Firefox 142; macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide exact commands, data, and a minimal redistributable synthetic fixture or link to a small repository.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include complete diagnostics and relevant layout-trace excerpts as text.
+    validations:
+      required: true
+  - type: textarea
+    id: determinism
+    attributes:
+      label: Reproducibility evidence
+      description: Does the same input fail consistently? Include hashes or repeat-run differences when relevant.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I confirmed this concerns currently documented behavior rather than an unsupported DOCX feature.
+          required: true
+        - label: Any attached fixture is redistributable and contains no personal, patient, customer, credential, or confidential data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

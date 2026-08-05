@@ -11,8 +11,8 @@ import { compileTemplate, resolveTemplate } from "../src"
 const style = {
   fontFamily: "Aptos",
   fontSize: twips(220),
-  bold: false,
-  italic: false,
+  fontWeight: 400,
+  fontStyle: "normal",
   underline: false,
   color: "000000",
 } as const
@@ -39,6 +39,7 @@ function documentWithRuns(runs: readonly string[]): SemanticDocument {
     type: "document",
     id: nodeId("document"),
     source: { part: "word/document.xml", xmlPath: "/w:document" },
+    numberingDefinitions: [],
     sections: [
       {
         type: "section",
@@ -67,12 +68,17 @@ function documentWithRuns(runs: readonly string[]): SemanticDocument {
               spacingBefore: twips(0),
               spacingAfter: twips(0),
               lineSpacing: null,
+              indentStart: twips(0),
+              indentEnd: twips(0),
+              firstLineIndent: twips(0),
               keepWithNext: false,
               keepLinesTogether: false,
+              widowControl: true,
               pageBreakBefore: false,
+              numbering: null,
             },
             children: runs.map((run, index) =>
-              text(run, index, index === 1 ? { bold: true } : {})
+              text(run, index, index === 1 ? { fontWeight: 700 } : {})
             ),
           },
         ],
@@ -109,9 +115,15 @@ describe("Phase 1 template compilation", () => {
         required: true,
       }),
     ])
-    expect(compiled.manifest.fields[0]?.sourceLocations).toEqual([
-      source.sections[0]!.blocks[0]!.children[0]!.source,
-    ])
+    const section = source.sections[0]
+    if (section === undefined) throw new Error("fixture must contain a section")
+    const block = section.blocks[0]
+    if (block === undefined)
+      throw new Error("fixture section must contain a block")
+    const child = block.children[0]
+    if (child === undefined)
+      throw new Error("fixture block must contain a child")
+    expect(compiled.manifest.fields[0]?.sourceLocations).toEqual([child.source])
     expect(compiled.jsonSchema).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       type: "object",
@@ -144,7 +156,7 @@ describe("Phase 1 template compilation", () => {
     if (!result.ok) throw new Error("Expected resolution to succeed")
     const children = result.value.sections[0]?.blocks[0]?.children ?? []
     const value = children.find((child) => child.text === "Ada Lovelace")
-    expect(value?.style.bold).toBe(false)
+    expect(value?.style.fontWeight).toBe(400)
     expect(value?.source).toEqual(
       source.sections[0]?.blocks[0]?.children[0]?.source
     )

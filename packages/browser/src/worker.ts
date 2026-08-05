@@ -1,5 +1,12 @@
-import { EngineOperationError, createDocxPdfEngine } from "@apex-docx-pdf/engine"
-import type { CompiledTemplate, Diagnostic } from "@apex-docx-pdf/core"
+import {
+  EngineOperationError,
+  createDocxPdfEngine,
+} from "@apex-docx-pdf/engine"
+import type {
+  CompiledTemplate,
+  Diagnostic,
+  EngineOptions,
+} from "@apex-docx-pdf/core"
 
 import type {
   BrowserCompileResult,
@@ -13,6 +20,10 @@ type RendererWorkerScope = Readonly<{
     type: "message",
     listener: (event: MessageEvent<RendererWorkerRequest>) => void
   ) => void
+  removeEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<RendererWorkerRequest>) => void
+  ) => void
   postMessage: (
     message: RendererWorkerResponse,
     transfer?: Transferable[]
@@ -20,11 +31,14 @@ type RendererWorkerScope = Readonly<{
 }>
 
 export function installRendererWorker(
-  scope: RendererWorkerScope = globalThis as unknown as RendererWorkerScope
+  scope: RendererWorkerScope = globalThis as unknown as RendererWorkerScope,
+  engineOptions: EngineOptions | PromiseLike<EngineOptions> = {}
 ): () => void {
   const compiledTemplates = new Map<string, CompiledTemplate>()
   const controllers = new Map<string, AbortController>()
-  const enginePromise = createDocxPdfEngine()
+  const enginePromise = Promise.resolve(engineOptions).then((options) =>
+    createDocxPdfEngine(options)
+  )
 
   const onMessage = (event: MessageEvent<RendererWorkerRequest>): void => {
     const request = event.data
@@ -38,12 +52,30 @@ export function installRendererWorker(
       try {
         const engine = await enginePromise
         if (request.type === "compile") {
-          progress(scope, request.requestId, "validating", 1, 4, "Validating DOCX package")
-          const compiled = await engine.compile(new Uint8Array(request.templateBytes), {
-            unsupportedFeatures: "strict",
-            signal: controller.signal,
-          })
-          progress(scope, request.requestId, "compiling", 3, 4, "Extracting typed fields")
+          progress(
+            scope,
+            request.requestId,
+            "validating",
+            1,
+            4,
+            "Validating DOCX package"
+          )
+          const compiled = await engine.compile(
+            new Uint8Array(request.templateBytes),
+            {
+              unsupportedFeatures: "strict",
+              signal: controller.signal,
+            }
+          )
+          progress(
+            scope,
+            request.requestId,
+            "compiling",
+            3,
+            4,
+            "Extracting typed fields"
+          )
+          compiledTemplates.clear()
           compiledTemplates.set(compiled.templateHash, compiled)
           const result: BrowserCompileResult = {
             templateHash: compiled.templateHash,
@@ -70,12 +102,26 @@ export function installRendererWorker(
             []
           )
         }
-        progress(scope, request.requestId, "resolving", 1, 3, "Resolving template data")
+        progress(
+          scope,
+          request.requestId,
+          "resolving",
+          1,
+          3,
+          "Resolving template data"
+        )
         const rendered = await engine.render(compiled, request.data, {
           ...request.options,
           signal: controller.signal,
         })
-        progress(scope, request.requestId, "pdf", 2, 3, "Writing deterministic PDF")
+        progress(
+          scope,
+          request.requestId,
+          "pdf",
+          2,
+          3,
+          "Writing deterministic PDF"
+        )
         const pdf = rendered.pdf.slice().buffer
         progress(scope, request.requestId, "complete", 3, 3, "PDF ready")
         respond(
@@ -111,6 +157,7 @@ export function installRendererWorker(
 
   scope.addEventListener("message", onMessage)
   return () => {
+    scope.removeEventListener("message", onMessage)
     for (const controller of controllers.values()) controller.abort()
     controllers.clear()
     compiledTemplates.clear()
@@ -160,7 +207,8 @@ function failureFrom(error: unknown): Readonly<{
   }
   return {
     code: "browser/internal",
-    message: error instanceof Error ? error.message : "The render worker failed",
+    message:
+      error instanceof Error ? error.message : "The render worker failed",
     diagnostics: [],
   }
 }

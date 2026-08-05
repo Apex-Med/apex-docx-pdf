@@ -2,6 +2,8 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 
 import appCss from "@workspace/ui/globals.css?url"
 
+import { ThemeProvider, themeInitScript } from "@/components/theme-provider"
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -21,8 +23,8 @@ export const Route = createRootRoute({
           "Create templates in Word or Google Docs and generate deterministic searchable PDFs in TypeScript without LibreOffice or a conversion API.",
       },
       {
-        name: "theme-color",
-        content: "#ffffff",
+        name: "color-scheme",
+        content: "light dark",
       },
       {
         property: "og:title",
@@ -52,12 +54,16 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="overscroll-none" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: this static, source-controlled script contains no user input and must run before hydration. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body>
-        {children}
+      <body className="overscroll-none">
+        <ThemeProvider defaultTheme="system" storageKey="apex-ui-theme">
+          {children}
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

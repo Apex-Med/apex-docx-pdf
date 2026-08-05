@@ -1,9 +1,21 @@
 import type { Diagnostic } from "./diagnostics"
+import type { FontFaceId, GlyphId } from "./fonts"
 import type { NodeId } from "./ids"
 import type { Rect, Twip } from "./units"
 
-export type GlyphRun = Readonly<{
+export type PositionedGlyph = Readonly<{
+  glyphId: GlyphId
+  unicode: string
+  /** Display-list coordinates: positive x is right and positive y is down. */
+  xAdvance: Twip
+  yAdvance: Twip
+  xOffset: Twip
+  yOffset: Twip
+}>
+
+export type StandardGlyphRun = Readonly<{
   type: "glyph-run"
+  fontSource: "standard"
   sourceNodeId: NodeId
   text: string
   fontFamily: string
@@ -13,6 +25,22 @@ export type GlyphRun = Readonly<{
   baselineY: Twip
   width: Twip
 }>
+
+export type EmbeddedGlyphRun = Readonly<{
+  type: "glyph-run"
+  fontSource: "embedded"
+  sourceNodeId: NodeId
+  text: string
+  faceId: FontFaceId
+  glyphs: readonly PositionedGlyph[]
+  fontSize: Twip
+  color: string
+  x: Twip
+  baselineY: Twip
+  width: Twip
+}>
+
+export type GlyphRun = StandardGlyphRun | EmbeddedGlyphRun
 
 export type Line = Readonly<{
   type: "line"

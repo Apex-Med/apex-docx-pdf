@@ -19,3 +19,5 @@ Every rendering dependency must be pure JavaScript, TypeScript, or bundled WebAs
 Adapters must be local and covered by deterministic fixtures. Dependencies that introduce timestamps, random IDs, unstable traversal, runtime-specific compression, or hidden system-font lookup are rejected or normalised behind the adapter.
 
 Phase 1 may use a deliberately small local PDF serializer to prove positioned searchable text. Before broader font/image support, record a separate ADR comparing maintained PDF and font libraries using maintenance, licensing, determinism, portability, bundle size, positioned glyph support, and API stability.
+
+The resulting Phase 3 font decision is recorded in [ADR 0004](/adr/0004-fontkit-full-font-embedding).

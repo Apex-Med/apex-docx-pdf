@@ -5,6 +5,7 @@ import {
   type CompiledTemplate,
   type Diagnostic,
   type DocumentHash,
+  type FormatterReference,
   type ResourceLimits,
   type SemanticDocument,
   type TemplateField,
@@ -12,8 +13,11 @@ import {
 } from "@apex-docx-pdf/core"
 
 import {
+  parseBlockMarker,
   parseParagraph,
   stableDiagnostics,
+  templateDiagnostic,
+  type BlockMarker,
   type ParsedPlaceholder,
 } from "./internal"
 
@@ -31,9 +35,18 @@ export type TemplateCompileOptions = Readonly<{
 
 type FieldAccumulator = {
   kind: TemplateFieldKind
-  explicitKinds: Set<TemplateFieldKind>
+  kinds: Set<TemplateFieldKind>
   sourceLocations: ParsedPlaceholder["source"][]
   inferredFrom: string[]
+  formatters: FormatterReference[]
+  first: ParsedPlaceholder | BlockMarker
+}
+
+type BlockFrame = {
+  type: "if" | "each"
+  marker: BlockMarker
+  elseSeen: boolean
+  itemBase?: string
 }
 
 function limitsFor(options: TemplateCompileOptions): ResourceLimits {
@@ -42,78 +55,102 @@ function limitsFor(options: TemplateCompileOptions): ResourceLimits {
 
 function stableSourceDocument(document: SemanticDocument): string {
   const serialize = (value: unknown): string => {
-    if (value === null || typeof value !== "object")
-      return JSON.stringify(value)
+    if (value === null || typeof value !== "object") return JSON.stringify(value)
     if (Array.isArray(value)) return `[${value.map(serialize).join(",")}]`
     return `{${Object.keys(value)
       .sort()
       .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .map(
-        (key) =>
-          `${JSON.stringify(key)}:${serialize((value as Record<string, unknown>)[key])}`
-      )
+      .map((key) => `${JSON.stringify(key)}:${serialize((value as Record<string, unknown>)[key])}`)
       .join(",")}}`
   }
   return serialize(document)
 }
 
-async function hashDocument(
-  document: SemanticDocument,
-  signal?: AbortSignal
-): Promise<DocumentHash> {
+async function hashDocument(document: SemanticDocument, signal?: AbortSignal): Promise<DocumentHash> {
   throwIfAborted(signal)
-  const bytes = new TextEncoder().encode(stableSourceDocument(document))
-  const digest = await crypto.subtle.digest("SHA-256", bytes)
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stableSourceDocument(document)))
   throwIfAborted(signal)
-  const value = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("")
-  return documentHash(value)
+  return documentHash(Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(""))
 }
 
-function fieldDiagnostic(
-  code: string,
-  message: string,
-  placeholder: ParsedPlaceholder
-): Diagnostic {
-  return {
-    code,
-    severity: "error",
-    message,
-    source: placeholder.source,
-    nodeId: placeholder.node.id,
+function markerDiagnostic(code: string, message: string, marker: BlockMarker): Diagnostic {
+  return templateDiagnostic(code, message, marker.source, marker.node)
+}
+
+function currentItemBase(stack: readonly BlockFrame[]): string | undefined {
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const base = stack[index]?.itemBase
+    if (base !== undefined) return base
+  }
+  return undefined
+}
+
+function qualify(path: string, stack: readonly BlockFrame[]): string {
+  const base = currentItemBase(stack)
+  return base === undefined ? path : `${base}.${path}`
+}
+
+function sameFormatter(left: FormatterReference, right: FormatterReference): boolean {
+  return left.name === right.name && JSON.stringify(left.arguments) === JSON.stringify(right.arguments)
+}
+
+function addField(
+  fields: Map<string, FieldAccumulator>,
+  path: string,
+  kind: TemplateFieldKind,
+  inferredFrom: string,
+  source: ParsedPlaceholder["source"],
+  first: ParsedPlaceholder | BlockMarker,
+  formatters: readonly FormatterReference[] = []
+): void {
+  const existing = fields.get(path)
+  if (existing === undefined) {
+    fields.set(path, {
+      kind,
+      kinds: kind === "unknown" ? new Set() : new Set([kind]),
+      sourceLocations: [source],
+      inferredFrom: [inferredFrom],
+      formatters: formatters.slice(),
+      first,
+    })
+    return
+  }
+  existing.sourceLocations.push(source)
+  existing.inferredFrom.push(inferredFrom)
+  if (kind !== "unknown") existing.kinds.add(kind)
+  if (existing.kinds.size === 1) existing.kind = Array.from(existing.kinds)[0] ?? "unknown"
+  for (const formatter of formatters) {
+    if (!existing.formatters.some((candidate) => sameFormatter(candidate, formatter))) {
+      existing.formatters.push(formatter)
+    }
   }
 }
 
-function nestedPathConflicts(
-  paths: readonly string[]
-): readonly [string, string][] {
+function nestedPathConflicts(fields: ReadonlyMap<string, FieldAccumulator>): readonly [string, string][] {
   const conflicts: [string, string][] = []
-  const sorted = paths.slice().sort()
-  for (let index = 0; index < sorted.length - 1; index += 1) {
-    const current = sorted[index]
-    const next = sorted[index + 1]
-    if (
-      current !== undefined &&
-      next !== undefined &&
-      next.startsWith(`${current}.`)
-    ) {
-      conflicts.push([current, next])
+  const entries = Array.from(fields.entries()).sort(([left], [right]) => left.localeCompare(right, "en"))
+  for (let index = 0; index < entries.length; index += 1) {
+    const [parent, parentField] = entries[index] ?? []
+    if (parent === undefined || parentField === undefined) continue
+    for (let childIndex = index + 1; childIndex < entries.length; childIndex += 1) {
+      const child = entries[childIndex]?.[0]
+      if (child === undefined) continue
+      const nestedPrefix = parentField.kind === "array" ? `${parent}[].` : `${parent}.`
+      if (child.startsWith(nestedPrefix)) continue
+      if (child.startsWith(`${parent}.`) || child.startsWith(`${parent}[].`)) conflicts.push([parent, child])
     }
   }
   return conflicts
 }
 
-function buildManifest(
-  fields: ReadonlyMap<string, FieldAccumulator>
-): readonly TemplateField[] {
+function buildManifest(fields: ReadonlyMap<string, FieldAccumulator>): readonly TemplateField[] {
   return Array.from(fields.entries())
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([path, field]) => ({
       path,
       kind: field.kind,
       required: true,
-      formatters: [],
+      formatters: field.formatters,
       sourceLocations: field.sourceLocations,
       inferredFrom: field.inferredFrom,
     }))
@@ -121,65 +158,53 @@ function buildManifest(
 
 type MutableSchema = Record<string, unknown>
 
-function isObjectSchema(value: unknown): value is MutableSchema {
-  if (typeof value !== "object" || value === null || Array.isArray(value))
-    return false
-  const candidate = value as MutableSchema
-  return (
-    candidate.type === "object" &&
-    typeof candidate.properties === "object" &&
-    candidate.properties !== null &&
-    Array.isArray(candidate.required)
-  )
+function objectSchema(): MutableSchema {
+  return { type: "object", properties: {}, required: [], additionalProperties: false }
 }
 
 function schemaForKind(kind: TemplateFieldKind): MutableSchema {
   switch (kind) {
-    case "string":
-      return { type: "string" }
-    case "number":
-      return { type: "number" }
-    case "boolean":
-      return { type: "boolean" }
-    case "date":
-      return { type: "string", format: "date-time" }
-    default:
-      return {}
+    case "string": return { type: "string" }
+    case "number": return { type: "number" }
+    case "boolean": return { type: "boolean" }
+    case "date": return { type: "string", format: "date-time" }
+    case "array": return { type: "array", items: objectSchema() }
+    default: return {}
   }
 }
 
-function buildSchema(
-  fields: readonly TemplateField[]
-): Readonly<Record<string, unknown>> {
+function ensureProperty(schema: MutableSchema, name: string): [MutableSchema, string[]] {
+  const properties = schema.properties as MutableSchema
+  const required = schema.required as string[]
+  if (!required.includes(name)) required.push(name)
+  return [properties, required]
+}
+
+function buildSchema(fields: readonly TemplateField[]): Readonly<Record<string, unknown>> {
   const root: MutableSchema = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    type: "object",
-    properties: {},
-    required: [],
-    additionalProperties: false,
+    ...objectSchema(),
   }
   for (const field of fields) {
     const segments = field.path.split(".")
     let schema = root
     for (let index = 0; index < segments.length; index += 1) {
-      const segment = segments[index]
-      if (segment === undefined) continue
-      const properties = schema.properties as MutableSchema
-      const required = schema.required as string[]
-      if (!required.includes(segment)) required.push(segment)
-      if (index === segments.length - 1) {
-        properties[segment] = schemaForKind(field.kind)
+      const raw = segments[index]
+      if (raw === undefined) continue
+      const arrayItem = raw.endsWith("[]")
+      const name = arrayItem ? raw.slice(0, -2) : raw
+      const [properties] = ensureProperty(schema, name)
+      const last = index === segments.length - 1
+      if (last) {
+        properties[name] = schemaForKind(field.kind)
+      } else if (arrayItem) {
+        const existing = properties[name] as MutableSchema | undefined
+        if (existing?.type !== "array") properties[name] = { type: "array", items: objectSchema() }
+        schema = (properties[name] as MutableSchema).items as MutableSchema
       } else {
-        const existing = properties[segment]
-        if (!isObjectSchema(existing)) {
-          properties[segment] = {
-            type: "object",
-            properties: {},
-            required: [],
-            additionalProperties: false,
-          }
-        }
-        schema = properties[segment] as MutableSchema
+        const existing = properties[name] as MutableSchema | undefined
+        if (existing?.type !== "object") properties[name] = objectSchema()
+        schema = properties[name] as MutableSchema
       }
     }
   }
@@ -188,42 +213,42 @@ function buildSchema(
 
 function starterForKind(kind: TemplateFieldKind): unknown {
   switch (kind) {
-    case "number":
-      return 0
-    case "boolean":
-      return false
-    case "date":
-      return "1970-01-01T00:00:00.000Z"
-    default:
-      return ""
+    case "number": return 0
+    case "boolean": return false
+    case "date": return "1970-01-01T00:00:00.000Z"
+    case "array": return [{}]
+    default: return ""
   }
 }
 
-function buildStarterData(
-  fields: readonly TemplateField[]
-): Readonly<Record<string, unknown>> {
+function buildStarterData(fields: readonly TemplateField[]): Readonly<Record<string, unknown>> {
   const root: Record<string, unknown> = {}
   for (const field of fields) {
     const segments = field.path.split(".")
-    let value: Record<string, unknown> = root
+    let value = root
     for (let index = 0; index < segments.length; index += 1) {
-      const segment = segments[index]
-      if (segment === undefined) continue
-      if (index === segments.length - 1) {
-        value[segment] = starterForKind(field.kind)
+      const raw = segments[index]
+      if (raw === undefined) continue
+      const arrayItem = raw.endsWith("[]")
+      const name = arrayItem ? raw.slice(0, -2) : raw
+      const last = index === segments.length - 1
+      if (last) {
+        value[name] = starterForKind(field.kind)
+      } else if (arrayItem) {
+        if (!Array.isArray(value[name])) value[name] = [{}]
+        const item = (value[name] as unknown[])[0]
+        if (typeof item !== "object" || item === null || Array.isArray(item)) (value[name] as unknown[])[0] = {}
+        value = (value[name] as Record<string, unknown>[])[0] as Record<string, unknown>
       } else {
-        const next = value[segment]
-        if (typeof next !== "object" || next === null || Array.isArray(next)) {
-          value[segment] = {}
-        }
-        value = value[segment] as Record<string, unknown>
+        if (typeof value[name] !== "object" || value[name] === null || Array.isArray(value[name])) value[name] = {}
+        value = value[name] as Record<string, unknown>
       }
     }
   }
   return root
 }
 
-/** Compiles Phase 1 inline placeholders from a normalized semantic document. */
+/** Compiles deterministic inline values and paragraph-level if/each blocks. */
 export async function compileTemplate(
   source: SemanticDocument,
   options: TemplateCompileOptions = {}
@@ -232,76 +257,72 @@ export async function compileTemplate(
   const diagnostics: Diagnostic[] = []
   const fields = new Map<string, FieldAccumulator>()
   const placeholderNodes: Record<string, string> = {}
-  const firstByPath = new Map<string, ParsedPlaceholder>()
 
   for (const section of source.sections) {
-    throwIfAborted(options.signal)
+    const stack: BlockFrame[] = []
     for (const paragraph of section.blocks) {
+      throwIfAborted(options.signal)
+      const markerResult = parseBlockMarker(paragraph, limits)
+      if (markerResult !== undefined && "code" in markerResult) {
+        diagnostics.push(markerResult)
+        continue
+      }
+      if (markerResult !== undefined) {
+        const marker = markerResult
+        if (marker.type === "if" || marker.type === "each") {
+          const markerPath = marker.path
+          if (markerPath === undefined) continue
+          const canonical = qualify(markerPath, stack)
+          const kind: TemplateFieldKind = marker.type === "if" ? "boolean" : "array"
+          addField(fields, canonical, kind, `{{${marker.raw}}}`, marker.source, marker)
+          stack.push({
+            type: marker.type,
+            marker,
+            elseSeen: false,
+            ...(marker.type === "each" ? { itemBase: `${canonical}[]` } : {}),
+          })
+        } else if (marker.type === "else") {
+          const frame = stack.at(-1)
+          if (frame?.type !== "if") diagnostics.push(markerDiagnostic("TEMPLATE_UNBALANCED_BLOCK", "An else marker must belong to an open if block", marker))
+          else if (frame.elseSeen) diagnostics.push(markerDiagnostic("TEMPLATE_DUPLICATE_ELSE", "An if block can contain only one else marker", marker))
+          else frame.elseSeen = true
+        } else {
+          const expected = marker.type === "endIf" ? "if" : "each"
+          const frame = stack.at(-1)
+          if (frame?.type !== expected) diagnostics.push(markerDiagnostic("TEMPLATE_UNBALANCED_BLOCK", `Closing ${expected} marker does not match the open block`, marker))
+          else stack.pop()
+        }
+        continue
+      }
+
       const parsed = parseParagraph(paragraph, limits)
       diagnostics.push(...parsed.diagnostics)
       for (const placeholder of parsed.placeholders) {
         throwIfAborted(options.signal)
-        if (placeholderNodes[placeholder.node.id] === undefined) {
-          placeholderNodes[placeholder.node.id] = placeholder.path
-        }
-        const existing = fields.get(placeholder.path)
-        if (existing === undefined) {
-          fields.set(placeholder.path, {
-            kind: placeholder.kind,
-            explicitKinds: placeholder.explicitKind
-              ? new Set([placeholder.kind])
-              : new Set(),
-            sourceLocations: [placeholder.source],
-            inferredFrom: [`{{${placeholder.raw}}}`],
-          })
-          firstByPath.set(placeholder.path, placeholder)
-          continue
-        }
-        existing.sourceLocations.push(placeholder.source)
-        existing.inferredFrom.push(`{{${placeholder.raw}}}`)
-        if (placeholder.explicitKind)
-          existing.explicitKinds.add(placeholder.kind)
-        if (existing.explicitKinds.size === 1) {
-          existing.kind = Array.from(existing.explicitKinds)[0] ?? "unknown"
-        }
+        const canonical = qualify(placeholder.path, stack)
+        if (placeholderNodes[placeholder.node.id] === undefined) placeholderNodes[placeholder.node.id] = canonical
+        addField(fields, canonical, placeholder.kind, `{{${placeholder.raw}}}`, placeholder.source, placeholder, placeholder.formatters)
       }
+    }
+    for (const frame of stack) {
+      diagnostics.push(markerDiagnostic("TEMPLATE_UNCLOSED_BLOCK", `The ${frame.type} block is not closed`, frame.marker))
     }
   }
 
   for (const [path, field] of fields) {
-    if (field.explicitKinds.size > 1) {
-      const placeholder = firstByPath.get(path)
-      if (placeholder !== undefined) {
-        diagnostics.push(
-          fieldDiagnostic(
-            "TEMPLATE_TYPE_CONFLICT",
-            `Placeholder ${path} declares incompatible explicit types`,
-            placeholder
-          )
-        )
-      }
+    if (field.kinds.size > 1) {
+      diagnostics.push(templateDiagnostic("TEMPLATE_TYPE_CONFLICT", `Template field ${path} has incompatible inferred or explicit types`, field.first.source, field.first.node))
     }
   }
-  for (const [parent, child] of nestedPathConflicts(
-    Array.from(fields.keys())
-  )) {
-    const placeholder = firstByPath.get(parent)
-    if (placeholder !== undefined) {
-      diagnostics.push(
-        fieldDiagnostic(
-          "TEMPLATE_PATH_CONFLICT",
-          `Placeholder ${parent} conflicts with nested placeholder ${child}`,
-          placeholder
-        )
-      )
-    }
+  for (const [parent, child] of nestedPathConflicts(fields)) {
+    const field = fields.get(parent)
+    if (field !== undefined) diagnostics.push(templateDiagnostic("TEMPLATE_PATH_CONFLICT", `Template field ${parent} conflicts with nested field ${child}`, field.first.source, field.first.node))
   }
 
   const manifestFields = buildManifest(fields)
   return {
-    version: options.version ?? "phase-1",
-    templateHash:
-      options.templateHash ?? (await hashDocument(source, options.signal)),
+    version: options.version ?? "phase-4",
+    templateHash: options.templateHash ?? (await hashDocument(source, options.signal)),
     source,
     manifest: { fields: manifestFields },
     jsonSchema: buildSchema(manifestFields),

@@ -1,0 +1,58 @@
+name: Support-matrix request
+description: Request or clarify support for a specific DOCX behavior
+title: "support: "
+body:
+  - type: input
+    id: feature
+    attributes:
+      label: DOCX feature
+      description: Name one precise WordprocessingML or authoring behavior.
+      placeholder: Nested table row splitting across pages
+    validations:
+      required: true
+  - type: textarea
+    id: authoring
+    attributes:
+      label: How the document is authored
+      description: Describe the visible Word behavior and, if known, the relevant OOXML elements and attributes.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Required rendering behavior
+      description: State the minimum acceptable fidelity, diagnostics, and fallback behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Compatibility importance
+      options:
+        - Common authoring workflow
+        - Required for a specific template family
+        - Edge case / malformed input behavior
+        - Specification clarification
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Specification and fixture evidence
+      description: Link to the relevant OOXML specification and attach a minimal synthetic DOCX if possible.
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Limits and interactions
+      description: Note pagination, tables, fonts, images, headers/footers, templates, resource limits, or cross-runtime concerns.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I checked the current support matrix and roadmap.
+          required: true
+        - label: Any attached fixture is redistributable and contains no personal, patient, customer, credential, or confidential data.
+          required: true
+        - label: I understand that a request does not mean the feature is currently supported or scheduled.
+          required: true

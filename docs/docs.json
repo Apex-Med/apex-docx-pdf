@@ -35,31 +35,17 @@
       {
         "group": "Introduction",
         "icon": "book-open",
-        "pages": [
-          "index",
-          "getting-started",
-          "supported-features"
-        ]
+        "pages": ["index", "getting-started", "supported-features"]
       },
       {
         "group": "Authoring",
         "icon": "file-pen-line",
-        "pages": [
-          "authoring",
-          "template-language",
-          "font-handling"
-        ]
+        "pages": ["authoring", "template-language", "font-handling"]
       },
       {
         "group": "Operating the renderer",
         "icon": "settings-2",
-        "pages": [
-          "browser",
-          "determinism",
-          "security",
-          "bun-vercel",
-          "convex"
-        ]
+        "pages": ["browser", "determinism", "security", "bun-vercel", "convex"]
       },
       {
         "group": "Reference",
@@ -69,6 +55,7 @@
           "adr/0001-staged-document-pipeline",
           "adr/0002-integer-layout-units",
           "adr/0003-phase-one-dependency-criteria",
+          "adr/0004-fontkit-full-font-embedding",
           "troubleshooting",
           "roadmap"
         ]

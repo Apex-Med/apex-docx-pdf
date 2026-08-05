@@ -5,25 +5,29 @@ description: "Hostile-input boundaries, limits, diagnostics, and safe integratio
 
 # Security
 
-Treat DOCX, ZIP, XML, template text, JSON data, images, and fonts as hostile input. The renderer is designed to diagnose unsupported input rather than execute or fetch it.
+Treat DOCX, ZIP, XML, template text, JSON data, and caller-supplied font bytes as hostile. The renderer is designed to diagnose unsupported input rather than execute or fetch it.
 
 ## Current protections
 
 Package validation enforces conservative limits before allocation where practical:
 
-| Limit | Default |
-| --- | ---: |
-| Template bytes | 20 MB |
-| ZIP archive entries | 2,000 |
-| Decompressed bytes | 100 MB |
-| XML depth | 128 |
-| Expression and object-path depth | 32 |
-| Loop iterations | 10,000 |
-| Expanded nodes | 100,000 |
-| Expanded text bytes | 10 MB |
-| Pages | 500 |
+| Limit                            |                                     Default |
+| -------------------------------- | ------------------------------------------: |
+| Template bytes                   |                                       20 MB |
+| ZIP archive entries              |                                       2,000 |
+| Decompressed bytes               |                                      100 MB |
+| XML depth                        |                                         128 |
+| Expression and object-path depth |                                          32 |
+| Loop iterations                  | 10,000 (reserved; loops are rejected today) |
+| Expanded nodes                   |                                     100,000 |
+| Expanded text bytes              |                                       10 MB |
+| Pages                            |                                         500 |
 
-The DOCX reader rejects unsafe ZIP paths, duplicate parts, ZIP64/multi-volume archives, malformed XML, forbidden `DOCTYPE`/entity declarations, external relationships, and invalid relationship targets. Template paths cannot address prototype-related fields, and values are resolved without evaluating code.
+The DOCX reader rejects unsafe ZIP paths, duplicate parts, ZIP64/multi-volume archives, malformed XML, forbidden `DOCTYPE`/entity declarations, relationship parts without a `Relationships` root, and every external relationship it encounters. The package root must contain exactly one internal `officeDocument` relationship whose target resolves to an existing package part. Template paths cannot address prototype-related fields, and values are resolved without evaluating code.
+
+Font configuration accepts explicit `Uint8Array` programs only. The font adapter performs no filesystem access, system-font discovery, network fetch, or `Buffer`-specific processing. Registrations, aliases, fallback-family requirements, metrics, glyph mappings, and embedded TrueType bytes are validated before use. Font licensing and redistribution rights remain the caller's responsibility.
+
+`maxLoopIterations` is present in the shared resource-limit contract for future block expansion. It does not imply loop support or provide a current protection path because loop tags are rejected before execution.
 
 ## Application responsibilities
 
@@ -34,5 +38,7 @@ The DOCX reader rejects unsafe ZIP paths, duplicate parts, ZIP64/multi-volume ar
 - Do not add network fetches, system-font lookup, or executable template helpers inside rendering stages.
 
 <Warning>
-Resource limits reduce risk; they do not replace application-level authentication, authorization, malware scanning, retention policy, or rate limiting.
+  Resource limits reduce risk; they do not replace application-level
+  authentication, authorization, malware scanning, retention policy, or rate
+  limiting.
 </Warning>

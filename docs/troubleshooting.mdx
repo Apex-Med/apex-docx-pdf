@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Interpret common Phase 1 diagnostics and rendering failures."
+description: "Interpret common diagnostics and rendering failures."
 ---
 
 # Troubleshooting
@@ -23,13 +23,25 @@ Check the compiled manifest and generated JSON Schema, then ensure every require
 
 Conditions, loops, and images are planned features. Replace them with a supported inline value tag or redesign the template until the corresponding feature lands.
 
-## The PDF has a Helvetica warning or missing characters
+## The PDF has a Helvetica warning
 
-Phase 1 uses built-in Helvetica regardless of the DOCX font family. The current serializer accepts WinAnsi text only; a glyph run outside that encoding is reported as an error and omitted. See [font handling](/font-handling).
+The engine was created without `FontConfiguration`, so it is using the historical built-in Helvetica/WinAnsi fallback. Supply the exact required TrueType faces in the engine's `fonts` option. Do not expect system-font discovery. See [font handling](/font-handling).
+
+## Font shaping or embedding fails
+
+Confirm that the text is well-formed left-to-right Latin, the selected face contains every required glyph, and the fallback family includes a 400 normal face. OpenType/CFF can be parsed but is not supported for PDF embedding. The default provider embeds a complete TrueType program; it is not a true subsetter.
+
+## Tabs or pagination controls are diagnosed
+
+Tabs require tab-stop layout and are unsupported. Keep-with-next and widow/orphan controls are also outside the current profile; redesign the affected paragraphs rather than assuming Word-equivalent pagination.
+
+## Compilation returned diagnostics with errors
+
+`engine.compile()` throws `EngineOperationError` with code `engine/docx` when DOCX validation or normalization fails. Template-language errors do not currently make `compile()` throw: they are returned in `compiled.diagnostics`. Inspect them before rendering. Rendering a compiled template that already contains errors fails and returns no PDF.
 
 ## Content is different from Word
 
-Confirm that the template uses only the supported profile. Tables, headers, footers, images, and advanced styles are not supported. For text, bold, italic, underline, and non-Helvetica families produce documented fidelity warnings.
+Confirm that the template uses only the supported profile. Tables, headers, footers, images, complex scripts, tabs, keep-with-next, and widow/orphan controls are not supported. Supported style cascades and direct formatting are described in the [feature matrix](/supported-features).
 
 ## The browser client cannot render after a reload
 

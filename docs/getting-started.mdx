@@ -1,6 +1,6 @@
 ---
 title: "Getting started"
-description: "Compile a Phase 1 DOCX template and render a searchable PDF."
+description: "Compile a supported DOCX template and render a searchable PDF."
 ---
 
 # Getting started
@@ -15,7 +15,7 @@ In Word or another DOCX editor, add a paragraph such as:
 Hello, {{customer.name:string}}
 ```
 
-Save it as `letter.docx`. Phase 1 recognizes the logical text of a paragraph, so a value tag may span DOCX runs; authoring it in one run is still easier to inspect.
+Save it as `letter.docx`. The compiler recognizes the logical text of a paragraph, so a value tag may span DOCX runs; authoring it in one run is still easier to inspect.
 
 ## 2. Compile and render
 
@@ -25,7 +25,9 @@ The engine requires an explicit `locale` and `timeZone` for every render.
 import { createDocxPdfEngine } from "@apex-docx-pdf/engine"
 
 const engine = await createDocxPdfEngine()
-const templateBytes = new Uint8Array(await Bun.file("letter.docx").arrayBuffer())
+const templateBytes = new Uint8Array(
+  await Bun.file("letter.docx").arrayBuffer()
+)
 
 const compiled = await engine.compile(templateBytes, {
   unsupportedFeatures: "strict",
@@ -48,11 +50,15 @@ await Bun.write("letter.pdf", result.pdf)
 `compiled` exposes a field manifest, a JSON Schema, starter data, and diagnostics. `result` contains PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a layout trace.
 
 <Note>
-The `Bun.file` and `Bun.write` lines are Bun conveniences. The engine itself accepts and returns `Uint8Array`, so an application can supply bytes from any supported runtime.
+  The `Bun.file` and `Bun.write` lines are Bun conveniences. The engine itself
+  accepts and returns `Uint8Array`, so an application can supply bytes from any
+  supported runtime.
 </Note>
+
+The zero-argument engine uses the historical built-in Helvetica fallback. For document fonts, create the engine with an explicit `fonts` configuration containing the exact TrueType `Uint8Array` programs. See [font handling](/font-handling).
 
 ## 3. Treat diagnostics as output
 
 Compilation and rendering preserve diagnostics rather than hiding lossy behavior. A diagnostic has a stable code, severity, message, and, where available, DOCX source location and node ID. Do not treat a warning as proof that visual fidelity has been preserved; check [supported features](/supported-features).
 
-Next: [author a Phase 1 template](/authoring).
+Next: [author a supported template](/authoring).

@@ -1,16 +1,17 @@
 ---
 title: "Roadmap"
-description: "What Phase 1 proves and the planned work needed for a broader DOCX profile."
+description: "What Phases 1–3 prove and the planned work for a broader DOCX profile."
 ---
 
 # Roadmap
 
-Phase 1 proves a staged, deterministic path from a constrained DOCX main document through typed inline values, A4 layout, and searchable Helvetica PDF output.
+Phases 1–3 prove a staged, deterministic path from a constrained DOCX main document through typed inline values, document styles, paragraph geometry, explicit TrueType font bytes, LTR Latin shaping, and searchable PDF output. The default font provider embeds complete TrueType programs; it does not perform true subsetting.
 
 ## Next renderer capabilities
 
 - Table parsing, normalization, measurement, fragmentation, and PDF display-list support.
-- Registered/custom fonts and a deterministic font/glyph adapter.
+- Broader scripts and bidirectional shaping beyond the current LTR Latin boundary.
+- A production-ready deterministic TrueType subsetter behind the existing source-to-subset glyph-mapping seam.
 - Conditional and loop template blocks with explicit limits and source diagnostics.
 - Images and image-template tags with decoding, resource policy, and layout support.
 - Header/footer and broader section behavior.
@@ -21,4 +22,4 @@ Phase 1 proves a staged, deterministic path from a constrained DOCX main documen
 - Deployment configuration and a canonical hosted playground/product URL.
 - Broader compatibility fixtures, golden PDFs, layout-trace comparisons, and cross-runtime verification.
 
-Each feature must enter through the staged architecture rather than bypassing it. In particular, font and PDF-library expansion requires the separate decision described in [ADR 0003](/adr/0003-phase-one-dependency-criteria).
+Each feature must enter through the staged architecture rather than bypassing it. Fontkit and complete TrueType embedding are recorded in [ADR 0004](/adr/0004-fontkit-full-font-embedding); that decision does not establish real-font fixture breadth, production readiness, or deployment proof.

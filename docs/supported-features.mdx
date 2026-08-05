@@ -1,33 +1,40 @@
 ---
 title: "Supported features"
-description: "An honest Phase 1 compatibility matrix."
+description: "An honest compatibility matrix for the implemented renderer slices."
 ---
 
 # Supported features
 
 The renderer supports a small, documented DOCX profile. A feature being common in Word does not make it supported here.
 
-| Area | Phase 1 status | Behavior |
-| --- | --- | --- |
-| DOCX package validation | Supported | Validates ZIP structure, paths, size/entry/decompression limits, relationships, XML, and required parts. |
-| Main-document paragraphs | Supported | Normalized and laid out on A4 pages. |
-| Text runs | Supported | Text is preserved as positioned, searchable PDF text. |
-| Inline value tags | Supported | Dotted paths with optional `string`, `number`, `boolean`, or `date` annotations. |
-| JSON Schema and starter data | Supported | Generated at compile time from discovered fields. |
-| PDF output | Supported | Deterministic PDF 1.7 using built-in Helvetica and WinAnsi text. |
-| Layout trace | Supported | Optional source-linked page, line, block, overflow, and page-break data. |
-| Tables | Planned | Not part of the current supported document profile. |
-| Conditions and loops | Planned | Block tags are rejected. |
-| Images | Planned | Image tags are rejected. |
-| Headers and footers | Planned | Not part of the Phase 1 profile. |
-| Full/custom font embedding | Planned | Current output uses built-in Helvetica only. |
-| Convex integration | Planned | No repository Convex module or adapter exists yet. |
-| Vercel deployment | Planned | No deployment configuration is supplied in this repository. |
+| Area                                 | Status                | Behavior                                                                                                                                                               |
+| ------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DOCX package validation              | Supported             | Validates ZIP structure, paths, size/entry/decompression limits, XML, relationship-part roots, external relationships, and the root office-document relationship.      |
+| Main-document paragraphs             | Supported             | Normalized into one section and laid out using the final body-level section size and margins, with A4 page-size fallback values.                                       |
+| Styles and direct formatting         | Supported             | Resolves `docDefaults`, default paragraph/character styles, `basedOn` cascades, and direct formatting. Explicit false overrides inherited bold, italic, and underline. |
+| Paragraph formatting                 | Supported             | Start/end and first-line/hanging indents; left, center, right, and justified alignment; spacing before/after; auto, exact, and at-least line spacing.                  |
+| Registered fonts                     | Supported with limits | Explicit `FontConfiguration` bytes, aliases, deterministic hashes/matching, and 400/700 normal/italic faces. Shaping is limited to LTR Latin.                          |
+| Embedded PDF text                    | Supported with limits | TrueType is embedded as searchable Type0/CIDFontType2 text with absolute glyph positioning. The default embeds the complete font program, not a true subset.           |
+| Inline value tags                    | Supported             | Dotted paths with optional `string`, `number`, `boolean`, or `date` annotations.                                                                                       |
+| JSON Schema and starter data         | Supported             | Generated at compile time from discovered fields.                                                                                                                      |
+| Historical Helvetica output          | Supported with limits | Without configured fonts, the Phase 1 built-in Helvetica/WinAnsi fallback remains available.                                                                           |
+| Layout trace                         | Supported             | Optional source-linked page, line, block, overflow, and page-break data.                                                                                               |
+| Tabs                                 | Unsupported           | Tab characters require tab-stop layout and produce an unsupported diagnostic.                                                                                          |
+| Keep with next; widow/orphan control | Unsupported           | These pagination controls are not preserved.                                                                                                                           |
+| Complex scripts and bidi             | Unsupported           | The current fontkit adapter accepts well-formed LTR Latin text only.                                                                                                   |
+| OpenType/CFF PDF embedding           | Unsupported           | CFF programs are diagnosed when PDF embedding is requested.                                                                                                            |
+| Tables                               | Planned               | Not part of the current supported document profile.                                                                                                                    |
+| Conditions and loops                 | Planned               | Block tags are rejected today; `maxLoopIterations` is reserved for future loop execution.                                                                              |
+| Images                               | Planned               | Image tags are rejected.                                                                                                                                               |
+| Headers and footers                  | Planned               | Not part of the Phase 1 profile.                                                                                                                                       |
+| Convex integration                   | Planned               | No repository Convex module or adapter exists yet.                                                                                                                     |
+| Vercel deployment                    | Planned               | No deployment configuration is supplied in this repository.                                                                                                            |
 
 ## Current fidelity limits
 
-DOCX font-family changes receive Helvetica-compatible measurement and PDF fallback warnings. Bold, italic, and underline text is retained as text but styling is not preserved. Text outside the current WinAnsi encoding is an error and that glyph run is omitted rather than substituted silently.
+The current font path includes one openly licensed Noto Sans adapter and engine integration fixture, but it does not claim complex-script shaping, true default subsetting, CFF embedding, or broad real-font compatibility coverage. Tables, images, headers, and footers remain outside the semantic and layout model. Treat an unsupported diagnostic as a boundary, not permission to assume Word-equivalent output.
 
 <Warning>
-Treat diagnostics as part of the rendering contract. A successful PDF file is not evidence that every Word feature was represented.
+  Treat diagnostics as part of the rendering contract. A successful PDF file is
+  not evidence that every Word feature was represented.
 </Warning>

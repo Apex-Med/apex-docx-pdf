@@ -1,6 +1,7 @@
 export * from "./diagnostics"
 export * from "./document"
 export * from "./engine"
+export * from "./fonts"
 export * from "./ids"
 export * from "./layout"
 export * from "./resources"

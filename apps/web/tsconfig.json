@@ -2,7 +2,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "eslint.config.js",
+    "biome.json",
     "prettier.config.js",
     "vite.config.ts"
   ],
@@ -23,7 +23,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
-    /* Linting */
+    /* Type checking */
     "skipLibCheck": true,
     "strict": true,
     "noUnusedLocals": true,

@@ -7,10 +7,12 @@ description: "A deterministic DOCX-profile renderer that produces searchable PDF
 
 Apex DOCX PDF renders a deliberately documented DOCX profile to searchable PDF. It is not a Word clone: unsupported or materially lossy source content is diagnosed with source location instead of being silently discarded.
 
-Phase 1 is a narrow, working vertical slice: ordinary main-document paragraphs, text runs, and inline value placeholders render onto A4 pages with deterministic geometry and built-in Helvetica PDF text.
+Phases 1–3 now form a working renderer slice: ordinary main-document paragraphs, inline value placeholders, document styles, paragraph geometry, and caller-supplied TrueType fonts render to searchable PDF. Page dimensions and margins come from the document's final body-level section properties, with A4 dimensions used when page-size values are absent or invalid.
 
 <Warning>
-Phase 1 is intentionally small. Tables, custom/full fonts, conditional and loop tags, images, headers, footers, Convex wiring, and deployment are planned—not implemented.
+  The supported profile remains intentionally small. Tables, conditional and
+  loop tags, images, headers, footers, complex-script shaping, Convex wiring,
+  and deployment are not implemented.
 </Warning>
 
 ## Start here
@@ -20,13 +22,13 @@ Phase 1 is intentionally small. Tables, custom/full fonts, conditional and loop 
     Compile a DOCX template and render it with explicit locale and time zone.
   </Card>
   <Card title="Author a template" icon="file-pen-line" href="/authoring">
-    Prepare the supported Phase 1 DOCX profile.
+    Prepare the current supported DOCX profile.
   </Card>
   <Card title="Template language" icon="braces" href="/template-language">
     Learn value-tag paths and the supported type annotations.
   </Card>
   <Card title="Feature status" icon="list-checks" href="/supported-features">
-    See exactly what Phase 1 supports and what it rejects.
+    See exactly what the current renderer supports and what it rejects.
   </Card>
 </CardGroup>
 
@@ -36,4 +38,4 @@ This documentation repository intentionally does not declare a public product or
 
 ## Design contract
 
-The renderer treats the compatibility input as template bytes, data, registered font bytes, engine version, locale, time zone, and explicit render options. Identical inputs are intended to produce identical layout traces and—where compression behavior permits—byte-identical PDFs. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.
+The renderer treats template bytes, data, caller-supplied font configuration and bytes, engine version, locale, time zone, metadata, and explicit render options as compatibility inputs. It does not discover system fonts or fetch font resources. Identical inputs are intended to produce identical layout traces and byte-identical PDFs. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.

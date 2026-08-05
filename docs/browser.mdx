@@ -7,14 +7,19 @@ description: "Run the same renderer in a Web Worker without uploading the docume
 
 `@apex-docx-pdf/browser` wraps the same engine packages used by Bun and Node. A Web Worker owns compilation and rendering so the UI thread can remain responsive.
 
+The Phase 3 `@apex-docx-pdf/fonts` adapter is browser-safe. The worker installer accepts explicit engine options, or a promise for them, so an application can resolve its bundled font assets to `Uint8Array` values before the engine is created. Asset acquisition remains application-owned; the engine and font package do not discover system fonts or perform filesystem or network access.
+
 ## Install the worker
 
 ```ts
 // render.worker.ts
 import { installRendererWorker } from "@apex-docx-pdf/browser/worker"
 
-installRendererWorker()
+const engineOptions = loadApplicationOwnedFontConfiguration()
+installRendererWorker(undefined, engineOptions)
 ```
+
+`loadApplicationOwnedFontConfiguration()` represents application code that returns `EngineOptions` or a promise for it. It must supply the exact font bytes and a fallback family; without `fonts`, the worker uses the historical Helvetica fallback.
 
 ## Create a client
 
@@ -45,4 +50,4 @@ const pdfUrl = lease.replace(rendered.pdf.slice().buffer, "application/pdf")
 
 Pass an `AbortSignal` to `compile` or `render` to send a cancellation message to the worker. A worker retains compiled templates by template hash for its own lifetime; recompile after disposal or reload. Call `renderer.dispose()` during UI teardown and revoke object URLs to release browser resources.
 
-The repository’s local playground follows this pattern and renders locally in a worker. It is a local route, not a declared hosted product URL.
+The repository’s local playground follows this pattern and renders locally in a worker. Its application layer bundles the openly licensed Noto Sans regular, bold, italic, and bold-italic TrueType faces, loads those asset bytes before engine creation, and explicitly aliases common DOCX family names to Noto Sans. That asset loading is reference-application behavior, not an engine network capability. The playground is a local route, not a declared hosted product URL.

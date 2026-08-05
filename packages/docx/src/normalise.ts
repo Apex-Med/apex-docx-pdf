@@ -23,11 +23,12 @@ export function normaliseDocx(
             id: nodeId(`docx:text:${paragraphIndex + 1}:${textIndex + 1}`),
             source: text.source,
             text: text.text,
+            preserveSpace: text.preserveSpace,
             style: {
               fontFamily: run.properties.fontFamily,
               fontSize: twips(run.properties.fontSizeHalfPoints * 10),
-              bold: run.properties.bold,
-              italic: run.properties.italic,
+              fontWeight: run.properties.fontWeight,
+              fontStyle: run.properties.fontStyle,
               underline: run.properties.underline,
               color: run.properties.color.startsWith("#")
                 ? run.properties.color
@@ -48,10 +49,23 @@ export function normaliseDocx(
           lineSpacing:
             paragraph.properties.lineSpacing === null
               ? null
-              : twips(paragraph.properties.lineSpacing),
+              : paragraph.properties.lineSpacing.rule === "auto"
+                ? {
+                    rule: "auto",
+                    value240ths: paragraph.properties.lineSpacing.value240ths,
+                  }
+                : {
+                    rule: paragraph.properties.lineSpacing.rule,
+                    value: twips(paragraph.properties.lineSpacing.valueTwips),
+                  },
+          indentStart: twips(paragraph.properties.indentStart),
+          indentEnd: twips(paragraph.properties.indentEnd),
+          firstLineIndent: twips(paragraph.properties.firstLineIndent),
           keepWithNext: paragraph.properties.keepWithNext,
           keepLinesTogether: paragraph.properties.keepLinesTogether,
+          widowControl: paragraph.properties.widowControl,
           pageBreakBefore: paragraph.properties.pageBreakBefore,
+          numbering: paragraph.properties.numbering,
         },
         children,
       }
@@ -63,6 +77,14 @@ export function normaliseDocx(
       type: "document",
       id: nodeId("docx:document:1"),
       source: document.source,
+      numberingDefinitions: document.numberingDefinitions.map((definition) => ({
+        id: definition.id,
+        levels: definition.levels.map((level) => ({
+          ...level,
+          indentStart: twips(level.indentStart),
+          firstLineIndent: twips(level.firstLineIndent),
+        })),
+      })),
       sections: [
         {
           type: "section",

@@ -3,8 +3,13 @@ export type ResourceLimits = Readonly<{
   maxArchiveEntries: number
   maxDecompressedBytes: number
   maxXmlDepth: number
+  maxXmlNodes: number
+  maxXmlTextBytes: number
   maxExpressionDepth: number
   maxObjectTraversalDepth: number
+  maxJsonNodes: number
+  maxJsonTextBytes: number
+  maxJsonArrayItems: number
   maxLoopIterations: number
   maxExpandedNodes: number
   maxExpandedTextBytes: number
@@ -16,8 +21,13 @@ export const DEFAULT_RESOURCE_LIMITS: ResourceLimits = Object.freeze({
   maxArchiveEntries: 2_000,
   maxDecompressedBytes: 100_000_000,
   maxXmlDepth: 128,
+  maxXmlNodes: 1_000_000,
+  maxXmlTextBytes: 50_000_000,
   maxExpressionDepth: 32,
   maxObjectTraversalDepth: 32,
+  maxJsonNodes: 100_000,
+  maxJsonTextBytes: 10_000_000,
+  maxJsonArrayItems: 100_000,
   maxLoopIterations: 10_000,
   maxExpandedNodes: 100_000,
   maxExpandedTextBytes: 10_000_000,

@@ -1,26 +1,55 @@
 ---
 title: "Font handling"
-description: "Phase 1 Helvetica behavior and the boundary for future registered fonts."
+description: "Explicit font configuration, deterministic matching, shaping, and PDF embedding."
 ---
 
 # Font handling
 
-Phase 1 deliberately uses the PDF built-in Helvetica Type 1 font. It does not inspect operating-system fonts, discover fonts from the machine, or embed custom font data.
+Phase 3 adds explicit caller-supplied font registration. Pass a `FontConfiguration` when creating the engine; the exact face metadata, aliases, fallback family, and immutable font bytes become compatibility inputs. When no font configuration is supplied, the historical built-in Helvetica/WinAnsi fallback remains available.
 
-## What happens today
+## Configure font bytes explicitly
 
-- Layout measures text with a small explicit Helvetica-compatible metrics adapter.
-- PDF serialization writes positioned, searchable Helvetica text using WinAnsi encoding.
-- A DOCX run that names another font produces fallback warnings; it is measured and rendered as Helvetica.
-- Bold, italic, and underline are not visually preserved in the current layout/PDF path.
-- Characters outside WinAnsi cause an error; the affected glyph run is omitted to avoid claiming a different character was rendered.
+```ts
+const fonts = {
+  faces: [
+    {
+      family: "Example Sans",
+      weight: 400,
+      style: "normal",
+      bytes: exampleSansBytes,
+    },
+  ],
+  fallbackFamily: "Example Sans",
+} as const
 
-## Why this is explicit
+const engine = await createDocxPdfEngine({ fonts })
+```
 
-Implicit system-font lookup would make output machine-dependent. Keeping the first slice to a known built-in font proves positioning and searchability while preserving deterministic behavior across Bun, Node, and browser environments.
+The fallback family must contain a 400 normal face. Faces support weights 400 and 700 and styles `normal` and `italic`. Optional aliases resolve to registered families. The engine snapshots supplied `Uint8Array` values and the font registry exposes a deterministic hash.
 
-## Future font boundary
+No part of this path discovers system fonts, reads font files, fetches a font URL, or depends on Node.js `Buffer`. The application owns acquisition of the bytes and must have the right to embed and distribute them.
 
-The architecture’s compatibility tuple reserves a place for registered font bytes. That is a forward-looking contract, not a Phase 1 registration API. Broader font support requires a separate dependency decision that considers licensing, portability, bundle size, deterministic glyph positioning, and API stability.
+## Deterministic matching
 
-Read [ADR 0003](/adr/0003-phase-one-dependency-criteria) before expanding this boundary.
+Within a requested or aliased family, matching uses this order:
+
+1. Exact weight and style.
+2. Weight 400 in the requested style.
+3. Requested weight in normal style.
+4. Weight 400 in normal style.
+
+If the family has no match, the same sequence is applied to the configured fallback family.
+
+## Shaping and embedding
+
+Exact-pinned `fontkit` 2.0.4 parses font metrics and shapes well-formed left-to-right Latin text. Complex scripts, right-to-left text, and bidirectional layout are outside the current boundary.
+
+For TrueType, the PDF serializer emits a Type0 font with a CIDFontType2 descendant, FontDescriptor, FontFile2 stream, CIDToGIDMap, and ToUnicode CMap. Each shaped glyph receives an absolute PDF position, preserving fontkit advances and offsets while keeping text searchable.
+
+By default, the registry embeds the complete immutable TrueType program and returns `subsetted: false`. There is an injectable deterministic subsetting seam with an explicit source-to-subset glyph mapping, but the repository does not provide true font subsetting today. OpenType/CFF is diagnosed as unsupported for PDF embedding.
+
+## Historical fallback
+
+Without `FontConfiguration`, the Phase 1 path still measures and serializes built-in Helvetica with WinAnsi encoding. Non-Helvetica family and style requests produce compatibility warnings. Characters outside WinAnsi produce an error, and the high-level engine returns no render result rather than exposing an incomplete PDF.
+
+Read [ADR 0004](/adr/0004-fontkit-full-font-embedding) for the dependency, licensing, determinism, and full-embedding decision.

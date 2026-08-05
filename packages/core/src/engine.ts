@@ -2,6 +2,7 @@ import type { CompiledTemplate } from "./template"
 import type { Diagnostic, UnsupportedFeatureMode } from "./diagnostics"
 import type { DocumentHash } from "./ids"
 import type { LayoutTrace } from "./layout"
+import type { FontConfiguration, TextShaper } from "./fonts"
 import type { ResourceLimits, ResourceUsage } from "./resources"
 
 export type RenderTimings = Readonly<{
@@ -48,15 +49,23 @@ export type RenderOptions = Readonly<{
 
 export type EngineOptions = Readonly<{
   limits?: Partial<ResourceLimits>
-  fallbackFont?: string
+  /** Required for embedded-font rendering; omitted only by the Phase 1 standard-font profile. */
+  fonts?: FontConfiguration
+  textShaper?: TextShaper
 }>
 
 export interface DocxPdfEngine {
-  inspect(templateBytes: Uint8Array, options?: InspectOptions): Promise<readonly Diagnostic[]>
-  compile(templateBytes: Uint8Array, options?: CompileOptions): Promise<CompiledTemplate>
+  inspect(
+    templateBytes: Uint8Array,
+    options?: InspectOptions
+  ): Promise<readonly Diagnostic[]>
+  compile(
+    templateBytes: Uint8Array,
+    options?: CompileOptions
+  ): Promise<CompiledTemplate>
   render(
     compiled: CompiledTemplate,
     data: Readonly<Record<string, unknown>>,
-    options: RenderOptions,
+    options: RenderOptions
   ): Promise<RenderResult>
 }

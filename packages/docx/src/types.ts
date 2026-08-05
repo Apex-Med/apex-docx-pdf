@@ -1,4 +1,10 @@
-import type { Diagnostic, SourceLocation } from "@apex-docx-pdf/core"
+import type {
+  Diagnostic,
+  FontStyle,
+  FontWeight,
+  NumberingFormat,
+  SourceLocation,
+} from "@apex-docx-pdf/core"
 
 /**
  * The OOXML-shaped representation owned by this package.  It deliberately
@@ -15,11 +21,16 @@ export type ParsedDocxText = Readonly<{
 export type ParsedDocxRunProperties = Readonly<{
   fontFamily: string
   fontSizeHalfPoints: number
-  bold: boolean
-  italic: boolean
+  fontWeight: FontWeight
+  fontStyle: FontStyle
   underline: boolean
   color: string
 }>
+
+export type ParsedDocxLineSpacing =
+  | Readonly<{ rule: "auto"; value240ths: number }>
+  | Readonly<{ rule: "exact" | "atLeast"; valueTwips: number }>
+  | null
 
 export type ParsedDocxRun = Readonly<{
   type: "docx-run"
@@ -32,10 +43,38 @@ export type ParsedDocxParagraphProperties = Readonly<{
   alignment: "left" | "center" | "right" | "justify"
   spacingBefore: number
   spacingAfter: number
-  lineSpacing: number | null
+  lineSpacing: ParsedDocxLineSpacing
+  indentStart: number
+  indentEnd: number
+  firstLineIndent: number
   keepWithNext: boolean
   keepLinesTogether: boolean
+  widowControl: boolean
   pageBreakBefore: boolean
+  numbering: ParsedDocxParagraphNumbering | null
+}>
+
+export type ParsedDocxParagraphNumbering = Readonly<{
+  definitionId: string
+  level: number
+}>
+
+export type ParsedDocxNumberingLevelDefinition = Readonly<{
+  level: number
+  startAt: number
+  format: NumberingFormat
+  levelText: string
+  suffix: "tab" | "space" | "nothing"
+  alignment: "left" | "center" | "right"
+  indentStart: number
+  firstLineIndent: number
+  restartAfterLevel: number | null
+  legal: boolean
+}>
+
+export type ParsedDocxNumberingDefinition = Readonly<{
+  id: string
+  levels: readonly ParsedDocxNumberingLevelDefinition[]
 }>
 
 export type ParsedDocxParagraph = Readonly<{
@@ -58,6 +97,7 @@ export type ParsedDocxDocument = Readonly<{
   type: "docx-document"
   source: SourceLocation
   documentPart: string
+  numberingDefinitions: readonly ParsedDocxNumberingDefinition[]
   paragraphs: readonly ParsedDocxParagraph[]
   sectionProperties: ParsedDocxSectionProperties
 }>
@@ -68,6 +108,10 @@ export type DocxParseOptions = Readonly<{
     maxTemplateBytes?: number
     maxArchiveEntries?: number
     maxDecompressedBytes?: number
+    /** Maximum decoded text bytes accepted for any individual XML part. */
+    maxXmlTextBytes?: number
+    /** Maximum element count accepted for any individual XML part. */
+    maxXmlNodes?: number
     maxXmlDepth?: number
   }>
   /** Unsupported meaningful OOXML is an error by default. */

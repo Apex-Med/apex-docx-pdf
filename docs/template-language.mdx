@@ -29,12 +29,12 @@ Supported explicit types are `string`, `number`, `boolean`, and `date`. Date val
 
 An explicit type requires its matching JSON value:
 
-| Type | Required input | Rendered text |
-| --- | --- | --- |
-| `string` | string | unchanged |
-| `number` | finite number | JavaScript string form |
-| `boolean` | boolean | `true` or `false` |
-| `date` | string | unchanged |
+| Type      | Required input | Rendered text          |
+| --------- | -------------- | ---------------------- |
+| `string`  | string         | unchanged              |
+| `number`  | finite number  | JavaScript string form |
+| `boolean` | boolean        | `true` or `false`      |
+| `date`    | string         | unchanged              |
 
 For untyped fields, strings, finite numbers, and booleans are accepted. Missing paths and type mismatches are errors by default. The lower-level resolver has a permissive mode that substitutes empty text with a warning; use that only when an application deliberately chooses it.
 
@@ -58,3 +58,5 @@ The following are rejected in Phase 1:
 ```
 
 Nested or unclosed tags are also errors. The renderer does not execute JavaScript, call services, or fetch network resources while resolving values.
+
+`engine.compile()` throws when DOCX validation or normalization fails. Template-language problems are different: compilation returns a `CompiledTemplate` whose `diagnostics` can contain errors such as malformed, nested, unclosed, unsafe, or conflicting tags. Applications should inspect those diagnostics before rendering. A later high-level render rejects compiled error diagnostics rather than returning a PDF.

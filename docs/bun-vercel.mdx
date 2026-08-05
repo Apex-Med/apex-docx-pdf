@@ -16,7 +16,7 @@ bun run build
 bun --cwd apps/web dev
 ```
 
-The web app uses the browser package and a module worker. The engine packages are intentionally portable across Bun, supported Node.js, and modern browsers subject to the Phase 1 profile.
+The web app uses the browser package and a module worker. The engine packages, including the explicit fontkit adapter, are intentionally portable across Bun, supported Node.js, and modern browsers within the documented compatibility profile. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application assets into those bytes remains outside the renderer.
 
 ## Vercel status
 
@@ -25,5 +25,6 @@ Vercel deployment is planned. This repository does not currently include Vercel 
 When deployment is introduced, keep the renderer’s explicit-input contract intact: package bytes and data should reach an application-owned endpoint or worker boundary; locale, time zone, metadata, limits, and authorization must be explicit. Do not turn deployment configuration into an implicit source of fonts, locale, clock data, or network template execution.
 
 <Note>
-The documentation site is configured independently under `docs/docs.json`. Its deployment host should be chosen before adding a product or playground link.
+  The documentation site is configured independently under `docs/docs.json`. Its
+  deployment host should be chosen before adding a product or playground link.
 </Note>

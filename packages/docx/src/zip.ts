@@ -20,18 +20,29 @@ const ZIP_LOCAL_FILE_HEADER = 0x04034b50
 const ZIP_CENTRAL_DIRECTORY_HEADER = 0x02014b50
 const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50
 
-function readU16(bytes: Uint8Array, offset: number): number {
-  return bytes[offset]! | (bytes[offset + 1]! << 8)
+function readU16(bytes: Uint8Array, offset: number): number | undefined {
+  const byte0 = bytes[offset]
+  const byte1 = bytes[offset + 1]
+  if (byte0 === undefined || byte1 === undefined) {
+    return undefined
+  }
+  return byte0 | (byte1 << 8)
 }
 
-function readU32(bytes: Uint8Array, offset: number): number {
-  return (
-    (bytes[offset]! |
-      (bytes[offset + 1]! << 8) |
-      (bytes[offset + 2]! << 16) |
-      (bytes[offset + 3]! << 24)) >>>
-    0
-  )
+function readU32(bytes: Uint8Array, offset: number): number | undefined {
+  const byte0 = bytes[offset]
+  const byte1 = bytes[offset + 1]
+  const byte2 = bytes[offset + 2]
+  const byte3 = bytes[offset + 3]
+  if (
+    byte0 === undefined ||
+    byte1 === undefined ||
+    byte2 === undefined ||
+    byte3 === undefined
+  ) {
+    return undefined
+  }
+  return (byte0 | (byte1 << 8) | (byte2 << 16) | (byte3 << 24)) >>> 0
 }
 
 function findEndOfCentralDirectory(bytes: Uint8Array): number {
@@ -95,6 +106,12 @@ function readCentralDirectory(
   const directorySize = readU32(bytes, endOffset + 12)
   const directoryOffset = readU32(bytes, endOffset + 16)
   if (
+    disk === undefined ||
+    directoryDisk === undefined ||
+    entriesOnDisk === undefined ||
+    totalEntries === undefined ||
+    directorySize === undefined ||
+    directoryOffset === undefined ||
     disk !== 0 ||
     directoryDisk !== 0 ||
     entriesOnDisk !== totalEntries ||
@@ -151,6 +168,19 @@ function readCentralDirectory(
     const nameLength = readU16(bytes, offset + 28)
     const extraLength = readU16(bytes, offset + 30)
     const commentLength = readU16(bytes, offset + 32)
+    if (
+      uncompressedSize === undefined ||
+      nameLength === undefined ||
+      extraLength === undefined ||
+      commentLength === undefined
+    ) {
+      return [
+        diagnostic(
+          "DOCX_INVALID_ZIP",
+          "The central directory contains a truncated entry header."
+        ),
+      ]
+    }
     const end = offset + 46 + nameLength + extraLength + commentLength
     if (end > bytes.length) {
       return [
@@ -263,7 +293,11 @@ export function validateDocxPackage(
   }
 
   const entriesOrDiagnostics = readCentralDirectory(bytes, options)
-  if (entriesOrDiagnostics.length === 0 || "code" in entriesOrDiagnostics[0]!) {
+  const firstEntryOrDiagnostic = entriesOrDiagnostics[0]
+  if (
+    firstEntryOrDiagnostic === undefined ||
+    "code" in firstEntryOrDiagnostic
+  ) {
     return {
       ok: false,
       diagnostics: entriesOrDiagnostics as readonly ReturnType<

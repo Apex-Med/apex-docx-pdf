@@ -5,7 +5,7 @@ description: "How explicit inputs, integer layout, and stable ordering produce r
 
 # Determinism
 
-The renderer is designed around reproducible inputs rather than ambient process state. Its compatibility input includes template bytes, data, registered font bytes, engine version, locale, time zone, and explicit render options.
+The renderer is designed around reproducible inputs rather than ambient process state. Its compatibility input includes template bytes, data, caller-supplied `FontConfiguration` and font bytes, engine version, locale, time zone, metadata, and explicit render options.
 
 ## Rules enforced by the pipeline
 
@@ -14,15 +14,18 @@ The renderer is designed around reproducible inputs rather than ambient process 
 - Semantic and layout collections are readonly and source ordered.
 - Meaningful nodes keep stable IDs and source locations.
 - Canonical JSON sorts object keys when computing the document hash.
+- Font face IDs and the registry hash are derived deterministically from normalized family/style metadata, aliases, fallback family, and exact font bytes.
 - PDF output has no generated clock value or random document ID.
 - Engine stages do not implicitly read the current locale, time zone, clock, randomness, filesystem, network, or operating-system fonts.
 
 ## What to persist for a reproducible render
 
-Persist the exact template bytes or template hash, data JSON, engine version, `locale`, `timeZone`, metadata, render options, diagnostics, and optional layout trace. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison.
+Persist the exact template bytes or template hash, data JSON, complete font configuration and exact font bytes, engine version, `locale`, `timeZone`, metadata, render options, diagnostics, and optional layout trace. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
 
 <Note>
-The architecture promises byte-identical PDFs where dependency compression permits. Layout traces are the stronger cross-environment diagnostic artifact when byte-level compression differs.
+  The current serializer does not compress PDF streams, and repeat-identical
+  inputs are expected to produce byte-identical PDFs. Layout traces remain the
+  stronger artifact for explaining a geometry difference.
 </Note>
 
 For the underlying unit choice, see [ADR 0002](/adr/0002-integer-layout-units).

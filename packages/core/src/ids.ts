@@ -14,7 +14,9 @@ export function nodeId(value: string): NodeId {
 
 export function documentHash(value: string): DocumentHash {
   if (!/^[a-f0-9]{64}$/u.test(value)) {
-    throw new TypeError("A document hash must be a lowercase SHA-256 hex digest")
+    throw new TypeError(
+      "A document hash must be a lowercase SHA-256 hex digest"
+    )
   }
 
   return value as DocumentHash
