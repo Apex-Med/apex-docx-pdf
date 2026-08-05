@@ -1,0 +1,28 @@
+---
+title: "Determinism"
+description: "How explicit inputs, integer layout, and stable ordering produce reproducible output."
+---
+
+# Determinism
+
+The renderer is designed around reproducible inputs rather than ambient process state. Its compatibility input includes template bytes, data, registered font bytes, engine version, locale, time zone, and explicit render options.
+
+## Rules enforced by the pipeline
+
+- Geometry, measurement, fragmentation, and display-list positions use integer twips.
+- Conversion to PDF points occurs only in the PDF adapter.
+- Semantic and layout collections are readonly and source ordered.
+- Meaningful nodes keep stable IDs and source locations.
+- Canonical JSON sorts object keys when computing the document hash.
+- PDF output has no generated clock value or random document ID.
+- Engine stages do not implicitly read the current locale, time zone, clock, randomness, filesystem, network, or operating-system fonts.
+
+## What to persist for a reproducible render
+
+Persist the exact template bytes or template hash, data JSON, engine version, `locale`, `timeZone`, metadata, render options, diagnostics, and optional layout trace. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison.
+
+<Note>
+The architecture promises byte-identical PDFs where dependency compression permits. Layout traces are the stronger cross-environment diagnostic artifact when byte-level compression differs.
+</Note>
+
+For the underlying unit choice, see [ADR 0002](/adr/0002-integer-layout-units).

@@ -1,0 +1,26 @@
+---
+title: "Font handling"
+description: "Phase 1 Helvetica behavior and the boundary for future registered fonts."
+---
+
+# Font handling
+
+Phase 1 deliberately uses the PDF built-in Helvetica Type 1 font. It does not inspect operating-system fonts, discover fonts from the machine, or embed custom font data.
+
+## What happens today
+
+- Layout measures text with a small explicit Helvetica-compatible metrics adapter.
+- PDF serialization writes positioned, searchable Helvetica text using WinAnsi encoding.
+- A DOCX run that names another font produces fallback warnings; it is measured and rendered as Helvetica.
+- Bold, italic, and underline are not visually preserved in the current layout/PDF path.
+- Characters outside WinAnsi cause an error; the affected glyph run is omitted to avoid claiming a different character was rendered.
+
+## Why this is explicit
+
+Implicit system-font lookup would make output machine-dependent. Keeping the first slice to a known built-in font proves positioning and searchability while preserving deterministic behavior across Bun, Node, and browser environments.
+
+## Future font boundary
+
+The architecture’s compatibility tuple reserves a place for registered font bytes. That is a forward-looking contract, not a Phase 1 registration API. Broader font support requires a separate dependency decision that considers licensing, portability, bundle size, deterministic glyph positioning, and API stability.
+
+Read [ADR 0003](/adr/0003-phase-one-dependency-criteria) before expanding this boundary.

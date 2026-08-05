@@ -1,3 +1,8 @@
+---
+title: "ADR 0002: Integer twips for layout"
+description: "Accepted decision to keep layout geometry in integer twips."
+---
+
 # ADR 0002: Integer twips for layout
 
 - Status: accepted

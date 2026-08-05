@@ -1,0 +1,60 @@
+---
+title: "Template language"
+description: "Phase 1 inline value tags, paths, and type annotations."
+---
+
+# Template language
+
+Phase 1 resolves inline value tags only. It never evaluates template code.
+
+## Grammar
+
+```text
+{{ path }}
+{{ path:type }}
+```
+
+`path` is a dotted property path. Each segment begins with a letter, `_`, or `$`, and remaining characters may also be digits. Prototype-related segments (`__proto__`, `prototype`, and `constructor`) are forbidden.
+
+```text
+{{customer.name}}
+{{invoice.total:number}}
+{{invoice.isPaid:boolean}}
+{{invoice.issuedAt:date}}
+```
+
+Supported explicit types are `string`, `number`, `boolean`, and `date`. Date values are strings; Phase 1 does not format them beyond substitution.
+
+## Data rules
+
+An explicit type requires its matching JSON value:
+
+| Type | Required input | Rendered text |
+| --- | --- | --- |
+| `string` | string | unchanged |
+| `number` | finite number | JavaScript string form |
+| `boolean` | boolean | `true` or `false` |
+| `date` | string | unchanged |
+
+For untyped fields, strings, finite numbers, and booleans are accepted. Missing paths and type mismatches are errors by default. The lower-level resolver has a permissive mode that substitutes empty text with a warning; use that only when an application deliberately chooses it.
+
+## Generated contract
+
+Compilation generates these values from the tags it finds:
+
+- a sorted field manifest with source locations;
+- a JSON Schema (Draft 2020-12) where discovered fields are required; and
+- starter data using empty strings, `0`, `false`, or the fixed ISO timestamp `1970-01-01T00:00:00.000Z`.
+
+## Unsupported expressions
+
+The following are rejected in Phase 1:
+
+```text
+{{#items}} ... {{/items}}   // loops
+{{#if paid}} ... {{/if}}   // conditions
+{{@image logo}}            // image tags
+{{amount | currency}}      // helpers/formatters
+```
+
+Nested or unclosed tags are also errors. The renderer does not execute JavaScript, call services, or fetch network resources while resolving values.

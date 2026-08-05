@@ -1,3 +1,8 @@
+---
+title: "Architecture"
+description: "The staged deterministic pipeline and its package boundaries."
+---
+
 # Architecture
 
 ## Product boundary

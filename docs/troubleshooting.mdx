@@ -1,0 +1,40 @@
+---
+title: "Troubleshooting"
+description: "Interpret common Phase 1 diagnostics and rendering failures."
+---
+
+# Troubleshooting
+
+## The engine says locale or time zone is required
+
+Every render must include both fields:
+
+```ts
+{ locale: "en-ZA", timeZone: "Africa/Johannesburg" }
+```
+
+The engine deliberately refuses to read ambient runtime defaults.
+
+## A value is missing or has the wrong type
+
+Check the compiled manifest and generated JSON Schema, then ensure every required dotted path exists. `number` requires a finite number, `boolean` requires a boolean, and `string`/`date` require strings. See [template language](/template-language).
+
+## A block tag or image tag is rejected
+
+Conditions, loops, and images are planned features. Replace them with a supported inline value tag or redesign the template until the corresponding feature lands.
+
+## The PDF has a Helvetica warning or missing characters
+
+Phase 1 uses built-in Helvetica regardless of the DOCX font family. The current serializer accepts WinAnsi text only; a glyph run outside that encoding is reported as an error and omitted. See [font handling](/font-handling).
+
+## Content is different from Word
+
+Confirm that the template uses only the supported profile. Tables, headers, footers, images, and advanced styles are not supported. For text, bold, italic, underline, and non-Helvetica families produce documented fidelity warnings.
+
+## The browser client cannot render after a reload
+
+Compiled templates live in the worker’s in-memory map. Compile the DOCX again after the worker is disposed, the page reloads, or the client reports `browser/template-missing`.
+
+## The renderer stopped due to a limit
+
+Inspect the diagnostic/error and decide whether the input should be rejected or whether an application-owned engine instance needs a deliberately reviewed `limits` override. Do not lift limits globally as a workaround for untrusted input.

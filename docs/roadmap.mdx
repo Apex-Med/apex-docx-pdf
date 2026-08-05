@@ -1,0 +1,24 @@
+---
+title: "Roadmap"
+description: "What Phase 1 proves and the planned work needed for a broader DOCX profile."
+---
+
+# Roadmap
+
+Phase 1 proves a staged, deterministic path from a constrained DOCX main document through typed inline values, A4 layout, and searchable Helvetica PDF output.
+
+## Next renderer capabilities
+
+- Table parsing, normalization, measurement, fragmentation, and PDF display-list support.
+- Registered/custom fonts and a deterministic font/glyph adapter.
+- Conditional and loop template blocks with explicit limits and source diagnostics.
+- Images and image-template tags with decoding, resource policy, and layout support.
+- Header/footer and broader section behavior.
+
+## Integration and operations
+
+- A defined Convex adapter with application-owned authorization, storage, audit, and retention policy.
+- Deployment configuration and a canonical hosted playground/product URL.
+- Broader compatibility fixtures, golden PDFs, layout-trace comparisons, and cross-runtime verification.
+
+Each feature must enter through the staged architecture rather than bypassing it. In particular, font and PDF-library expansion requires the separate decision described in [ADR 0003](/adr/0003-phase-one-dependency-criteria).

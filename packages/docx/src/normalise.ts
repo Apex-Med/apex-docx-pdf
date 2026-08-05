@@ -29,7 +29,9 @@ export function normaliseDocx(
               bold: run.properties.bold,
               italic: run.properties.italic,
               underline: run.properties.underline,
-              color: run.properties.color,
+              color: run.properties.color.startsWith("#")
+                ? run.properties.color
+                : `#${run.properties.color}`,
             },
           })
           textIndex += 1

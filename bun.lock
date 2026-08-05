@@ -86,6 +86,7 @@
         "@apex-docx-pdf/template": "workspace:*",
       },
       "devDependencies": {
+        "fflate": "^0.8.3",
         "typescript": "^6",
       },
     },

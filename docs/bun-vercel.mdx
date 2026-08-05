@@ -1,0 +1,29 @@
+---
+title: "Bun and Vercel"
+description: "Run the monorepo with Bun today and keep deployment work explicitly future-scoped."
+---
+
+# Bun and Vercel
+
+This repository is a Bun workspace monorepo. Its current scripts live at the repository root and in `apps/web`.
+
+## Local commands
+
+```bash
+bun test
+bun run typecheck
+bun run build
+bun --cwd apps/web dev
+```
+
+The web app uses the browser package and a module worker. The engine packages are intentionally portable across Bun, supported Node.js, and modern browsers subject to the Phase 1 profile.
+
+## Vercel status
+
+Vercel deployment is planned. This repository does not currently include Vercel project configuration, environment variables, deployment scripts, production domains, or a hosted playground URL.
+
+When deployment is introduced, keep the renderer’s explicit-input contract intact: package bytes and data should reach an application-owned endpoint or worker boundary; locale, time zone, metadata, limits, and authorization must be explicit. Do not turn deployment configuration into an implicit source of fonts, locale, clock data, or network template execution.
+
+<Note>
+The documentation site is configured independently under `docs/docs.json`. Its deployment host should be chosen before adding a product or playground link.
+</Note>

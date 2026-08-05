@@ -1,0 +1,40 @@
+---
+title: "Authoring guide"
+description: "Create templates that fit the documented Phase 1 DOCX profile."
+---
+
+# Authoring guide
+
+Phase 1 accepts one ordinary DOCX main document and normalizes its paragraphs and text runs before templating and layout. Keep templates simple and make unsupported content an intentional future migration, not an assumption.
+
+## Supported authoring shape
+
+- Use paragraphs and text runs in the main document.
+- Use inline value tags in paragraph text, for example `{{invoice.number}}`.
+- Expect A4 output with deterministic layout.
+- Keep text within the PDF’s current WinAnsi encoding limits when output must be preserved exactly.
+
+## Use explicit value types where helpful
+
+```text
+Invoice: {{invoice.number:string}}
+Amount: {{invoice.total:number}}
+Paid: {{invoice.paid:boolean}}
+Issued: {{invoice.issuedAt:date}}
+```
+
+An untyped tag is permitted, but explicit types make generated schema and data validation more useful. Each field is required by the generated JSON Schema.
+
+## Preserve an inspectable template
+
+Use semantic paths such as `customer.address.city`; avoid dynamic expressions, helpers, or arbitrary code. The compiler rejects malformed tags, unsafe paths, and incompatible explicit types with source-located diagnostics.
+
+<Tip>
+Save a representative template fixture with known data and keep its layout trace/PDF as a regression artifact. This makes intentional renderer changes distinguishable from accidental drift.
+</Tip>
+
+## Do not rely on these yet
+
+Tables, images, headers, footers, conditions, loops, image tags, and custom font rendering are outside the Phase 1 profile. The correct behavior is a diagnostic or fallback where documented—not a best-effort recreation of Word.
+
+See [template language](/template-language) for grammar and [font handling](/font-handling) for the current Helvetica policy.

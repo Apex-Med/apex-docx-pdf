@@ -1,3 +1,8 @@
+---
+title: "ADR 0003: Phase 1 dependency criteria"
+description: "Accepted criteria for portable deterministic rendering dependencies."
+---
+
 # ADR 0003: Phase 1 dependency criteria
 
 - Status: accepted

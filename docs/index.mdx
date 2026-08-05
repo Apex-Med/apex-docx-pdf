@@ -1,0 +1,39 @@
+---
+title: "Apex DOCX PDF"
+description: "A deterministic DOCX-profile renderer that produces searchable PDFs."
+---
+
+# Apex DOCX PDF
+
+Apex DOCX PDF renders a deliberately documented DOCX profile to searchable PDF. It is not a Word clone: unsupported or materially lossy source content is diagnosed with source location instead of being silently discarded.
+
+Phase 1 is a narrow, working vertical slice: ordinary main-document paragraphs, text runs, and inline value placeholders render onto A4 pages with deterministic geometry and built-in Helvetica PDF text.
+
+<Warning>
+Phase 1 is intentionally small. Tables, custom/full fonts, conditional and loop tags, images, headers, footers, Convex wiring, and deployment are planned—not implemented.
+</Warning>
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Get started" icon="play" href="/getting-started">
+    Compile a DOCX template and render it with explicit locale and time zone.
+  </Card>
+  <Card title="Author a template" icon="file-pen-line" href="/authoring">
+    Prepare the supported Phase 1 DOCX profile.
+  </Card>
+  <Card title="Template language" icon="braces" href="/template-language">
+    Learn value-tag paths and the supported type annotations.
+  </Card>
+  <Card title="Feature status" icon="list-checks" href="/supported-features">
+    See exactly what Phase 1 supports and what it rejects.
+  </Card>
+</CardGroup>
+
+## Product and playground links
+
+This documentation repository intentionally does not declare a public product or playground URL. The local web app includes a `/playground` route, but a Mintlify deployment may be hosted on a different origin. Configure any product or playground link at deployment time, once its canonical URL is known.
+
+## Design contract
+
+The renderer treats the compatibility input as template bytes, data, registered font bytes, engine version, locale, time zone, and explicit render options. Identical inputs are intended to produce identical layout traces and—where compression behavior permits—byte-identical PDFs. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.

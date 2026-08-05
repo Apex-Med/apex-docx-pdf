@@ -1,0 +1,43 @@
+---
+title: "Convex integration"
+description: "A future application-owned storage and authorization boundary for rendering."
+---
+
+# Convex integration
+
+Convex integration is planned, not present in this repository. There is no `convex/` directory, schema, function, storage policy, or production endpoint to configure today.
+
+## Intended boundary
+
+An eventual Convex integration should keep document access and authorization outside the pure renderer. Fetch authorized bytes, invoke the engine with explicit inputs, record diagnostics, then store the returned PDF through the application’s storage policy.
+
+```ts
+// Boundary sketch only — not a present or runnable repository module.
+const templateBytes = await loadAuthorizedTemplateBytes(templateId, viewer)
+const engine = await createDocxPdfEngine({ limits })
+const compiled = await engine.compile(templateBytes, {
+  unsupportedFeatures: "strict",
+})
+const result = await engine.render(compiled, data, {
+  locale: "en-ZA",
+  timeZone: "Africa/Johannesburg",
+  metadata: { title: "Customer document" },
+})
+
+await storeAuthorizedPdf(result.pdf, viewer)
+await recordRenderAudit({
+  templateHash: result.templateHash,
+  documentHash: result.documentHash,
+  diagnostics: result.diagnostics,
+})
+```
+
+## Decisions to make before implementation
+
+- Define tenant-scoped template and rendered-PDF access rules.
+- Decide retention, deletion, and audit-redaction policies for template data and diagnostics.
+- Bound action duration, size, concurrency, cancellation, and retry behavior.
+- Choose whether rendering is synchronous, queued, or delegated to a browser worker.
+- Keep the exact `locale`, `timeZone`, engine version, options, and bytes available for reproducibility.
+
+Do not infer an endpoint or production behavior from this example. It only identifies the seam where a future Convex adapter belongs.

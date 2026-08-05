@@ -1,3 +1,8 @@
+---
+title: "ADR 0001: Staged document pipeline"
+description: "Accepted decision for distinct readonly pipeline types."
+---
+
 # ADR 0001: Staged document pipeline
 
 - Status: accepted

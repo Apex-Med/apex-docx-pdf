@@ -1,0 +1,78 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "maple",
+  "name": "Apex DOCX PDF",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#60A5FA",
+    "dark": "#1D4ED8"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "fonts": {
+    "family": "Geist Mono",
+    "weight": 400,
+    "heading": {
+      "family": "Geist",
+      "weight": 600
+    }
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs",
+    "codeblocks": {
+      "theme": {
+        "light": "github-light",
+        "dark": "github-dark"
+      }
+    }
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Introduction",
+        "icon": "book-open",
+        "pages": [
+          "index",
+          "getting-started",
+          "supported-features"
+        ]
+      },
+      {
+        "group": "Authoring",
+        "icon": "file-pen-line",
+        "pages": [
+          "authoring",
+          "template-language",
+          "font-handling"
+        ]
+      },
+      {
+        "group": "Operating the renderer",
+        "icon": "settings-2",
+        "pages": [
+          "browser",
+          "determinism",
+          "security",
+          "bun-vercel",
+          "convex"
+        ]
+      },
+      {
+        "group": "Reference",
+        "icon": "library",
+        "pages": [
+          "architecture",
+          "adr/0001-staged-document-pipeline",
+          "adr/0002-integer-layout-units",
+          "adr/0003-phase-one-dependency-criteria",
+          "troubleshooting",
+          "roadmap"
+        ]
+      }
+    ]
+  }
+}
