@@ -1,0 +1,20 @@
+{
+  "name": "@apex-docx-pdf/template",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apex-docx-pdf/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6"
+  }
+}

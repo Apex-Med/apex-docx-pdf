@@ -8,59 +8,195 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root"
-import { Route as IndexRouteImport } from "./routes/index"
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as DocsRouteImport } from './routes/docs'
+import { Route as PlaygroundRouteImport } from './routes/playground'
+import { Route as DocsIndexRouteImport } from './routes/docs.index'
+import { Route as DocsGettingStartedRouteImport } from './routes/docs.getting-started'
+import { Route as DocsSupportedFeaturesRouteImport } from './routes/docs.supported-features'
+import { Route as DocsTemplateLanguageRouteImport } from './routes/docs.template-language'
 
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaygroundRoute = PlaygroundRouteImport.update({
+  id: '/playground',
+  path: '/playground',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsGettingStartedRoute = DocsGettingStartedRouteImport.update({
+  id: '/getting-started',
+  path: '/getting-started',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsSupportedFeaturesRoute = DocsSupportedFeaturesRouteImport.update({
+  id: '/supported-features',
+  path: '/supported-features',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsTemplateLanguageRoute = DocsTemplateLanguageRouteImport.update({
+  id: '/template-language',
+  path: '/template-language',
+  getParentRoute: () => DocsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/docs': typeof DocsRouteWithChildren
+  '/playground': typeof PlaygroundRoute
+  '/docs/getting-started': typeof DocsGettingStartedRoute
+  '/docs/supported-features': typeof DocsSupportedFeaturesRoute
+  '/docs/template-language': typeof DocsTemplateLanguageRoute
+  '/docs/': typeof DocsIndexRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/playground': typeof PlaygroundRoute
+  '/docs/getting-started': typeof DocsGettingStartedRoute
+  '/docs/supported-features': typeof DocsSupportedFeaturesRoute
+  '/docs/template-language': typeof DocsTemplateLanguageRoute
+  '/docs': typeof DocsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/docs': typeof DocsRouteWithChildren
+  '/playground': typeof PlaygroundRoute
+  '/docs/getting-started': typeof DocsGettingStartedRoute
+  '/docs/supported-features': typeof DocsSupportedFeaturesRoute
+  '/docs/template-language': typeof DocsTemplateLanguageRoute
+  '/docs/': typeof DocsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/"
+  fullPaths:
+    | '/'
+    | '/docs'
+    | '/playground'
+    | '/docs/getting-started'
+    | '/docs/supported-features'
+    | '/docs/template-language'
+    | '/docs/'
   fileRoutesByTo: FileRoutesByTo
-  to: "/"
-  id: "__root__" | "/"
+  to:
+    | '/'
+    | '/playground'
+    | '/docs/getting-started'
+    | '/docs/supported-features'
+    | '/docs/template-language'
+    | '/docs'
+  id:
+    | '__root__'
+    | '/'
+    | '/docs'
+    | '/playground'
+    | '/docs/getting-started'
+    | '/docs/supported-features'
+    | '/docs/template-language'
+    | '/docs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DocsRoute: typeof DocsRouteWithChildren
+  PlaygroundRoute: typeof PlaygroundRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/"
-      path: "/"
-      fullPath: "/"
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playground': {
+      id: '/playground'
+      path: '/playground'
+      fullPath: '/playground'
+      preLoaderRoute: typeof PlaygroundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/getting-started': {
+      id: '/docs/getting-started'
+      path: '/getting-started'
+      fullPath: '/docs/getting-started'
+      preLoaderRoute: typeof DocsGettingStartedRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/supported-features': {
+      id: '/docs/supported-features'
+      path: '/supported-features'
+      fullPath: '/docs/supported-features'
+      preLoaderRoute: typeof DocsSupportedFeaturesRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/template-language': {
+      id: '/docs/template-language'
+      path: '/template-language'
+      fullPath: '/docs/template-language'
+      preLoaderRoute: typeof DocsTemplateLanguageRouteImport
+      parentRoute: typeof DocsRoute
     }
   }
 }
 
+interface DocsRouteChildren {
+  DocsGettingStartedRoute: typeof DocsGettingStartedRoute
+  DocsSupportedFeaturesRoute: typeof DocsSupportedFeaturesRoute
+  DocsTemplateLanguageRoute: typeof DocsTemplateLanguageRoute
+  DocsIndexRoute: typeof DocsIndexRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsGettingStartedRoute: DocsGettingStartedRoute,
+  DocsSupportedFeaturesRoute: DocsSupportedFeaturesRoute,
+  DocsTemplateLanguageRoute: DocsTemplateLanguageRoute,
+  DocsIndexRoute: DocsIndexRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DocsRoute: DocsRouteWithChildren,
+  PlaygroundRoute: PlaygroundRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx"
-import type { createStart } from "@tanstack/react-start"
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>

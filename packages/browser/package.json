@@ -1,0 +1,22 @@
+{
+  "name": "@apex-docx-pdf/browser",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apex-docx-pdf/core": "workspace:*",
+    "@apex-docx-pdf/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6"
+  }
+}

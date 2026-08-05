@@ -13,7 +13,25 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Apex DOCX PDF — deterministic DOCX template rendering",
+      },
+      {
+        name: "description",
+        content:
+          "Create templates in Word or Google Docs and generate deterministic searchable PDFs in TypeScript without LibreOffice or a conversion API.",
+      },
+      {
+        name: "theme-color",
+        content: "#ffffff",
+      },
+      {
+        property: "og:title",
+        content: "Apex DOCX PDF",
+      },
+      {
+        property: "og:description",
+        content:
+          "Word-authored templates, typed data, and deterministic searchable PDFs from one portable TypeScript engine.",
       },
     ],
     links: [

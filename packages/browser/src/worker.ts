@@ -1,0 +1,166 @@
+import { EngineOperationError, createDocxPdfEngine } from "@apex-docx-pdf/engine"
+import type { CompiledTemplate, Diagnostic } from "@apex-docx-pdf/core"
+
+import type {
+  BrowserCompileResult,
+  RendererWorkerRequest,
+  RendererWorkerResponse,
+  WorkerProgressStage,
+} from "./protocol"
+
+type RendererWorkerScope = Readonly<{
+  addEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<RendererWorkerRequest>) => void
+  ) => void
+  postMessage: (
+    message: RendererWorkerResponse,
+    transfer?: Transferable[]
+  ) => void
+}>
+
+export function installRendererWorker(
+  scope: RendererWorkerScope = globalThis as unknown as RendererWorkerScope
+): () => void {
+  const compiledTemplates = new Map<string, CompiledTemplate>()
+  const controllers = new Map<string, AbortController>()
+  const enginePromise = createDocxPdfEngine()
+
+  const onMessage = (event: MessageEvent<RendererWorkerRequest>): void => {
+    const request = event.data
+    if (request.type === "cancel") {
+      controllers.get(request.requestId)?.abort()
+      return
+    }
+    const controller = new AbortController()
+    controllers.set(request.requestId, controller)
+    void (async () => {
+      try {
+        const engine = await enginePromise
+        if (request.type === "compile") {
+          progress(scope, request.requestId, "validating", 1, 4, "Validating DOCX package")
+          const compiled = await engine.compile(new Uint8Array(request.templateBytes), {
+            unsupportedFeatures: "strict",
+            signal: controller.signal,
+          })
+          progress(scope, request.requestId, "compiling", 3, 4, "Extracting typed fields")
+          compiledTemplates.set(compiled.templateHash, compiled)
+          const result: BrowserCompileResult = {
+            templateHash: compiled.templateHash,
+            manifest: compiled.manifest,
+            jsonSchema: compiled.jsonSchema,
+            starterData: compiled.starterData,
+            diagnostics: compiled.diagnostics,
+          }
+          progress(scope, request.requestId, "complete", 4, 4, "Template ready")
+          respond(scope, {
+            type: "success",
+            requestId: request.requestId,
+            operation: "compile",
+            result,
+          })
+          return
+        }
+
+        const compiled = compiledTemplates.get(request.templateHash)
+        if (!compiled) {
+          throw new EngineOperationError(
+            "browser/template-missing",
+            "The compiled template is no longer available; compile it again",
+            []
+          )
+        }
+        progress(scope, request.requestId, "resolving", 1, 3, "Resolving template data")
+        const rendered = await engine.render(compiled, request.data, {
+          ...request.options,
+          signal: controller.signal,
+        })
+        progress(scope, request.requestId, "pdf", 2, 3, "Writing deterministic PDF")
+        const pdf = rendered.pdf.slice().buffer
+        progress(scope, request.requestId, "complete", 3, 3, "PDF ready")
+        respond(
+          scope,
+          {
+            type: "success",
+            requestId: request.requestId,
+            operation: "render",
+            result: {
+              pdf,
+              pageCount: rendered.pageCount,
+              diagnostics: rendered.diagnostics,
+              timings: rendered.timings,
+              ...(rendered.layoutTrace
+                ? { layoutTrace: rendered.layoutTrace }
+                : {}),
+            },
+          },
+          [pdf]
+        )
+      } catch (error) {
+        const failure = failureFrom(error)
+        respond(scope, {
+          type: "failure",
+          requestId: request.requestId,
+          ...failure,
+        })
+      } finally {
+        controllers.delete(request.requestId)
+      }
+    })()
+  }
+
+  scope.addEventListener("message", onMessage)
+  return () => {
+    for (const controller of controllers.values()) controller.abort()
+    controllers.clear()
+    compiledTemplates.clear()
+  }
+}
+
+function progress(
+  scope: RendererWorkerScope,
+  requestId: string,
+  stage: WorkerProgressStage,
+  completed: number,
+  total: number,
+  message: string
+): void {
+  respond(scope, {
+    type: "progress",
+    progress: { requestId, stage, completed, total, message },
+  })
+}
+
+function respond(
+  scope: RendererWorkerScope,
+  response: RendererWorkerResponse,
+  transfer: Transferable[] = []
+): void {
+  scope.postMessage(response, transfer)
+}
+
+function failureFrom(error: unknown): Readonly<{
+  code: string
+  message: string
+  diagnostics: readonly Diagnostic[]
+}> {
+  if (error instanceof EngineOperationError) {
+    return {
+      code: error.code,
+      message: error.message,
+      diagnostics: error.diagnostics,
+    }
+  }
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return {
+      code: "browser/aborted",
+      message: "The operation was cancelled",
+      diagnostics: [],
+    }
+  }
+  return {
+    code: "browser/internal",
+    message: error instanceof Error ? error.message : "The render worker failed",
+    diagnostics: [],
+  }
+}
