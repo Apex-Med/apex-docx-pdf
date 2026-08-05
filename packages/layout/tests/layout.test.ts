@@ -7,6 +7,7 @@ import {
   type FontFaceRequest,
   type FontFaceResource,
   type FontRegistry,
+  type FontWeight,
   type GlyphRun,
   type NumberingDefinition,
   type ResolvedBlock,
@@ -161,6 +162,7 @@ function table(
         verticalMerge: "none",
         verticalAlignment: "top",
         fillColor: null,
+        borders: { top: null, right: null, bottom: null, left: null },
         blocks: [
           paragraph([{ text }], {}, `cell-p-${rowIndex}-${columnIndex}`),
         ],
@@ -326,7 +328,7 @@ function fakeTypography() {
       return {
         faceId: id,
         family: "Test Sans",
-        weight: Number(weight) as 400 | 700,
+        weight: Number(weight) as FontWeight,
         style: fontStyle as "normal" | "italic",
         postscriptName: `TestSans-${id}`,
         kind: "truetype",
@@ -432,6 +434,46 @@ describe("paragraph layout", () => {
         .map((glyph) => glyph.unicode)
         .join("")
     ).toBe("mixed style")
+  })
+
+  test("preserves medium and semibold requests in embedded layout runs", () => {
+    const typography = fakeTypography()
+    const result = layoutDocument(
+      documentWith([
+        paragraph([
+          {
+            text: "Medium",
+            style: {
+              ...style,
+              fontFamily: "Test Sans",
+              fontWeight: 500,
+            },
+          },
+          {
+            text: "SemiBold",
+            style: {
+              ...style,
+              fontFamily: "Test Sans",
+              fontWeight: 600,
+            },
+          },
+        ]),
+      ]),
+      { fonts: typography.registry, shaper: typography.shaper }
+    )
+
+    expect(typography.matches.map(({ weight }) => weight)).toEqual([500, 600])
+    const runs = glyphRuns(result)
+    expect(runs.every((run) => run.fontSource === "embedded")).toBeTrue()
+    expect(
+      runs.map((run) => [
+        run.fontWeight,
+        run.fontSource === "embedded" ? run.faceId : undefined,
+      ])
+    ).toEqual([
+      [500, fontFaceId("500-normal")],
+      [600, fontFaceId("600-normal")],
+    ])
   })
 
   test("treats an explicit family alias as a resolved match rather than a fallback warning", () => {
@@ -1167,6 +1209,240 @@ describe("table layout", () => {
     expect(lines.filter((line) => line.y1 === twips(92))).toHaveLength(1)
     expect(lines.some((line) => line.lineCap === "round")).toBe(true)
     expect(lines.some((line) => line.dashArray?.[0] === twips(32))).toBe(true)
+  })
+
+  test("lets direct cell borders own shared edges without double-stroking", () => {
+    const tableBorder = {
+      style: "single" as const,
+      color: "#111111",
+      width: twips(10),
+      space: twips(0),
+    }
+    const direct = {
+      style: "single" as const,
+      color: "#999999",
+      width: twips(20),
+      space: twips(0),
+    }
+    const base = table([
+      ["a", "b"],
+      ["c", "d"],
+    ])
+    const rows = base.rows.map((row) => ({
+      ...row,
+      cells: row.cells.map((cell) => ({
+        ...cell,
+        borders: { top: direct, right: direct, bottom: direct, left: direct },
+      })),
+    }))
+    const bordered: ResolvedTable = {
+      ...base,
+      borders: {
+        top: tableBorder,
+        right: tableBorder,
+        bottom: tableBorder,
+        left: tableBorder,
+        insideHorizontal: tableBorder,
+        insideVertical: tableBorder,
+      },
+      rows,
+    }
+    const result = layoutDocument(documentWith([bordered]), {
+      metrics: fixedMetrics,
+    })
+    const lines =
+      result.displayList.pages[0]?.items.filter(
+        (item) => item.type === "line"
+      ) ?? []
+    const sharedHorizontal = lines.filter(
+      (line) =>
+        line.x1 === twips(100) &&
+        line.x2 === twips(500) &&
+        line.y1 === twips(380) &&
+        line.y2 === twips(380)
+    )
+    const sharedVertical = lines.filter(
+      (line) =>
+        line.x1 === twips(500) &&
+        line.x2 === twips(500) &&
+        line.y1 === twips(100) &&
+        line.y2 === twips(380)
+    )
+    expect(sharedHorizontal).toHaveLength(1)
+    expect(sharedVertical).toHaveLength(1)
+    expect(sharedHorizontal[0]).toMatchObject({
+      color: "#999999",
+      width: twips(20),
+    })
+    expect(sharedVertical[0]).toMatchObject({
+      color: "#999999",
+      width: twips(20),
+    })
+
+    const suppressed: ResolvedTable = {
+      ...bordered,
+      rows: bordered.rows.map((row, rowIndex) => ({
+        ...row,
+        cells: row.cells.map((cell, cellIndex) =>
+          rowIndex === 0 && cellIndex === 0
+            ? {
+                ...cell,
+                borders: {
+                  ...cell.borders,
+                  top: { ...direct, style: "none" as const },
+                },
+              }
+            : cell
+        ),
+      })),
+    }
+    const suppressedLines =
+      layoutDocument(documentWith([suppressed]), {
+        metrics: fixedMetrics,
+      }).displayList.pages[0]?.items.filter((item) => item.type === "line") ??
+      []
+    expect(
+      suppressedLines.filter(
+        (line) =>
+          line.y1 === twips(100) &&
+          line.y2 === twips(100) &&
+          line.x1 === twips(100) &&
+          line.x2 === twips(500)
+      )
+    ).toHaveLength(0)
+  })
+
+  test("keeps direct borders stable across spans, merges, fragments, and repeated headers", () => {
+    const direct = {
+      style: "single" as const,
+      color: "#778899",
+      width: twips(12),
+      space: twips(0),
+    }
+    const base = table([
+      ["header", ""],
+      ["merged", "body"],
+      ["", "tail"],
+    ])
+    const header = base.rows[0] as ResolvedTable["rows"][number]
+    const firstBody = base.rows[1] as ResolvedTable["rows"][number]
+    const lastBody = base.rows[2] as ResolvedTable["rows"][number]
+    const headerCell = tableCell(header)
+    const firstMergeCell = tableCell(firstBody)
+    const firstBodyCell = tableCell(firstBody, 1)
+    const continuationCell = tableCell(lastBody)
+    const lastBodyCell = tableCell(lastBody, 1)
+    const value: ResolvedTable = {
+      ...base,
+      repeatHeaderRowCount: 1,
+      rows: [
+        {
+          ...header,
+          repeatAsHeader: true,
+          cells: [
+            {
+              ...headerCell,
+              width: twips(800),
+              columnSpan: 2,
+              borders: {
+                top: direct,
+                right: direct,
+                bottom: direct,
+                left: direct,
+              },
+            },
+          ],
+        },
+        {
+          ...firstBody,
+          cells: [
+            {
+              ...firstMergeCell,
+              verticalMerge: "restart",
+              borders: {
+                top: direct,
+                right: direct,
+                bottom: direct,
+                left: direct,
+              },
+            },
+            firstBodyCell,
+          ],
+        },
+        {
+          ...lastBody,
+          cells: [
+            {
+              ...continuationCell,
+              verticalMerge: "continue",
+              blocks: [],
+            },
+            lastBodyCell,
+          ],
+        },
+      ],
+    }
+    const result = layoutDocument(
+      documentWith([value], { pageHeight: twips(700) }),
+      { metrics: fixedMetrics }
+    )
+    expect(result.displayList.pages.length).toBeGreaterThan(1)
+    for (const page of result.displayList.pages) {
+      const signatures = page.items
+        .filter((item) => item.type === "line")
+        .map(
+          (line) =>
+            `${line.x1}:${line.y1}:${line.x2}:${line.y2}:${line.width}:${line.color}`
+        )
+      expect(new Set(signatures).size).toBe(signatures.length)
+    }
+    const continuationHorizontals = result.displayList.pages.flatMap((page) =>
+      page.items.filter(
+        (item) =>
+          item.type === "line" &&
+          item.sourceNodeId === continuationCell.id &&
+          item.color === direct.color &&
+          item.y1 === item.y2
+      )
+    )
+    expect(continuationHorizontals).toHaveLength(1)
+  })
+
+  test("fails closed for conflicting semantic direct borders", () => {
+    const base = table([["a", "b"]])
+    const row = base.rows[0] as ResolvedTable["rows"][number]
+    const firstCell = tableCell(row)
+    const secondCell = tableCell(row, 1)
+    const solid = {
+      style: "single" as const,
+      color: "#000000",
+      width: twips(8),
+      space: twips(0),
+    }
+    const conflicting: ResolvedTable = {
+      ...base,
+      rows: [
+        {
+          ...row,
+          cells: [
+            {
+              ...firstCell,
+              borders: { ...firstCell.borders, right: solid },
+            },
+            {
+              ...secondCell,
+              borders: {
+                ...secondCell.borders,
+                left: { ...solid, style: "dashed" },
+              },
+            },
+          ],
+        },
+      ],
+    }
+    expect(() =>
+      layoutDocument(documentWith([conflicting]), { metrics: fixedMetrics })
+    ).toThrow("Conflicting direct borders")
   })
 
   test("applies exact/atLeast heights and top/center/bottom vertical alignment", () => {
@@ -2371,5 +2647,202 @@ describe("Phase 6 images, sections, headers, footers, and page fields", () => {
     expect(() =>
       layoutDocument(base, { metrics: fixedMetrics, signal: controller.signal })
     ).toThrow()
+  })
+
+  test("renders K3 18-half-point scripts with the fixed scale and shift rule", () => {
+    const eighteenHalfPoints = { ...style, fontSize: twips(180) }
+    const result = layoutDocument(
+      documentWith([
+        paragraph([
+          { text: "H", style: eighteenHalfPoints },
+          {
+            text: "2",
+            style: {
+              ...eighteenHalfPoints,
+              verticalAlignment: "subscript",
+            },
+          },
+          {
+            text: "+",
+            style: {
+              ...eighteenHalfPoints,
+              verticalAlignment: "superscript",
+            },
+          },
+        ]),
+      ]),
+      { metrics: fixedMetrics }
+    )
+    const [baseline, subscript, superscript] = glyphRuns(result)
+    expect(baseline).toMatchObject({ text: "H", fontSize: 180 })
+    expect(subscript).toMatchObject({ text: "2", fontSize: 120 })
+    expect(superscript).toMatchObject({ text: "+", fontSize: 120 })
+    expect(subscript?.baselineY).toBe(twips((baseline?.baselineY ?? 0) + 30))
+    expect(superscript?.baselineY).toBe(twips((baseline?.baselineY ?? 0) - 60))
+  })
+
+  test("emits the K3 VML rule as an atomic full-width 1.5-point block", () => {
+    const rule: Extract<ResolvedBlock, { type: "horizontalRule" }> = {
+      type: "horizontalRule",
+      id: "k3-rule" as never,
+      source: {
+        part: "word/document.xml",
+        xmlPath: "/w:document[1]/w:body[1]/w:p[1]/w:r[1]/w:pict[1]",
+      },
+      properties: { ...paragraphProperties, spacingBefore: twips(20) },
+      height: twips(30),
+      color: "#A0A0A0",
+    }
+    const result = layoutDocument(documentWith([rule]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    const line = result.displayList.pages[0]?.items.find(
+      (item) => item.type === "line"
+    )
+    expect(line).toEqual({
+      type: "line",
+      sourceNodeId: rule.id,
+      x1: twips(100),
+      y1: twips(135),
+      x2: twips(1_900),
+      y2: twips(135),
+      width: twips(30),
+      color: "#A0A0A0",
+    })
+    expect(result.trace?.events).toContainEqual(
+      expect.objectContaining({
+        sourceNodeId: "k3-rule",
+        reason: "word-vml-horizontal-rule",
+      })
+    )
+  })
+
+  test("paginates K3 VML rules atomically and honours limits and cancellation", () => {
+    const rule: Extract<ResolvedBlock, { type: "horizontalRule" }> = {
+      type: "horizontalRule",
+      id: "k3-rule-page" as never,
+      source,
+      properties: paragraphProperties,
+      height: twips(30),
+      color: "#A0A0A0",
+    }
+    const leading = paragraph([{ text: "one\ntwo\nthree\nfour\nfive" }], {
+      lineSpacing: { rule: "exact", value: twips(280) },
+    })
+    const input = documentWith([leading, rule])
+    const result = layoutDocument(input, { metrics: fixedMetrics })
+    const rulePage = result.displayList.pages.find((page) =>
+      page.items.some((item) => item.sourceNodeId === rule.id)
+    )
+    expect(rulePage?.pageNumber).toBe(2)
+    expect(() =>
+      layoutDocument(input, { metrics: fixedMetrics, maxPages: 1 })
+    ).toThrow(LayoutLimitError)
+    const controller = new AbortController()
+    controller.abort()
+    expect(() =>
+      layoutDocument(input, {
+        metrics: fixedMetrics,
+        signal: controller.signal,
+      })
+    ).toThrow()
+  })
+})
+
+describe("bounded Word text controls", () => {
+  test("positions explicit tabs, paints highlights first, shifts scripts, and forces a page", () => {
+    const normal = {
+      ...style,
+      highlightColor: null,
+      verticalAlignment: "baseline" as const,
+    }
+    const highlighted = { ...normal, highlightColor: "#FFFF00" }
+    const superscript = { ...normal, verticalAlignment: "superscript" as const }
+    const subscript = { ...normal, verticalAlignment: "subscript" as const }
+    const value: ResolvedParagraph = {
+      ...paragraph([], {
+        indentStart: twips(200),
+        tabStops: [{ position: twips(600), alignment: "left" }],
+      }),
+      children: [
+        { type: "text", id: "a" as never, source, text: "A", style: normal },
+        { type: "tab", id: "tab" as never, source },
+        {
+          type: "text",
+          id: "b" as never,
+          source,
+          text: "B",
+          style: highlighted,
+        },
+        { type: "text", id: "x" as never, source, text: "x", style: normal },
+        {
+          type: "text",
+          id: "super" as never,
+          source,
+          text: "2",
+          style: superscript,
+        },
+        { type: "break", id: "line" as never, source, kind: "line" },
+        { type: "text", id: "h" as never, source, text: "H", style: normal },
+        {
+          type: "text",
+          id: "sub" as never,
+          source,
+          text: "2",
+          style: subscript,
+        },
+        { type: "break", id: "page" as never, source, kind: "page" },
+        { type: "text", id: "d" as never, source, text: "D", style: normal },
+      ],
+    }
+
+    const result = layoutDocument(documentWith([value]), { includeTrace: true })
+    expect(result.displayList.pages).toHaveLength(2)
+    expect(
+      result.trace?.events.some((event) => event.reason === "manual-page-break")
+    ).toBe(true)
+    const first = result.displayList.pages[0]
+    const second = result.displayList.pages[1]
+    const glyphs =
+      first?.items.filter((item) => item.type === "glyph-run") ?? []
+    const byText = (text: string) => glyphs.find((run) => run.text === text)
+    expect(Number(byText("B")?.x)).toBe(700)
+    expect(byText("2")?.fontSize).toBe(twips(160))
+    expect(Number(byText("2")?.baselineY)).toBeLessThan(
+      Number(byText("x")?.baselineY)
+    )
+    const sub = glyphs.find((run) => run.sourceNodeId === ("sub" as never))
+    expect(Number(sub?.baselineY)).toBeGreaterThan(
+      Number(byText("H")?.baselineY)
+    )
+    expect(sub?.verticalAlignment).toBe("subscript")
+    const highlightedRunIndex = first?.items.findIndex(
+      (item) => item.type === "glyph-run" && item.text === "B"
+    )
+    expect(first?.items[Number(highlightedRunIndex) - 1]).toMatchObject({
+      type: "rectangle",
+      fillColor: "#FFFF00",
+    })
+    expect(
+      second?.items
+        .filter((item) => item.type === "glyph-run")
+        .map((item) => item.text)
+    ).toEqual(["D"])
+  })
+
+  test("fails closed when a tab has no following explicit stop", () => {
+    const value: ResolvedParagraph = {
+      ...paragraph([{ text: "wide" }], {
+        tabStops: [{ position: twips(100), alignment: "left" }],
+      }),
+      children: [
+        { type: "text", id: "wide" as never, source, text: "wide", style },
+        { type: "tab", id: "tab" as never, source },
+      ],
+    }
+    expect(() => layoutDocument(documentWith([value]))).toThrow(
+      "Word tab has no explicit left tab stop"
+    )
   })
 })

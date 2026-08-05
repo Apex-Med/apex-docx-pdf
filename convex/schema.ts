@@ -64,4 +64,20 @@ export default defineSchema({
       "status",
     ])
     .index("by_sessionId_and_createdAt", ["sessionId", "createdAt"]),
+
+  uploadIntents: defineTable({
+    sessionId: v.string(),
+    kind: v.union(v.literal("docx"), v.literal("pdf")),
+    status: v.union(
+      v.literal("awaitingUpload"),
+      v.literal("registered"),
+      v.literal("consumed")
+    ),
+    uploadContentType: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_sessionId_and_createdAt", ["sessionId", "createdAt"]),
 })

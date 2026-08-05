@@ -2,6 +2,7 @@ import { DEFAULT_RESOURCE_LIMITS, throwIfAborted } from "@apex-docx-pdf/core"
 import { unzipSync } from "fflate"
 
 import { diagnostic, source } from "./diagnostics"
+import { activeContentDiagnostics } from "./security"
 import type { DocxParseOptions } from "./types"
 
 type CentralDirectoryEntry = Readonly<{
@@ -345,6 +346,10 @@ export function validateDocxPackage(
   const requiredPartDiagnostics = hasRequiredParts(parts)
   if (requiredPartDiagnostics.length > 0) {
     return { ok: false, diagnostics: requiredPartDiagnostics }
+  }
+  const securityDiagnostics = activeContentDiagnostics(parts, options)
+  if (securityDiagnostics.length > 0) {
+    return { ok: false, diagnostics: securityDiagnostics }
   }
   return {
     ok: true,

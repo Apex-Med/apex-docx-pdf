@@ -10,8 +10,16 @@ import {
   type RenderOptions,
   type RenderResult,
   type ResourceLimits,
+  type DocumentFeatureInspection,
+  type RequiredFontInspection,
+  type SemanticBlock,
+  type SemanticDocument,
+  type SemanticInline,
+  type SemanticParagraph,
+  type SourceLocation,
+  type TemplateInspectionResult,
 } from "@apex-docx-pdf/core"
-import { inspectDocx, normaliseDocxBytes } from "@apex-docx-pdf/docx"
+import { normaliseDocxBytes } from "@apex-docx-pdf/docx"
 import { createFontRegistry } from "@apex-docx-pdf/fonts"
 import {
   ImagePreparationError,
@@ -59,11 +67,15 @@ export async function createDocxPdfEngine(
     ...(fontRegistry ? { fontRegistryHash: fontRegistry.registryHash } : {}),
     async inspect(templateBytes, inspectOptions = {}) {
       await yieldToAbort(inspectOptions.signal)
-      const result = inspectDocx(templateBytes, {
+      const result = normaliseDocxBytes(templateBytes, {
         limits,
         signal: inspectOptions.signal,
+        unsupportedFeatures: "lenient",
       })
-      return result.diagnostics
+      return inspectSemanticDocument(
+        result.ok ? result.value : undefined,
+        result.diagnostics
+      )
     },
 
     async compile(templateBytes, compileOptions = {}) {
@@ -125,6 +137,42 @@ export async function createDocxPdfEngine(
       return result
     },
 
+    async preview(compiled, previewOptions = {}) {
+      await yieldToAbort(previewOptions.signal)
+      if (!compiledTemplates.has(compiled)) {
+        throw new EngineOperationError(
+          "engine/compiled-template",
+          "The compiled template was not created by this engine instance",
+          []
+        )
+      }
+      throwForUnacceptableTemplateDiagnostics(compiled.diagnostics)
+      const commonLayoutOptions = {
+        maxPages: limits.maxPages,
+        signal: previewOptions.signal,
+      }
+      const layout =
+        fontRegistry && textShaper
+          ? layoutDocument(compiled.source, {
+              ...commonLayoutOptions,
+              fonts: fontRegistry,
+              shaper: textShaper,
+            })
+          : layoutDocument(compiled.source, commonLayoutOptions)
+      if (hasErrors(layout.diagnostics)) {
+        throw new EngineOperationError(
+          "engine/preview",
+          "The template preview could not be laid out without content loss",
+          layout.diagnostics
+        )
+      }
+      return Object.freeze({
+        displayList: layout.displayList,
+        placeholderNodes: compiled.placeholderNodes,
+        diagnostics: layout.diagnostics,
+      })
+    },
+
     async render(compiled, data, renderOptions) {
       validateRenderOptions(renderOptions)
       throwIfAborted(renderOptions.signal)
@@ -151,6 +199,47 @@ export async function createDocxPdfEngine(
           "engine/template-data",
           "Template data did not satisfy the compiled manifest",
           resolved.diagnostics
+        )
+      }
+
+      let renderImages = staticImages.get(compiled)
+      try {
+        const dynamicAssets = resolved.value.assets.slice(
+          compiled.source.assets.length
+        )
+        if (dynamicAssets.length > 0) {
+          const dynamicImages = prepareImageAssets(dynamicAssets, {
+            limits: {
+              maxBytes: limits.maxImageBytes,
+              maxDimensionPixels: limits.maxImageDimensionPixels,
+              maxPixels: limits.maxImagePixels,
+              maxDecodedBytes: limits.maxDecodedImageBytes,
+            },
+            signal: renderOptions.signal,
+          })
+          const staticProvider = renderImages
+          renderImages = Object.freeze({
+            get(assetId: string) {
+              return dynamicImages.get(assetId) ?? staticProvider?.get(assetId)
+            },
+          })
+        }
+      } catch (error) {
+        if (!(error instanceof ImagePreparationError)) throw error
+        const asset = resolved.value.assets.find(
+          (candidate) => candidate.id === error.assetId
+        )
+        const diagnostic: Diagnostic = Object.freeze({
+          code: error.code,
+          severity: "error",
+          message: error.message,
+          ...(asset === undefined ? {} : { source: asset.source }),
+          details: { assetId: error.assetId },
+        })
+        throw new EngineOperationError(
+          "engine/image",
+          "A resolved image could not be prepared safely",
+          Object.freeze([...resolved.diagnostics, diagnostic])
         )
       }
 
@@ -184,7 +273,7 @@ export async function createDocxPdfEngine(
       const pdf = serializePdf(layout.displayList, {
         metadata: renderOptions.metadata,
         signal: renderOptions.signal,
-        images: staticImages.get(compiled),
+        images: renderImages,
         ...(fontRegistry ? { fonts: fontRegistry } : {}),
       })
       const completedAt = now()
@@ -217,6 +306,180 @@ export async function createDocxPdfEngine(
     },
   }
   return Object.freeze(engine)
+}
+
+const INSPECTION_SOURCE_LIMIT = 20
+const INSPECTION_ENTRY_LIMIT = 200
+const FEATURE_ORDER = [
+  "section",
+  "header",
+  "footer",
+  "paragraph",
+  "table",
+  "image",
+  "pageField",
+  "numberedParagraph",
+  "horizontalRule",
+  "lineBreak",
+  "pageBreak",
+  "tab",
+] as const
+
+type InspectionAccumulator = {
+  count: number
+  sources: SourceLocation[]
+}
+
+function inspectSemanticDocument(
+  document: SemanticDocument | undefined,
+  diagnostics: readonly Diagnostic[]
+): TemplateInspectionResult {
+  const fonts = new Map<string, InspectionAccumulator>()
+  const features = new Map<string, InspectionAccumulator>()
+  const add = (
+    target: Map<string, InspectionAccumulator>,
+    key: string,
+    source: SourceLocation
+  ): void => {
+    const entry = target.get(key) ?? { count: 0, sources: [] }
+    entry.count += 1
+    if (entry.sources.length < INSPECTION_SOURCE_LIMIT)
+      entry.sources.push(source)
+    target.set(key, entry)
+  }
+  const addInline = (inline: SemanticInline): void => {
+    if (inline.type === "text" || inline.type === "pageField") {
+      const style = inline.style
+      add(
+        fonts,
+        `${style.fontFamily}\u0000${style.fontWeight}\u0000${style.fontStyle}`,
+        inline.source
+      )
+    }
+    if (inline.type === "image") add(features, "image", inline.source)
+    if (inline.type === "pageField") add(features, "pageField", inline.source)
+    if (inline.type === "break") {
+      add(
+        features,
+        inline.kind === "page" ? "pageBreak" : "lineBreak",
+        inline.source
+      )
+    }
+    if (inline.type === "tab") add(features, "tab", inline.source)
+  }
+  const addParagraph = (paragraph: SemanticParagraph): void => {
+    add(features, "paragraph", paragraph.source)
+    if (paragraph.properties.numbering) {
+      add(features, "numberedParagraph", paragraph.source)
+    }
+    for (const inline of paragraph.children) addInline(inline)
+  }
+  const addBlock = (block: SemanticBlock): void => {
+    if (block.type === "paragraph") {
+      addParagraph(block)
+      return
+    }
+    if (block.type === "horizontalRule") {
+      add(features, "horizontalRule", block.source)
+      return
+    }
+    add(features, "table", block.source)
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const paragraph of cell.blocks) addParagraph(paragraph)
+      }
+    }
+  }
+
+  if (document) {
+    for (const header of document.headers) {
+      add(features, "header", header.source)
+      for (const paragraph of header.blocks) addParagraph(paragraph)
+    }
+    for (const footer of document.footers) {
+      add(features, "footer", footer.source)
+      for (const paragraph of footer.blocks) addParagraph(paragraph)
+    }
+    for (const section of document.sections) {
+      add(features, "section", section.source)
+      for (const block of section.blocks) addBlock(block)
+    }
+  }
+
+  for (const diagnostic of diagnostics) {
+    if (!diagnostic.source || !diagnostic.code.startsWith("DOCX_UNSUPPORTED")) {
+      continue
+    }
+    const feature = diagnostic.details?.feature
+    const suffix = typeof feature === "string" ? feature : diagnostic.code
+    add(features, `unsupported:${suffix}`, diagnostic.source)
+  }
+
+  const allRequiredFonts: RequiredFontInspection[] = [...fonts.entries()]
+    .map(([key, entry]) => {
+      const [family = "", weight = "400", style = "normal"] =
+        key.split("\u0000")
+      return Object.freeze({
+        family,
+        weight: Number(weight) as 400 | 700,
+        style: style as "normal" | "italic",
+        instanceCount: entry.count,
+        sources: Object.freeze(entry.sources),
+        sourcesTruncated: entry.count > entry.sources.length,
+      })
+    })
+    .sort(
+      (left, right) =>
+        compareInspectionText(left.family, right.family) ||
+        left.weight - right.weight ||
+        compareInspectionText(left.style, right.style)
+    )
+
+  const orderedKinds = [
+    ...FEATURE_ORDER.filter((kind) => features.has(kind)),
+    ...[...features.keys()]
+      .filter(
+        (kind) =>
+          !FEATURE_ORDER.includes(kind as (typeof FEATURE_ORDER)[number])
+      )
+      .sort(compareInspectionText),
+  ]
+  const allInspectedFeatures: DocumentFeatureInspection[] = orderedKinds.map(
+    (kind) => {
+      const entry = features.get(kind)
+      if (!entry) throw new Error(`Missing inspection accumulator for ${kind}`)
+      return Object.freeze({
+        kind,
+        support: kind.startsWith("unsupported:")
+          ? "unsupported"
+          : "implemented",
+        instanceCount: entry.count,
+        sources: Object.freeze(entry.sources),
+        sourcesTruncated: entry.count > entry.sources.length,
+      })
+    }
+  )
+
+  return Object.freeze({
+    documentModelAvailable: document !== undefined,
+    requiredFonts: Object.freeze(
+      allRequiredFonts.slice(0, INSPECTION_ENTRY_LIMIT)
+    ),
+    requiredFontEntryCount: allRequiredFonts.length,
+    requiredFontsTruncated: allRequiredFonts.length > INSPECTION_ENTRY_LIMIT,
+    features: Object.freeze(
+      allInspectedFeatures.slice(0, INSPECTION_ENTRY_LIMIT)
+    ),
+    featureEntryCount: allInspectedFeatures.length,
+    featuresTruncated: allInspectedFeatures.length > INSPECTION_ENTRY_LIMIT,
+    diagnostics: Object.freeze([...diagnostics]),
+    sourceLimitPerEntry: INSPECTION_SOURCE_LIMIT,
+    entryLimit: INSPECTION_ENTRY_LIMIT,
+  })
+}
+
+function compareInspectionText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function validateRenderOptions(options: RenderOptions): void {
@@ -300,6 +563,8 @@ function cloneBoundedJsonData(
     const state = {
       nodes: 0,
       textBytes: 0,
+      imageCount: 0,
+      imageBytes: 0,
       visiting: new WeakSet<object>(),
     }
     const cloned = cloneJsonValue(data, 0, limits, state)
@@ -329,6 +594,8 @@ function cloneBoundedJsonData(
 type JsonCloneState = {
   nodes: number
   textBytes: number
+  imageCount: number
+  imageBytes: number
   visiting: WeakSet<object>
 }
 
@@ -421,6 +688,32 @@ function cloneJsonValue(
     if (prototype !== Object.prototype && prototype !== null) {
       throw new InvalidJsonDataError("the value contains a non-plain object")
     }
+    const bytesDescriptor = Object.getOwnPropertyDescriptor(value, "bytes")
+    const byteValue =
+      bytesDescriptor && "value" in bytesDescriptor
+        ? bytesDescriptor.value
+        : undefined
+    if (byteValue instanceof Uint8Array) {
+      if (
+        Object.getPrototypeOf(byteValue) !== Uint8Array.prototype ||
+        !bytesDescriptor?.enumerable
+      ) {
+        throw new InvalidJsonDataError(
+          "an image byte buffer is not a plain Uint8Array"
+        )
+      }
+      state.imageCount += 1
+      state.imageBytes += byteValue.byteLength
+      if (state.imageCount > limits.maxImageCount) {
+        throw new InvalidJsonDataError("dynamic images exceed the count limit")
+      }
+      if (
+        byteValue.byteLength > limits.maxImageBytes ||
+        state.imageBytes > limits.maxImageBytes
+      ) {
+        throw new InvalidJsonDataError("dynamic images exceed the byte limit")
+      }
+    }
     const cloned = Object.create(null) as Record<string, unknown>
     for (const key of Reflect.ownKeys(value)) {
       if (typeof key !== "string") {
@@ -435,7 +728,10 @@ function cloneJsonValue(
         throw new InvalidJsonDataError("the value contains an accessor")
       }
       Object.defineProperty(cloned, key, {
-        value: cloneJsonValue(descriptor.value, depth + 1, limits, state),
+        value:
+          key === "bytes" && byteValue instanceof Uint8Array
+            ? Array.from(byteValue)
+            : cloneJsonValue(descriptor.value, depth + 1, limits, state),
         enumerable: true,
         configurable: true,
         writable: true,
@@ -472,4 +768,5 @@ export type {
   DocxPdfEngine,
   RenderOptions,
   RenderResult,
+  TemplateImageValue,
 } from "@apex-docx-pdf/core"

@@ -6,6 +6,7 @@ import {
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { internalMutation, mutation, query } from "./_generated/server"
+import { consumeRegisteredUpload } from "./storage"
 import { deleteStoredFile, getBearerUrl } from "./storageAccess"
 import {
   assertBoundedLimit,
@@ -120,7 +121,7 @@ export const complete = mutation({
   args: {
     ...SessionIdArg,
     renderId: v.id("renders"),
-    pdfStorageId: v.optional(v.id("_storage")),
+    pdfUploadIntentId: v.optional(v.id("uploadIntents")),
     pageCount: v.number(),
     diagnosticsSummary: diagnosticsSummaryValidator,
   },
@@ -136,19 +137,15 @@ export const complete = mutation({
     if (render.status !== "queued" && render.status !== "rendering") {
       throw new Error("Render cannot be completed from its current state")
     }
-    if (args.pdfStorageId) {
-      const storedFile = await ctx.db.system.get("_storage", args.pdfStorageId)
-      if (
-        !storedFile ||
-        storedFile.size > 100_000_000 ||
-        (storedFile.contentType !== undefined &&
-          storedFile.contentType !== "application/pdf")
-      ) {
-        throw new Error("Stored PDF is missing or invalid")
-      }
-    }
+    const pdfStorageId = args.pdfUploadIntentId
+      ? await consumeRegisteredUpload(ctx, {
+          sessionId: args.sessionId,
+          uploadIntentId: args.pdfUploadIntentId,
+          kind: "pdf",
+        })
+      : undefined
     await ctx.db.patch(render._id, {
-      ...(args.pdfStorageId ? { pdfStorageId: args.pdfStorageId } : {}),
+      ...(pdfStorageId ? { pdfStorageId } : {}),
       pageCount: args.pageCount,
       status: "complete",
       diagnosticsSummary: args.diagnosticsSummary,

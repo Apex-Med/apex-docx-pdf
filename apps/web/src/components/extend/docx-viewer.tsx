@@ -658,12 +658,15 @@ function DocxToolbar({
             <>
               <Separator
                 orientation="vertical"
-                className="mx-1 h-4 self-center"
+                className="mx-1 h-4 w-px self-center"
               />
               {toolbarActions}
             </>
           ) : null}
-          <Separator orientation="vertical" className="mx-1 h-4 self-center" />
+          <Separator
+            orientation="vertical"
+            className="mx-1 h-4 w-px self-center"
+          />
           <DocxFileActionsMenu
             controlsDisabled={controlsDisabled}
             downloadDisabled={controlsDisabled || isPreparingDownload}
@@ -911,8 +914,9 @@ function DocxThumbnailSidebarList({
                   thumbnail.pageNumber === activePage && "z-10"
                 )}
                 style={{
-                  transform: `translateY(${virtualRow.start + DOCX_THUMBNAIL_LIST_PADDING
-                    }px)`,
+                  transform: `translateY(${
+                    virtualRow.start + DOCX_THUMBNAIL_LIST_PADDING
+                  }px)`,
                 }}
               >
                 <div
@@ -930,11 +934,11 @@ function DocxThumbnailSidebarList({
                   className={cn(
                     "flex h-auto w-full cursor-default flex-col items-center gap-2 rounded-md p-2 text-xs transition-shadow outline-none select-none hover:bg-sidebar-accent",
                     thumbnail.pageNumber === activePage &&
-                    "bg-sidebar-accent text-foreground",
+                      "bg-sidebar-accent text-foreground",
                     thumbnail.pageNumber !== activePage &&
-                    "text-muted-foreground",
+                      "text-muted-foreground",
                     thumbnail.pageNumber === activePage &&
-                    DOCX_THUMBNAIL_FOCUS_RING_CLASS
+                      DOCX_THUMBNAIL_FOCUS_RING_CLASS
                   )}
                   onClick={() => onSelectPage(thumbnail.pageNumber)}
                   onKeyDown={(event) => {

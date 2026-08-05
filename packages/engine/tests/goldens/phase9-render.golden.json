@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "fixture": "phase9-golden-docx",
+  "provenance": "Original synthetic Apache-2.0 test material; no third-party document content.",
+  "fontCatalog": "apex-offline-ttf/v1",
+  "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+  "renderOptions": {
+    "locale": "en-ZA",
+    "timeZone": "Africa/Johannesburg",
+    "includeLayoutTrace": true
+  },
+  "data": {
+    "subject": "Apex"
+  },
+  "pageCount": 1,
+  "searchableText": "Golden ApexDeterministic trace evidence.",
+  "pdfSha256": "0ab89b0735034ff41375d1e336975afcdfa2582c5b261f8c3db39342dade05c1",
+  "traceSha256": "835f2a404ae28f028b06c236ef845c281f5a1cbc6d611b9151bdd693180ebde2",
+  "trace": "{\"pages\":[{\"pageNumber\":1,\"pageBounds\":{\"x\":0,\"y\":0,\"width\":6120,\"height\":7920},\"contentBounds\":{\"x\":720,\"y\":720,\"width\":4680,\"height\":6480}}],\"events\":[{\"pageNumber\":1,\"sourceNodeId\":\"docx:paragraph:1\",\"kind\":\"line\",\"bounds\":{\"x\":720,\"y\":720,\"width\":1334,\"height\":266}},{\"pageNumber\":1,\"sourceNodeId\":\"docx:paragraph:1\",\"kind\":\"block\",\"bounds\":{\"x\":720,\"y\":720,\"width\":4680,\"height\":266}},{\"pageNumber\":1,\"sourceNodeId\":\"docx:paragraph:2\",\"kind\":\"line\",\"bounds\":{\"x\":720,\"y\":986,\"width\":3035,\"height\":266}},{\"pageNumber\":1,\"sourceNodeId\":\"docx:paragraph:2\",\"kind\":\"block\",\"bounds\":{\"x\":720,\"y\":986,\"width\":4680,\"height\":266}}]}"
+}

@@ -39,9 +39,11 @@ Each arrow is an explicit typed boundary. OOXML vocabulary ends at `@apex-docx-p
 @apex-docx-pdf/pdf      -> core + images
 @apex-docx-pdf/engine   -> core + docx + template + fonts + images + layout + pdf
 @apex-docx-pdf/browser  -> core + engine
+@apex-docx-pdf/devtools -> core + React peer
+apex-docx-pdf           -> core + engine
 @apex-docx-pdf/testkit  -> core + fflate
 @workspace/ui           -> no workspace packages
-web                     -> browser + core + engine + ui + Convex/TanStack adapters
+web                     -> browser + core + devtools + engine + ui + Convex/TanStack adapters
 @apex-docx-pdf/docs     -> no workspace packages
 ```
 
@@ -67,7 +69,7 @@ Anonymous `convex-helpers` session IDs are a demonstration ownership seam, not i
 
 ## Phase 6 supported slice
 
-Engine version `0.0.0-phase.6` carries static images, multiple sections, default headers/footers, and decimal page fields through the same typed stages. Image assets are internal relationship-owned DOCX parts with declared PNG/JPEG content, matching signatures and raster dimensions, immutable package bytes, stable IDs, and source locations. Placements require exactly one inline DrawingML image and an explicit positive EMU extent. Aspect-lock metadata is preserved and a locked extent must agree with the intrinsic ratio within the bounded tolerance. There is no resource fetch.
+Engine version `0.0.0-phase.6` carries static images, multiple sections, default headers/footers, and decimal page fields through the same typed stages. Static image assets are internal relationship-owned DOCX parts with declared PNG/JPEG content, matching signatures and raster dimensions, immutable package bytes, stable IDs, and source locations. Placements require exactly one inline DrawingML image and an explicit positive EMU extent. Canonical dynamic `{{@image path}}` values add deterministic assets from explicit caller-owned bytes, pixel dimensions, and physical twip bounds during resolution. Aspect metadata is preserved and bounded before layout. There is no resource fetch.
 
 The default resource envelope permits at most 100 distinct embedded image parts, 20,000,000 total image bytes, 100,000 pixels on either side, and 100,000,000 pixels per image. Image preparation additionally bounds chunks/markers at 10,000 and decoded PNG working data at 400,000,000 bytes. The PNG path verifies signature, chunk order, CRCs, exact end, legal non-interlaced grayscale/RGB/indexed/grayscale-alpha/RGBA bit-depth combinations, palettes/transparency, exact scanline size, and filters. It normalizes colors to 8-bit `DeviceGray` or `DeviceRGB` and alpha to an 8-bit plane. The JPEG path admits well-formed 8-bit baseline or bounded progressive frames with one or three components, validates scans and EXIF orientation 1, and requires an unambiguous JFIF/Adobe RGB-or-YCbCr transform. ICC profiles, CMYK/YCCK, ambiguous transforms, APNG, interlaced PNG, and unsupported compressed metadata are rejected.
 
@@ -77,7 +79,7 @@ Paragraph-level `sectPr` closes a section and starts the next section on a new p
 
 Header/footer parts contain supported paragraphs and may use static images, value tags, safe formatters, and bounded whole-paragraph blocks. Their resolved definitions are reused across sections/pages. Automatic paragraph numbering in headers/footers is unsupported. Simple fields and complete complex fields support global decimal `PAGE`/`NUMPAGES` only. Layout first reserves the width of `String(maxPages).length` widest decimal digits, paginates the complete document, then materializes current/total values without repagination; this two-pass reservation also applies in headers and footers.
 
-The exact unsupported boundary includes dynamic image tags, external image relationships/fetches, anchors/floating placement, crop, rotation, SVG, broad image color/profile conversion, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields. Synchronous PNG inflate is bounded and cancellation is checked immediately before and after it, but the synchronous inflate call itself cannot be interrupted mid-execution. Focused implementation tests do not prove broad Microsoft Word compatibility, complete Bun/Node/browser equivalence, or production readiness.
+The exact unsupported boundary includes non-canonical image tags, external image relationships/fetches, anchors/floating placement, crop, rotation, SVG, broad image color/profile conversion, tagged-PDF accessibility metadata, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields. Synchronous PNG inflate is bounded and cancellation is checked immediately before and after it, but the synchronous inflate call itself cannot be interrupted mid-execution. Focused implementation tests do not prove broad Microsoft Word compatibility, complete Bun/Node/browser equivalence, or production readiness.
 
 ## Phase 5 supported slice
 
@@ -99,11 +101,11 @@ The formatter set is closed: `upper`, `lower`, `currency:"ISO"`, and `date:"d MM
 
 DOCX numbering is resolved through the main document's internal numbering relationship. The semantic model retains concrete numbering definitions and overrides, level starts and restarts, supported number formats, custom multilevel text, legal-numbering behavior, and style/direct `numPr`; direct `numId` 0 removes inherited numbering. Layout owns counter continuation and restart state and emits searchable, source-linked labels with list indentation and wrapping. It also honors `keepWithNext` chains, `keepLinesTogether`, and widow/orphan control.
 
-General tab stops remain unavailable; a numbering suffix tab is normalized into deterministic list spacing rather than tab-stop layout. Dynamic image tags remain unsupported; Phase 6 static images are document content rather than template-created resources.
+General tab stops remain unavailable; a numbering suffix tab is normalized into deterministic list spacing rather than tab-stop layout. Canonical dynamic image tags are supported through explicit bytes and dimensions; Phase 6 static images remain package-owned document content.
 
 ## Phase 3 supported slice
 
-Phase 3 adds explicit font resources and a bounded paragraph/run fidelity profile. `FontConfiguration` bytes are parsed and shaped through the browser-safe `fonts` adapter for left-to-right Latin text. Registry construction is deterministic, as is face matching: exact match, 400 in the requested style, requested weight in normal style, 400 normal, then the same sequence in the configured fallback family.
+Phase 3 adds explicit font resources and a bounded paragraph/run fidelity profile. `FontConfiguration` bytes are parsed and shaped through the browser-safe `fonts` adapter for left-to-right Latin text. Registry construction is deterministic. Static CSS/OpenType weights 100–900 are matched by requested style and CSS nearest-weight order, then normal style, then the same sequence in the configured fallback family. Named aliases may select a pinned weight. Variable-font axis instantiation is outside the current contract; each promised weight/style tuple must provide a real static font program.
 
 DOCX styles now resolve document defaults, default paragraph and character styles, `basedOn` cascades, and direct formatting. Direct `false` values override inherited bold, italic, and underline. Supported paragraph properties include start/end and first-line/hanging indents, left/center/right/justify alignment, spacing before/after, and auto/exact/at-least line spacing.
 

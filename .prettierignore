@@ -6,6 +6,7 @@ node_modules/
 .tanstack/
 .vinxi/
 coverage/
+.convex/local/
 apps/web/src/routeTree.gen.ts
 convex/_generated
 pnpm-lock.yaml

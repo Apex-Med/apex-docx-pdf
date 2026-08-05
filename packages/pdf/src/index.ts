@@ -343,7 +343,7 @@ function pageContent(
         )
       writer.write(
         ascii(
-          `1 0 0 -1 0 ${point(page.height)} cm\n${point(bounds.x)} ${point(twips(bounds.y + bounds.height))} ${point(bounds.width)} ${point(bounds.height)} re ${fill && stroke ? "B" : fill ? "f" : "S"}\n`
+          `1 0 0 -1 0 ${point(page.height)} cm\n${point(bounds.x)} ${point(bounds.y)} ${point(bounds.width)} ${point(bounds.height)} re ${fill && stroke ? "B" : fill ? "f" : "S"}\n`
         )
       )
     }

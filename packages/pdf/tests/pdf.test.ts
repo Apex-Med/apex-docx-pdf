@@ -140,6 +140,106 @@ describe("Phase 1 PDF serializer", () => {
     expect(result.diagnostics).toEqual([])
   })
 
+  test("keeps vertically aligned K3 glyph runs upright and searchable", () => {
+    const scripted: PageDisplayList = {
+      pages: [
+        {
+          ...standardPage,
+          items: [
+            {
+              type: "glyph-run",
+              fontSource: "standard",
+              sourceNodeId: "base" as never,
+              text: "H",
+              fontFamily: "Helvetica",
+              fontSize: twips(180),
+              color: "#000000",
+              x: twips(1_440),
+              baselineY: twips(1_680),
+              width: twips(120),
+            },
+            {
+              type: "glyph-run",
+              fontSource: "standard",
+              sourceNodeId: "subscript" as never,
+              text: "2",
+              fontFamily: "Helvetica",
+              fontSize: twips(120),
+              color: "#000000",
+              x: twips(1_560),
+              baselineY: twips(1_710),
+              width: twips(80),
+            },
+            {
+              type: "glyph-run",
+              fontSource: "standard",
+              sourceNodeId: "superscript" as never,
+              text: "+",
+              fontFamily: "Helvetica",
+              fontSize: twips(120),
+              color: "#000000",
+              x: twips(1_640),
+              baselineY: twips(1_620),
+              width: twips(80),
+            },
+          ],
+        },
+      ],
+    }
+    const result = serializePdf(scripted)
+    const validation = validatePdfStructure(result.bytes)
+    expect(validation.valid).toBe(true)
+    expect(validation.text).toContain("H2+")
+    const syntax = new TextDecoder().decode(result.bytes)
+    expect(syntax.match(/1 0 0 1 [\d.]+ [\d.]+ Tm/gu)).toHaveLength(3)
+    expect(syntax).not.toMatch(/0 1 -1 0|0 -1 1 0/gu)
+  })
+
+  test("paints retained highlight geometry before upright searchable script text", () => {
+    const highlighted: PageDisplayList = {
+      pages: [
+        {
+          ...standardPage,
+          items: [
+            {
+              type: "rectangle",
+              sourceNodeId: "highlighted" as never,
+              bounds: {
+                x: twips(1_440),
+                y: twips(1_500),
+                width: twips(300),
+                height: twips(160),
+              },
+              fillColor: "#FFFF00",
+            },
+            {
+              type: "glyph-run",
+              fontSource: "standard",
+              sourceNodeId: "highlighted" as never,
+              text: "Search",
+              fontFamily: "Helvetica",
+              fontSize: twips(160),
+              color: "#000000",
+              highlightColor: "#FFFF00",
+              verticalAlignment: "superscript",
+              x: twips(1_440),
+              baselineY: twips(1_620),
+              width: twips(300),
+            },
+          ],
+        },
+      ],
+    }
+    const first = serializePdf(highlighted)
+    const second = serializePdf(highlighted)
+    const validation = validatePdfStructure(first.bytes)
+    const syntax = new TextDecoder("latin1").decode(first.bytes)
+    expect(first.bytes).toEqual(second.bytes)
+    expect(validation).toMatchObject({ valid: true, text: "Search" })
+    expect(syntax.indexOf(" re f")).toBeLessThan(syntax.indexOf("(Search) Tj"))
+    expect(syntax).toContain("1 0 0 1 72 760.9 Tm")
+  })
+
   test("is byte-identical on repeat", () => {
     expect(serializePdf(displayList).bytes).toEqual(
       serializePdf(displayList).bytes
@@ -445,7 +545,7 @@ describe("styled line PDF serializer", () => {
       "pdf/rectangle-invalid",
       "pdf/rectangle-invalid",
     ])
-    expect(text).toContain("1 5 5 3 re f")
+    expect(text).toContain("1 0 0 -1 0 841.9 cm\n1 2 5 3 re f")
     expect(text).not.toContain("NaN")
     expect(text.match(/ re /gu) ?? []).toHaveLength(1)
     expect(validatePdfStructure(result.bytes).valid).toBe(true)

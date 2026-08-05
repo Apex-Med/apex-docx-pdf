@@ -1,5 +1,5 @@
 import type { Diagnostic } from "./diagnostics"
-import type { FontFaceId, GlyphId } from "./fonts"
+import type { FontFaceId, FontWeight, GlyphId } from "./fonts"
 import type { NodeId } from "./ids"
 import type { Rect, Twip } from "./units"
 
@@ -19,8 +19,12 @@ export type StandardGlyphRun = Readonly<{
   sourceNodeId: NodeId
   text: string
   fontFamily: string
+  fontWeight?: FontWeight
+  fontStyle?: "normal" | "italic"
   fontSize: Twip
   color: string
+  highlightColor?: string | null
+  verticalAlignment?: "baseline" | "superscript" | "subscript"
   x: Twip
   baselineY: Twip
   width: Twip
@@ -32,9 +36,14 @@ export type EmbeddedGlyphRun = Readonly<{
   sourceNodeId: NodeId
   text: string
   faceId: FontFaceId
+  fontFamily?: string
+  fontWeight?: FontWeight
+  fontStyle?: "normal" | "italic"
   glyphs: readonly PositionedGlyph[]
   fontSize: Twip
   color: string
+  highlightColor?: string | null
+  verticalAlignment?: "baseline" | "superscript" | "subscript"
   x: Twip
   baselineY: Twip
   width: Twip

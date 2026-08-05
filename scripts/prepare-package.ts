@@ -3,6 +3,7 @@ import { basename, join, resolve } from "node:path"
 
 type PackageJson = Record<string, unknown> & {
   dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
   name?: string
   version?: string
 }
@@ -19,8 +20,10 @@ if (!source.name || !source.version) {
 
 const workspaceVersions = new Map<string, string>()
 for (const directory of [
+  "apex-docx-pdf",
   "browser",
   "core",
+  "devtools",
   "docx",
   "engine",
   "fonts",
@@ -49,6 +52,7 @@ const dependencies = Object.fromEntries(
   ])
 )
 const browser = basename(packageDirectory) === "browser"
+const fonts = basename(packageDirectory) === "fonts"
 const entry = (file: string) => ({
   types: `./${file}.d.ts`,
   import: `./${file}.js`,
@@ -69,10 +73,15 @@ const published = {
   engines: source.engines,
   exports: browser
     ? { ".": entry("index"), "./worker": entry("worker") }
-    : { ".": entry("index") },
+    : fonts
+      ? { ".": entry("index"), "./assets/*": "./assets/*" }
+      : { ".": entry("index") },
   main: "./index.js",
   types: "./index.d.ts",
   dependencies,
+  ...(source.peerDependencies
+    ? { peerDependencies: source.peerDependencies }
+    : {}),
   publishConfig: source.publishConfig,
 }
 
@@ -86,4 +95,15 @@ await Promise.all([
     join(rootDirectory, "README.md"),
     join(packageDirectory, "dist", "README.md")
   ),
+  ...(fonts
+    ? [
+        cp(
+          join(packageDirectory, "assets"),
+          join(packageDirectory, "dist", "assets"),
+          {
+            recursive: true,
+          }
+        ),
+      ]
+    : []),
 ])

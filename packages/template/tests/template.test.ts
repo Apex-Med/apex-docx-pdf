@@ -221,6 +221,7 @@ function documentWithTable(
         verticalMerge: "none",
         verticalAlignment: "top",
         fillColor: null,
+        borders: { top: null, right: null, bottom: null, left: null },
         blocks: [paragraph(value, rowIndex, cellIndex)],
       })),
     })),
@@ -1211,7 +1212,11 @@ describe("Phase 6 static inlines and header/footer templates", () => {
           ? `text:${child.text}`
           : child.type === "image"
             ? `image:${child.assetId}`
-            : `field:${child.field}`
+            : child.type === "pageField"
+              ? `field:${child.field}`
+              : child.type === "break"
+                ? `break:${child.kind}`
+                : "tab"
       )
     ).toEqual([
       "text:Hello ",
@@ -1436,7 +1441,7 @@ describe("Phase 6 static inlines and header/footer templates", () => {
     expect(permissive.diagnostics[0]?.severity).toBe("warning")
   })
 
-  test("diagnoses header/footer cross-container blocks and dynamic image content loss", async () => {
+  test("diagnoses header/footer cross-container blocks while compiling canonical dynamic images", async () => {
     const source = documentWithParagraphs(["Body"])
     const section = source.sections[0]
     const paragraph = section?.blocks[0]
@@ -1456,9 +1461,89 @@ describe("Phase 6 static inlines and header/footer templates", () => {
     })
     expect(compiled.diagnostics.map((item) => item.code)).toEqual([
       "TEMPLATE_CROSS_CONTAINER_BLOCK",
-      "TEMPLATE_UNSUPPORTED_IMAGE_TAG",
-      "TEMPLATE_CONTENT_LOSS",
     ])
+    expect(compiled.manifest.fields).toEqual([
+      expect.objectContaining({ path: "patient.photo", kind: "image" }),
+      expect.objectContaining({ path: "shown", kind: "boolean" }),
+    ])
+  })
+
+  test("resolves canonical dynamic image values into deterministic assets and inline placements", async () => {
+    const compiled = await compileTemplate(
+      documentWithRuns(["Before {{@image companyLogo}} after"])
+    )
+    expect(compiled.diagnostics).toEqual([])
+    expect(compiled.manifest.fields[0]).toEqual(
+      expect.objectContaining({ path: "companyLogo", kind: "image" })
+    )
+    expect(compiled.jsonSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          companyLogo: expect.objectContaining({
+            type: "object",
+            required: [
+              "mimeType",
+              "bytes",
+              "pixelWidth",
+              "pixelHeight",
+              "width",
+              "height",
+            ],
+            additionalProperties: false,
+          }),
+        }),
+      })
+    )
+    expect(compiled.starterData).toEqual({
+      companyLogo: {
+        mimeType: "image/png",
+        bytes: [],
+        pixelWidth: 1,
+        pixelHeight: 1,
+        width: 1,
+        height: 1,
+        preserveAspectRatio: true,
+        altText: "",
+      },
+    })
+    const value = {
+      mimeType: "image/png",
+      bytes: Uint8Array.of(1, 2, 3),
+      pixelWidth: 200,
+      pixelHeight: 100,
+      width: 1000,
+      height: 1000,
+      altText: "Company logo",
+    } as const
+    const first = resolveTemplate(compiled, { companyLogo: value })
+    const second = resolveTemplate(compiled, { companyLogo: value })
+    expect(first).toEqual(second)
+    expect(first.ok).toBe(true)
+    if (!first.ok) throw new Error("image fixture must resolve")
+    expect(first.value.assets).toEqual([
+      expect.objectContaining({
+        id: expect.stringContaining("template-image:"),
+        bytes: [1, 2, 3],
+        pixelWidth: 200,
+        pixelHeight: 100,
+      }),
+    ])
+    const block = first.value.sections[0]?.blocks[0]
+    if (block?.type !== "paragraph") throw new Error("expected paragraph")
+    expect(block.children.map((child) => child.type)).toEqual([
+      "text",
+      "image",
+      "text",
+    ])
+    expect(block.children[1]).toEqual(
+      expect.objectContaining({
+        type: "image",
+        width: 1000,
+        height: 500,
+        altText: "Company logo",
+        aspect: expect.objectContaining({ preserve: true }),
+      })
+    )
   })
 
   test("honors cancellation while compiling header/footer templates", async () => {

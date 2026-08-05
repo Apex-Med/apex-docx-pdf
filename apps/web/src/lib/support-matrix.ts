@@ -22,7 +22,7 @@ export const supportMatrix: readonly SupportRow[] = [
     area: "DOCX package validation",
     status: "supported",
     behavior:
-      "Validates ZIP structure, paths, limits, XML, relationship roots, external relationships, and the root office-document relationship.",
+      "Validates ZIP structure, paths, limits, XML, relationship roots, external relationships, and the root office-document relationship; unconditionally rejects VBA/macros, OLE/embedded objects, ActiveX, attached packages/executables, custom UI, web extensions, and alternative-format chunks.",
   },
   {
     area: "Main-document paragraphs",
@@ -37,6 +37,12 @@ export const supportMatrix: readonly SupportRow[] = [
       "Resolves docDefaults, default paragraph/character styles, basedOn, direct formatting, indents, alignment, spacing, keep controls, widow/orphan control, and page-break-before.",
   },
   {
+    area: "Explicit left tab stops",
+    status: "limited",
+    behavior:
+      "Word tabs require explicit resolved paragraph stops with positive integer-twip positions, left/start alignment, and no leader. Duplicate, clear, non-left, leader, missing-next-stop, and default-tab behavior are rejected rather than approximated.",
+  },
+  {
     area: "DOCX numbering and list layout",
     status: "limited",
     behavior:
@@ -46,7 +52,7 @@ export const supportMatrix: readonly SupportRow[] = [
     area: "Registered fonts and embedded text",
     status: "limited",
     behavior:
-      "Explicit TrueType bytes and LTR Latin shaping; searchable upright Type0/CIDFontType2 output. The default path embeds complete fonts rather than true subsets.",
+      "The library accepts explicit TrueType bytes for LTR Latin shaping. The playground self-hosts five application-owned, hash-pinned OFL TrueType families, maps familiar system names deterministically, and never executes uploaded embedded fonts. Output is searchable upright Type0/CIDFontType2 text; the default path embeds complete fonts rather than true subsets.",
   },
   {
     area: "Template values and formatters",
@@ -122,9 +128,9 @@ export const supportMatrix: readonly SupportRow[] = [
   },
   {
     area: "Determinism and source links",
-    status: "supported",
+    status: "limited",
     behavior:
-      "Stable semantic and display IDs, source-ordered collections, deterministic resource ordering, searchable page text, byte-repeatable PDFs, and optional source-linked traces.",
+      "Stable semantic and display IDs, source-ordered collections, deterministic resource ordering, searchable page text, byte-repeatable PDFs, and optional source-linked traces. The checked-in golden matches in separate Bun processes, Node 24, and a real Chromium module worker.",
   },
   {
     area: "Binary-safe testkit",
@@ -134,9 +140,9 @@ export const supportMatrix: readonly SupportRow[] = [
   },
   {
     area: "Dynamic image tags",
-    status: "unsupported",
+    status: "limited",
     behavior:
-      "{{@image …}}, {{image …}}, and :image values are rejected. Static DOCX images are preserved content, not data-created resources.",
+      "Canonical {{@image path}} values accept explicit PNG/JPEG bytes, pixel dimensions, physical twip bounds, optional aspect preservation, and semantic alt text. URLs and non-canonical image tags are rejected; PDFs remain untagged.",
   },
   {
     area: "Floating, cropped, or transformed images",
@@ -166,13 +172,13 @@ export const supportMatrix: readonly SupportRow[] = [
     area: "Other text and font features",
     status: "unsupported",
     behavior:
-      "General tab stops, complex scripts/bidi, CFF PDF embedding, and true default font subsetting are unavailable.",
+      "Default or non-left tab behavior, tab leaders, complex scripts/bidi, CFF PDF embedding, and true default font subsetting are unavailable.",
   },
   {
-    area: "Dormant Convex groundwork",
+    area: "Opt-in Convex persistence",
     status: "limited",
     behavior:
-      "Tested anonymous-session storage, metadata, cache, realtime, and deletion adapters exist for future product work, but the current playground does not mount them and remains local-only.",
+      "The configured playground mounts tested anonymous-session storage, upload-intent registration/cleanup, metadata, cache, realtime, and deletion adapters behind an explicit disabled-by-default control. This is demo isolation, not production authentication.",
   },
   {
     area: "Hosted deployment",

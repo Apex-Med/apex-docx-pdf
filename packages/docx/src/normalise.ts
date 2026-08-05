@@ -33,6 +33,25 @@ function normaliseParagraph(
   let textIndex = 0
   for (const run of paragraph.runs) {
     for (const inline of run.inlines) {
+      if (inline.type === "docx-break") {
+        children.push({
+          type: "break",
+          id: nodeId(`${textIdPrefix}:${textIndex + 1}`),
+          source: inline.source,
+          kind: inline.kind,
+        })
+        textIndex += 1
+        continue
+      }
+      if (inline.type === "docx-tab") {
+        children.push({
+          type: "tab",
+          id: nodeId(`${textIdPrefix}:${textIndex + 1}`),
+          source: inline.source,
+        })
+        textIndex += 1
+        continue
+      }
       if (inline.type === "docx-image") {
         children.push({
           type: "image",
@@ -65,6 +84,11 @@ function normaliseParagraph(
             fontWeight: run.properties.fontWeight,
             fontStyle: run.properties.fontStyle,
             underline: run.properties.underline,
+            highlightColor:
+              run.properties.highlightColor === null
+                ? null
+                : `#${run.properties.highlightColor}`,
+            verticalAlignment: run.properties.verticalAlignment,
             color: run.properties.color.startsWith("#")
               ? run.properties.color
               : `#${run.properties.color}`,
@@ -85,6 +109,11 @@ function normaliseParagraph(
           fontWeight: run.properties.fontWeight,
           fontStyle: run.properties.fontStyle,
           underline: run.properties.underline,
+          highlightColor:
+            run.properties.highlightColor === null
+              ? null
+              : `#${run.properties.highlightColor}`,
+          verticalAlignment: run.properties.verticalAlignment,
           color: run.properties.color.startsWith("#")
             ? run.properties.color
             : `#${run.properties.color}`,
@@ -121,6 +150,10 @@ function normaliseParagraph(
       widowControl: paragraph.properties.widowControl,
       pageBreakBefore: paragraph.properties.pageBreakBefore,
       numbering: paragraph.properties.numbering,
+      tabStops: paragraph.properties.tabStops.map((stop) => ({
+        position: twips(stop.position),
+        alignment: stop.alignment,
+      })),
     },
     children,
   }
@@ -192,6 +225,12 @@ function normaliseTable(
             : cell.fillColor.startsWith("#")
               ? cell.fillColor
               : `#${cell.fillColor}`,
+        borders: {
+          top: border(cell.borders.top),
+          right: border(cell.borders.right),
+          bottom: border(cell.borders.bottom),
+          left: border(cell.borders.left),
+        },
         blocks: cell.paragraphs.map((paragraph, paragraphIndex) =>
           normaliseParagraph(
             paragraph,
@@ -231,6 +270,30 @@ export function normaliseDocx(
       if (block.type === "docx-table") {
         tableIndex += 1
         return normaliseTable(block, tableIndex)
+      }
+      if (block.type === "docx-horizontal-rule") {
+        paragraphIndex += 1
+        return {
+          type: "horizontalRule",
+          id: nodeId(`docx:horizontal-rule:${paragraphIndex}`),
+          source: block.source,
+          properties: {
+            alignment: block.properties.alignment,
+            spacingBefore: twips(block.properties.spacingBefore),
+            spacingAfter: twips(block.properties.spacingAfter),
+            lineSpacing: null,
+            indentStart: twips(block.properties.indentStart),
+            indentEnd: twips(block.properties.indentEnd),
+            firstLineIndent: twips(block.properties.firstLineIndent),
+            keepWithNext: block.properties.keepWithNext,
+            keepLinesTogether: block.properties.keepLinesTogether,
+            widowControl: block.properties.widowControl,
+            pageBreakBefore: block.properties.pageBreakBefore,
+            numbering: null,
+          },
+          height: twips(block.heightTwips),
+          color: block.color.startsWith("#") ? block.color : `#${block.color}`,
+        }
       }
       paragraphIndex += 1
       return normaliseParagraph(

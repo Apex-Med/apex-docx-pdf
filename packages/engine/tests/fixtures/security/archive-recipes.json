@@ -1,0 +1,8 @@
+{
+  "unsafeEntryPaths": [
+    "../escape.xml",
+    "/absolute.xml",
+    "word/../../escape.xml"
+  ],
+  "truncatedTailBytes": [1, 7, 23]
+}

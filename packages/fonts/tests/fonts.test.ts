@@ -3,6 +3,7 @@ import {
   twips,
   type FontConfiguration,
   type FontFaceMetrics,
+  type FontWeight,
 } from "@apex-docx-pdf/core"
 import { describe, expect, test } from "bun:test"
 import {
@@ -239,6 +240,59 @@ describe("font registry", () => {
       weight: 400,
       style: "italic",
     })
+  })
+
+  test("matches static CSS weights deterministically and lets named aliases select a face", async () => {
+    const registry = await createFontRegistry(
+      {
+        faces: ([400, 500, 600, 700] as const).map((weight) => ({
+          family: "Static Sans",
+          weight,
+          style: "normal" as const,
+          bytes: Uint8Array.of(weight / 100),
+        })),
+        aliases: [
+          { from: "Static Sans Medium", to: "Static Sans", weight: 500 },
+          { from: "Static Sans SemiBold", to: "Static Sans", weight: 600 },
+        ],
+        fallbackFamily: "Static Sans",
+      },
+      { parser: fakeParser() }
+    )
+
+    const matchedWeight = (family: string, weight: FontWeight) => {
+      const match = registry.matchFace({ family, weight, style: "normal" })
+      return {
+        kind: match.kind,
+        weight: registry.face(match.faceId).weight,
+      }
+    }
+
+    expect(matchedWeight("Static Sans", 500)).toEqual({
+      kind: "exact",
+      weight: 500,
+    })
+    expect(matchedWeight("Static Sans", 600)).toEqual({
+      kind: "exact",
+      weight: 600,
+    })
+    expect(matchedWeight("Static Sans", 300).weight).toBe(400)
+    expect(matchedWeight("Static Sans", 800).weight).toBe(700)
+    expect(matchedWeight("Static Sans Medium", 400)).toEqual({
+      kind: "alias",
+      weight: 500,
+    })
+    expect(matchedWeight("Static Sans SemiBold", 700)).toEqual({
+      kind: "alias",
+      weight: 600,
+    })
+    expect(() =>
+      registry.matchFace({
+        family: "Static Sans",
+        weight: 450 as FontWeight,
+        style: "normal",
+      })
+    ).toThrow(FontConfigurationError)
   })
 
   test("rejects duplicate tuples, invalid aliases, and a missing regular fallback", async () => {

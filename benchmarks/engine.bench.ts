@@ -148,26 +148,35 @@ for (const pageCount of SMOKE ? [1, 5] : [1, 20, 100]) {
   )
 }
 
-const invoiceRows = SMOKE ? 50 : 1000
 const invoiceEngine = await createDocxPdfEngine({ limits: { maxPages: 1000 } })
-const invoiceTemplate = await invoiceEngine.compile(buildPhase5TemplateTableDocx())
-samples.push(
-  await measure(`render-invoice-${invoiceRows}-rows`, ITERATIONS, async () => {
-    const rendered = await invoiceEngine.render(
-      invoiceTemplate,
-      {
-        invoice: {
-          items: Array.from({ length: invoiceRows }, (_, index) => ({
-            name: `Synthetic licensed-free line ${index + 1}`,
-            quantity: (index % 12) + 1,
-          })),
-        },
-      },
-      RENDER_OPTIONS
-    )
-    return { outputBytes: rendered.pdf.length, pages: rendered.pageCount }
-  })
+const invoiceTemplate = await invoiceEngine.compile(
+  buildPhase5TemplateTableDocx()
 )
+for (const invoiceRows of SMOKE ? [1, 50] : [1, 1000]) {
+  samples.push(
+    await measure(
+      `render-invoice-${invoiceRows}-${invoiceRows === 1 ? "row" : "rows"}`,
+      ITERATIONS,
+      async () => {
+        const rendered = await invoiceEngine.render(
+          invoiceTemplate,
+          {
+            invoice: {
+              items: Array.from({ length: invoiceRows }, (_, index) => ({
+                name: `Synthetic licensed-free line ${index + 1}`,
+                quantity: (index % 12) + 1,
+              })),
+            },
+          },
+          RENDER_OPTIONS
+        )
+        return { outputBytes: rendered.pdf.length, pages: rendered.pageCount }
+      }
+    )
+  )
+}
+
+const peakRss = process.resourceUsage().maxRSS
 
 const result = {
   schemaVersion: 1,
@@ -176,6 +185,7 @@ const result = {
   platform: `${process.platform}-${process.arch}`,
   mode: SMOKE ? "smoke" : "full",
   note: "Observational baseline only; no regression budget is asserted.",
+  processPeakRssBytes: peakRss * (process.platform === "darwin" ? 1 : 1024),
   samples,
 }
 await Bun.write(OUTPUT, `${JSON.stringify(result, null, 2)}\n`)

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { SessionId } from "convex-helpers/server/sessions"
 import { convexTest } from "convex-test"
 import type { Id } from "../convex/_generated/dataModel"
-import { api } from "../convex/_generated/api"
+import { api, internal } from "../convex/_generated/api"
 import schema from "../convex/schema"
 
 const modules = {
@@ -443,6 +443,114 @@ describe("Phase 7 Convex persistence", () => {
         t.query(api.renders.recent, { sessionId: SESSION_A, limit })
       ).rejects.toThrow("Limit must be between 1 and 100")
     }
+  })
+
+  test("binds direct uploads to expiring session-owned intents and cleans unclaimed blobs", async () => {
+    const t = testBackend()
+    const now = Date.now()
+    const generated = await t.mutation(api.storage.generateUploadUrl, {
+      sessionId: SESSION_A,
+      kind: "docx",
+    })
+    expect(generated.uploadUrl).toStartWith("https://")
+    expect(generated.uploadContentType).toBe(
+      `application/vnd.openxmlformats-officedocument.wordprocessingml.document; apex-upload-intent=${generated.uploadIntentId}`
+    )
+    expect(generated.expiresAt).toBeGreaterThan(now)
+    expect(
+      await t.run(async (ctx) => await ctx.db.get(generated.uploadIntentId))
+    ).toMatchObject({
+      sessionId: SESSION_A,
+      kind: "docx",
+      status: "awaitingUpload",
+      uploadContentType: generated.uploadContentType,
+    })
+    const unmarkedStorageId = await t.run(async (ctx) =>
+      ctx.storage.store(
+        new Blob(["unmarked-docx"], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        })
+      )
+    )
+    await expect(
+      t.mutation(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: generated.uploadIntentId,
+        storageId: unmarkedStorageId,
+      })
+    ).rejects.toThrow("Uploaded artifact is missing or invalid")
+    const { docxStorageId, docxIntentId } = await t.run(async (ctx) => {
+      const docxIntentId = await ctx.db.insert("uploadIntents", {
+        sessionId: SESSION_A,
+        kind: "docx",
+        status: "awaitingUpload",
+        createdAt: now,
+        expiresAt: now + 60_000,
+      })
+      const docxStorageId = await ctx.storage.store(
+        new Blob(["docx-bytes"], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        })
+      )
+      return { docxStorageId, docxIntentId }
+    })
+
+    await expect(
+      t.mutation(api.storage.registerUploadedFile, {
+        sessionId: SESSION_B,
+        uploadIntentId: docxIntentId,
+        storageId: docxStorageId,
+      })
+    ).rejects.toThrow("Active upload intent not found")
+    await t.mutation(api.storage.registerUploadedFile, {
+      sessionId: SESSION_A,
+      uploadIntentId: docxIntentId,
+      storageId: docxStorageId,
+    })
+    const templateId = await t.mutation(api.templates.create, {
+      sessionId: SESSION_A,
+      originalFileUploadIntentId: docxIntentId,
+      ...templateMetadata(),
+    })
+    expect(
+      await t.run(async (ctx) => await ctx.db.get(docxIntentId))
+    ).toMatchObject({ status: "consumed", storageId: docxStorageId })
+    expect(
+      await t.run(async (ctx) => await ctx.db.get(templateId))
+    ).toMatchObject({ originalFileStorageId: docxStorageId })
+    await expect(
+      t.mutation(api.templates.create, {
+        sessionId: SESSION_A,
+        originalFileUploadIntentId: docxIntentId,
+        ...templateMetadata({ sourceHash: HASH_B }),
+      })
+    ).rejects.toThrow("Registered upload intent not found")
+
+    const { expiredStorageId, expiredIntentId } = await t.run(async (ctx) => {
+      const expiredStorageId = await ctx.storage.store(
+        new Blob(["%PDF-1.7\n"], { type: "application/pdf" })
+      )
+      const expiredIntentId = await ctx.db.insert("uploadIntents", {
+        sessionId: SESSION_A,
+        kind: "pdf",
+        status: "registered",
+        storageId: expiredStorageId,
+        createdAt: now - 2_000,
+        expiresAt: now - 1_000,
+      })
+      return { expiredStorageId, expiredIntentId }
+    })
+    await t.mutation(internal.storage.cleanupExpiredUploadIntents, {
+      cutoff: now,
+    })
+    expect(
+      await t.run(async (ctx) => await ctx.db.get(expiredIntentId))
+    ).toBeNull()
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db.system.get("_storage", expiredStorageId)
+      )
+    ).toBeNull()
   })
 
   test("template removal drains bounded cascade batches and stored files", async () => {

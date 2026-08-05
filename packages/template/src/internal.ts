@@ -247,13 +247,42 @@ function parseValueBody(
     )
   }
   if (
-    body.startsWith("@") ||
     /^image(?:\s|:|\()/iu.test(body) ||
     /:\s*image(?:\s*\|.*)?$/iu.test(body)
   ) {
     return templateDiagnostic(
       "TEMPLATE_UNSUPPORTED_IMAGE_TAG",
       "Image template tags are not supported",
+      source,
+      node
+    )
+  }
+
+  if (body.startsWith("@image")) {
+    const match = /^@image\s+(?<path>[A-Za-z_$][A-Za-z0-9_$.]*)$/u.exec(body)
+    const path = match?.groups?.path
+    if (path === undefined) {
+      return templateDiagnostic(
+        "TEMPLATE_INVALID_IMAGE_TAG",
+        "An image template tag must use the canonical {{@image path}} form",
+        source,
+        node
+      )
+    }
+    const pathError = validatePath(path, source, node, limits)
+    if (pathError !== undefined) return pathError
+    return {
+      raw,
+      path,
+      kind: "image",
+      explicitKind: true,
+      formatters: [],
+    }
+  }
+  if (body.startsWith("@")) {
+    return templateDiagnostic(
+      "TEMPLATE_INVALID_EXPRESSION",
+      "Unknown template directive",
       source,
       node
     )

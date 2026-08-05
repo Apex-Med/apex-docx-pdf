@@ -2,9 +2,11 @@ import type {
   Diagnostic,
   JsonSchema,
   LayoutTrace,
+  PageDisplayList,
   RenderOptions,
   RenderTimings,
   TemplateManifest,
+  TemplateInspectionResult,
 } from "@apex-docx-pdf/core"
 
 export type WorkerProgressStage =
@@ -31,7 +33,21 @@ export type BrowserCompileResult = Readonly<{
   manifest: TemplateManifest
   jsonSchema: JsonSchema
   starterData: Readonly<Record<string, unknown>>
+  templatePreview: BrowserTemplatePreview
+  inspection: TemplateInspectionResult
   diagnostics: readonly Diagnostic[]
+}>
+
+export type BrowserTemplatePreview = Readonly<{
+  displayList: PageDisplayList
+  placeholderNodes: Readonly<Record<string, string>>
+  assets: readonly BrowserPreviewAsset[]
+}>
+
+export type BrowserPreviewAsset = Readonly<{
+  assetId: string
+  mimeType: "image/png" | "image/jpeg"
+  bytes: Uint8Array<ArrayBuffer>
 }>
 
 export type BrowserRenderResult = Readonly<{

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "apex-docx-pdf-synthetic-security-v1",
+  "provenance": {
+    "origin": "Generated as original synthetic test material for this repository.",
+    "license": "Apache-2.0",
+    "containsThirdPartyContent": false,
+    "containsPersonalData": false,
+    "networkTargets": "Reserved example.invalid hostnames only; the engine must never fetch them."
+  },
+  "fixtures": [
+    {
+      "file": "malformed-document.xml",
+      "sha256": "1034ee0655472c0f6a68a7e340757896535adcf17927ef397e434d3b832057e8",
+      "kind": "rawDocumentXml",
+      "expected": "reject",
+      "risk": "malformed XML"
+    },
+    {
+      "file": "entity-document.xml",
+      "sha256": "8c9e37f538546a2627f9dab7d5791f3166432d7746b2c81fe6a7195c0b9e76de",
+      "kind": "rawDocumentXml",
+      "expected": "reject",
+      "risk": "external entity declaration"
+    },
+    {
+      "file": "external-root.rels",
+      "sha256": "6d912d41509e1838dc39264c602b8f2265547b9319fbc8cdcc7c24916a0c82c1",
+      "kind": "rootRelationships",
+      "expected": "reject",
+      "risk": "external relationship"
+    },
+    {
+      "file": "traversing-root.rels",
+      "sha256": "b9a5548f7f2e384c7da8c8390446983515585015580746e7b887ca38a1d8f8dd",
+      "kind": "rootRelationships",
+      "expected": "reject",
+      "risk": "relationship traversal"
+    },
+    {
+      "file": "duplicate-office-document.rels",
+      "sha256": "cc8d24250354d3263f17bdbcb136fe0d611576fece727d45fc97d85b7fb527ee",
+      "kind": "rootRelationships",
+      "expected": "reject",
+      "risk": "ambiguous package root"
+    },
+    {
+      "file": "archive-recipes.json",
+      "sha256": "9d3d21f318ff90fa659df392ef66e248d24133f8ef6373259d6e8a4ec748dede",
+      "kind": "archiveRecipes",
+      "expected": "reject",
+      "risk": "unsafe entry paths and truncated archives"
+    }
+  ]
+}

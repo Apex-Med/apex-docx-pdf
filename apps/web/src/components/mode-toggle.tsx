@@ -1,5 +1,6 @@
 import { Moon02Icon, Sun01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import { ClientOnly } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
@@ -11,6 +12,27 @@ import {
 import { useTheme } from "@/components/theme-provider"
 
 export function ModeToggle() {
+  return (
+    <ClientOnly fallback={<ModeToggleFallback />}>
+      <ModeToggleMenu />
+    </ClientOnly>
+  )
+}
+
+function ModeToggleFallback() {
+  return (
+    <button
+      type="button"
+      className="inline-flex size-9 items-center justify-center opacity-70"
+      aria-label="Toggle theme"
+      disabled
+    >
+      <HugeiconsIcon icon={Sun01Icon} strokeWidth={1.8} className="size-3.5" />
+    </button>
+  )
+}
+
+function ModeToggleMenu() {
   const { setTheme } = useTheme()
 
   return (

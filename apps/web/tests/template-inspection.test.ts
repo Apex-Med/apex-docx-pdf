@@ -22,6 +22,23 @@ function compileResult(
     manifest: { fields },
     jsonSchema: {},
     starterData: {},
+    templatePreview: {
+      displayList: { pages: [] },
+      placeholderNodes: {},
+      assets: [],
+    },
+    inspection: {
+      documentModelAvailable: true,
+      requiredFonts: [],
+      requiredFontEntryCount: 0,
+      requiredFontsTruncated: false,
+      features: [],
+      featureEntryCount: 0,
+      featuresTruncated: false,
+      diagnostics: [],
+      sourceLimitPerEntry: 20,
+      entryLimit: 200,
+    },
     diagnostics,
   }
 }
@@ -83,6 +100,9 @@ describe("template inspection", () => {
       arrayRoots: ["invoice.items"],
       conditionalFields: ["showNotes"],
       diagnosticCounts: { error: 0, warning: 1, info: 1 },
+      documentModelAvailable: true,
+      requiredFonts: [],
+      features: [],
     })
   })
 
@@ -98,12 +118,30 @@ describe("template inspection", () => {
       "Headers and footers",
       "Page fields",
     ])
-    expect(BUNDLED_FONT_PROFILE.faces).toHaveLength(4)
+    expect(BUNDLED_FONT_PROFILE.families).toEqual([
+      "Inter",
+      "Bricolage Grotesque",
+      "Instrument Sans",
+      "Instrument Serif",
+      "Geist Mono",
+    ])
+    expect(BUNDLED_FONT_PROFILE.catalogVersion).toBe("apex-offline-ttf/v2")
+    expect(BUNDLED_FONT_PROFILE.uploadedEmbeddedFonts).toBe(false)
     expect(BUNDLED_FONT_PROFILE.aliases).toEqual([
-      "Calibri",
-      "Arial",
-      "Helvetica",
-      "Times New Roman",
+      "Arial → Inter",
+      "Calibri → Inter",
+      "Helvetica → Inter",
+      "Times New Roman → Instrument Serif",
+      "Courier New → Geist Mono",
+      "Inter Variable → Inter",
+      "Inter Medium → Inter (500)",
+      "Inter SemiBold → Inter (600)",
+      "BricolageGrotesque → Bricolage Grotesque",
+      "Bricolage Grotesque Medium → Bricolage Grotesque (500)",
+      "Bricolage Grotesque SemiBold → Bricolage Grotesque (600)",
+      "InstrumentSans → Instrument Sans",
+      "InstrumentSerif → Instrument Serif",
+      "GeistMono → Geist Mono",
     ])
   })
 

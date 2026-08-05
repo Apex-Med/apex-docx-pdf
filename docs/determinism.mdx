@@ -3,8 +3,6 @@ title: "Determinism"
 description: "How explicit inputs, integer layout, and stable ordering produce reproducible output."
 ---
 
-# Determinism
-
 The renderer is designed around reproducible inputs rather than ambient process state. Its compatibility input includes template bytes, bounded JSON data, caller-supplied `FontConfiguration` and font bytes, engine version, locale, time zone, metadata, limits, and explicit render options.
 
 ## Rules enforced by the pipeline

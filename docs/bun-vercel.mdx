@@ -1,9 +1,7 @@
 ---
 title: "Bun and Vercel"
-description: "Run the monorepo with Bun today and keep deployment work explicitly future-scoped."
+description: "Run the Bun monorepo and understand the locally verified Vercel build boundary."
 ---
-
-# Bun and Vercel
 
 This repository is a Bun workspace monorepo. Its current scripts live at the repository root and in `apps/web`.
 
@@ -11,22 +9,33 @@ This repository is a Bun workspace monorepo. Its current scripts live at the rep
 
 ```bash
 bun test
+bun run test:cross-runtime
+bun run test:browser-determinism
+bun run test:playground-smoke
 bun run typecheck
 bun run build
 bun run dev
+bun run convex:dev
 ```
 
-`bun run dev` starts the local-only web application. The dormant Convex adapter can be exercised separately with `CONVEX_AGENT_MODE=anonymous bun run convex:dev`, but the current playground does not mount it and never uploads document data.
+Run `bun run dev` and `bun run convex:dev` in separate terminals. The first starts the Turbo application tasks; the second starts Convex development. For an unlinked backend, use `CONVEX_AGENT_MODE=anonymous bun run convex:dev`. The playground renders locally; its collapsed persistence drawer is off by default and uploads only after the user explicitly enables it and chooses Save.
 
-The web app uses the browser package and a module worker. The engine packages, including the explicit fontkit adapter and Phase 6 template/numbering/table/image/section path, are designed for Bun, supported Node.js, and modern browsers within the documented compatibility profile. This is a portability design boundary, not a claim of complete cross-runtime fixture proof. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application font assets remains outside the renderer. DOCX images are package-owned bytes and require no runtime fetch.
+The web app uses the browser package and a module worker. The checked-in runtime-neutral release suite reuses deterministic synthetic fixture builders for plain template formatting, multi-page template-table row expansion, and static PNG/JPEG rendering with sections, headers, and footers. It also checks a missing-required-data rejection with stable engine and diagnostic codes. The Bun/Node gate bundles that compact suite once, runs it in two separate Bun processes and Node 24, and requires exact agreement with canonical page counts, searchable text, PDF-validity flags, PDF hashes, and layout-trace hashes. The browser-determinism gate verifies the same canonical evidence through the production module worker in real headless Chromium. CI installs Chromium and runs both gates.
+
+The separate playground smoke drives the actual application through a three-page upright render, `%PDF-` download, form/JSON synchronization, invalid-data guard, stale-result invalidation, reset actions, and mobile keyboard tabs with zero runtime errors. Together these checks prove only the bounded release suite and local application walkthrough across the pinned Bun, Node 24, and Chromium toolchain. They are not broad browser, Word-fixture, operating-system, or hosted-production proof. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application font assets remains outside the renderer. DOCX images are package-owned bytes and require no runtime fetch.
 
 ## Vercel status
 
-Vercel deployment is planned. This repository does not currently include Vercel project configuration, environment variables, deployment scripts, production domains, or a hosted playground URL.
+The TanStack Start application uses the current `nitro/vite` adapter and the repository includes a Bun-targeted `vercel.json`. Nitro's Vercel function configuration also pins `runtime: "bun1.x"` and `maxDuration: 30`. A local `NITRO_PRESET=vercel` build emits Build Output API function metadata with those exact values; the ordinary production build and local production preview are also verified. This proves the generated deployment shape, not the runtime of a hosted invocation. The repository is not linked to a Vercel project, no production environment variables or domain are configured here, and no live deployment or hosted playground URL is claimed.
 
-When deployment is introduced, keep the renderer’s explicit-input contract intact: package bytes and data should reach an application-owned endpoint or worker boundary; locale, time zone, metadata, limits, and authorization must be explicit. Do not turn deployment configuration into an implicit source of fonts, locale, clock data, or network template execution.
+When deploying, keep the renderer’s explicit-input contract intact: package bytes and data should reach an application-owned endpoint or worker boundary; locale, time zone, metadata, limits, and authorization must be explicit. Do not turn deployment configuration into an implicit source of fonts, locale, clock data, or network template execution.
 
 <Note>
   The documentation site is configured independently under `docs/docs.json`. Its
   deployment host should be chosen before adding a product or playground link.
 </Note>
+
+See the [deployment runbook](/deployment-runbook) for the exact preview, smoke,
+promotion, and rollback sequence. Linking a Vercel project, adding environment
+variables, deploying, promoting, and rolling back are external actions and are
+performed only after narrow action-time approval.

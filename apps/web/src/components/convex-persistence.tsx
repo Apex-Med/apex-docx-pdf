@@ -6,6 +6,7 @@ import type {
 } from "@apex-docx-pdf/browser"
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query"
 import { useQuery } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -22,11 +23,13 @@ import { useConvex } from "convex/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { uploadToConvexStorage } from "@/lib/convex-upload"
+import { isPlaygroundRenderedDataCurrent } from "@/lib/playground-freshness"
 import { canonicalJson, computeRenderCacheIdentity } from "@/lib/render-cache"
 
 export type ConvexPersistenceProps = Readonly<{
   compiled?: BrowserCompileResult
   rendered?: BrowserRenderResult
+  renderedData?: Readonly<Record<string, unknown>>
   templateBytes?: Uint8Array<ArrayBuffer>
   fileName?: string
   data: Readonly<Record<string, unknown>>
@@ -62,8 +65,16 @@ type DeleteTarget = Readonly<{
   id: string
 }>
 
+type UploadProgress = Readonly<{
+  kind: "DOCX" | "PDF"
+  loadedBytes: number
+  totalBytes: number
+}>
+
 const recentRenderLimit = 5
 const textEncoder = new TextEncoder()
+const persistenceOffStatus =
+  "Persistence is off. This document stays local to this browser."
 const metadataByteLimits = {
   manifest: 240 * 1024,
   jsonSchema: 240 * 1024,
@@ -73,6 +84,7 @@ const metadataByteLimits = {
 export function ConvexPersistence({
   compiled,
   rendered,
+  renderedData,
   templateBytes,
   fileName,
   data,
@@ -82,11 +94,15 @@ export function ConvexPersistence({
 }: ConvexPersistenceProps) {
   const [enabled, setEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>()
   const [deleting, setDeleting] = useState<DeleteTarget>()
-  const [status, setStatus] = useState(
-    "Persistence is off. This document stays local to this browser."
-  )
+  const [status, setStatus] = useState(persistenceOffStatus)
   const resetKeyRef = useRef(resetKey)
+  const mountedRef = useRef(true)
+  const saveOperationRef = useRef(0)
+  const uploadAbortControllerRef = useRef<AbortController | undefined>(
+    undefined
+  )
   const [sessionId, , sessionIdPromise] = useSessionId()
   const sessionArgs = useSessionIdArg(
     enabled ? { limit: recentRenderLimit } : "skip"
@@ -94,17 +110,23 @@ export function ConvexPersistence({
   const recentQuery = useQuery(convexQuery(api.renders.recent, sessionArgs))
   const convex = useConvex()
   const generateUploadUrl = useConvexMutation(api.storage.generateUploadUrl)
+  const registerUploadedFile = useConvexMutation(
+    api.storage.registerUploadedFile
+  )
   const createTemplate = useConvexMutation(api.templates.create)
   const removeTemplate = useConvexMutation(api.templates.remove)
   const beginRender = useConvexMutation(api.renders.begin)
   const completeRender = useConvexMutation(api.renders.complete)
   const failRender = useConvexMutation(api.renders.fail)
+  const cancelRender = useConvexMutation(api.renders.cancel)
   const removeRender = useConvexMutation(api.renders.remove)
   const recentRenders = (recentQuery.data ?? []) as readonly RecentRender[]
 
   const report = useCallback(
     (message: string, operationResetKey = resetKeyRef.current) => {
-      if (operationResetKey !== resetKeyRef.current) return
+      if (!mountedRef.current || operationResetKey !== resetKeyRef.current) {
+        return
+      }
       setStatus(message)
       onStatus?.(message)
     },
@@ -112,11 +134,24 @@ export function ConvexPersistence({
   )
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      saveOperationRef.current += 1
+      uploadAbortControllerRef.current?.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    saveOperationRef.current += 1
+    uploadAbortControllerRef.current?.abort()
+    uploadAbortControllerRef.current = undefined
     resetKeyRef.current = resetKey
     setEnabled(false)
     setSaving(false)
+    setUploadProgress(undefined)
     setDeleting(undefined)
-    setStatus("Persistence is off. This document stays local to this browser.")
+    setStatus(persistenceOffStatus)
   }, [resetKey])
 
   const handleSave = async () => {
@@ -127,13 +162,23 @@ export function ConvexPersistence({
     }
 
     const operationResetKey = resetKeyRef.current
+    const saveOperationId = saveOperationRef.current + 1
+    saveOperationRef.current = saveOperationId
+    const reportSave = (message: string) => {
+      if (saveOperationId !== saveOperationRef.current) return
+      report(message, operationResetKey)
+    }
+    const uploadAbortController = new AbortController()
+    uploadAbortControllerRef.current = uploadAbortController
     setSaving(true)
-    report("Saving the current template…", operationResetKey)
+    setUploadProgress(undefined)
+    reportSave("Saving the current template…")
     let renderId: Id<"renders"> | undefined
     let templateSaved = false
 
     try {
       const resolvedSessionId = sessionId ?? (await sessionIdPromise)
+      uploadAbortController.signal.throwIfAborted()
       const existingTemplate = (await convex.query(
         api.templates.findBySourceHash,
         {
@@ -141,6 +186,7 @@ export function ConvexPersistence({
           sourceHash: compiled.templateHash,
         }
       )) as ExistingTemplate | null
+      uploadAbortController.signal.throwIfAborted()
       let templateId: Id<"templates">
       if (
         existingTemplate?.status === "ready" &&
@@ -150,20 +196,46 @@ export function ConvexPersistence({
       } else {
         const metadata = serializeTemplateMetadata(compiled)
         const templateDiagnostics = summarizeDiagnostics(compiled.diagnostics)
-        const docxUploadUrl = await generateUploadUrl({
+        const docxUpload = await generateUploadUrl({
           sessionId: resolvedSessionId,
           kind: "docx",
         })
+        uploadAbortController.signal.throwIfAborted()
+        reportSave("Uploading DOCX…")
         const { storageId: originalFileStorageId } =
           await uploadToConvexStorage(
-            docxUploadUrl,
+            docxUpload.uploadUrl,
             templateBytes,
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            docxUpload.uploadContentType,
+            {
+              signal: uploadAbortController.signal,
+              onProgress: ({ loadedBytes, totalBytes }) => {
+                if (
+                  saveOperationId !== saveOperationRef.current ||
+                  operationResetKey !== resetKeyRef.current ||
+                  !mountedRef.current
+                ) {
+                  return
+                }
+                setUploadProgress({
+                  kind: "DOCX",
+                  loadedBytes,
+                  totalBytes,
+                })
+              },
+            }
           )
+        uploadAbortController.signal.throwIfAborted()
+        await registerUploadedFile({
+          sessionId: resolvedSessionId,
+          uploadIntentId: docxUpload.uploadIntentId,
+          storageId: originalFileStorageId as Id<"_storage">,
+        })
+        uploadAbortController.signal.throwIfAborted()
         templateId = (await createTemplate({
           sessionId: resolvedSessionId,
           name: normalizedTemplateName(fileName),
-          originalFileStorageId: originalFileStorageId as Id<"_storage">,
+          originalFileUploadIntentId: docxUpload.uploadIntentId,
           sourceHash: compiled.templateHash,
           engineVersion: compiled.engineVersion,
           manifestJson: metadata.manifestJson,
@@ -174,11 +246,16 @@ export function ConvexPersistence({
         })) as Id<"templates">
       }
       templateSaved = true
+      uploadAbortController.signal.throwIfAborted()
 
-      if (!rendered) {
-        report(
-          "Template saved. Render a PDF to persist an output too.",
-          operationResetKey
+      if (!rendered || !renderedData) {
+        reportSave("Template saved. Render a PDF to persist an output too.")
+        return
+      }
+
+      if (!isPlaygroundRenderedDataCurrent(renderedData, data)) {
+        reportSave(
+          "Template saved. Data changed after the last render; render again before saving the PDF."
         )
         return
       }
@@ -190,16 +267,15 @@ export function ConvexPersistence({
         data,
         renderOptions,
       })
+      uploadAbortController.signal.throwIfAborted()
       const cached = (await convex.query(api.renders.findCached, {
         sessionId: resolvedSessionId,
         cacheKey: identity.cacheKey,
       })) as RecentRender | null
+      uploadAbortController.signal.throwIfAborted()
 
       if (cached?.status === "complete") {
-        report(
-          "Template saved. Reused your completed cached render.",
-          operationResetKey
-        )
+        reportSave("Template saved. Reused your completed cached render.")
         return
       }
 
@@ -216,42 +292,99 @@ export function ConvexPersistence({
       })) as Id<"renders">
 
       try {
-        const pdfUploadUrl = await generateUploadUrl({
+        uploadAbortController.signal.throwIfAborted()
+        const pdfUpload = await generateUploadUrl({
           sessionId: resolvedSessionId,
           kind: "pdf",
         })
+        uploadAbortController.signal.throwIfAborted()
+        reportSave("Uploading PDF…")
         const { storageId: pdfStorageId } = await uploadToConvexStorage(
-          pdfUploadUrl,
+          pdfUpload.uploadUrl,
           rendered.pdf,
-          "application/pdf"
+          pdfUpload.uploadContentType,
+          {
+            signal: uploadAbortController.signal,
+            onProgress: ({ loadedBytes, totalBytes }) => {
+              if (
+                saveOperationId !== saveOperationRef.current ||
+                operationResetKey !== resetKeyRef.current ||
+                !mountedRef.current
+              ) {
+                return
+              }
+              setUploadProgress({
+                kind: "PDF",
+                loadedBytes,
+                totalBytes,
+              })
+            },
+          }
         )
+        uploadAbortController.signal.throwIfAborted()
+        await registerUploadedFile({
+          sessionId: resolvedSessionId,
+          uploadIntentId: pdfUpload.uploadIntentId,
+          storageId: pdfStorageId as Id<"_storage">,
+        })
+        uploadAbortController.signal.throwIfAborted()
         await completeRender({
           sessionId: resolvedSessionId,
           renderId,
-          pdfStorageId: pdfStorageId as Id<"_storage">,
+          pdfUploadIntentId: pdfUpload.uploadIntentId,
           pageCount: rendered.pageCount,
           diagnosticsSummary: renderDiagnostics,
         })
       } catch (error) {
-        await failRender({
-          sessionId: resolvedSessionId,
-          renderId,
-          diagnosticsSummary: failedPersistenceSummary,
-        }).catch(() => undefined)
+        if (isAbortError(error)) {
+          await cancelRender({
+            sessionId: resolvedSessionId,
+            renderId,
+          }).catch(() => undefined)
+        } else {
+          await failRender({
+            sessionId: resolvedSessionId,
+            renderId,
+            diagnosticsSummary: failedPersistenceSummary,
+          }).catch(() => undefined)
+        }
         throw error
       }
 
-      report("Template and PDF saved.", operationResetKey)
-    } catch {
-      report(
-        templateSaved
-          ? "The template was saved, but the PDF could not be persisted."
-          : "Save failed. Your local document is unchanged.",
-        operationResetKey
-      )
+      reportSave("Template and PDF saved.")
+    } catch (error) {
+      if (isAbortError(error)) {
+        reportSave(
+          templateSaved
+            ? "Save cancelled. The template remains saved."
+            : "Save cancelled. Your local document is unchanged."
+        )
+      } else {
+        reportSave(
+          templateSaved
+            ? "The template was saved, but the PDF could not be persisted."
+            : "Save failed. Your local document is unchanged."
+        )
+      }
     } finally {
-      if (operationResetKey === resetKeyRef.current) setSaving(false)
+      if (uploadAbortControllerRef.current === uploadAbortController) {
+        uploadAbortControllerRef.current = undefined
+      }
+      if (
+        saveOperationId === saveOperationRef.current &&
+        operationResetKey === resetKeyRef.current &&
+        mountedRef.current
+      ) {
+        setSaving(false)
+        setUploadProgress(undefined)
+      }
     }
+  }
+
+  const handleCancelSave = () => {
+    if (!saving) return
+    report("Cancelling save…")
+    uploadAbortControllerRef.current?.abort()
   }
 
   const handleDeleteRender = async (renderId: Id<"renders">) => {
@@ -307,11 +440,17 @@ export function ConvexPersistence({
             checked={enabled}
             onChange={(event) => {
               const nextEnabled = event.currentTarget.checked
+              if (!nextEnabled) {
+                saveOperationRef.current += 1
+                uploadAbortControllerRef.current?.abort()
+                setSaving(false)
+                setUploadProgress(undefined)
+              }
               setEnabled(nextEnabled)
               report(
                 nextEnabled
                   ? "Persistence enabled. Nothing uploads until you choose Save current."
-                  : "Persistence is off. This document stays local to this browser."
+                  : persistenceOffStatus
               )
             }}
             className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -351,6 +490,16 @@ export function ConvexPersistence({
               "Save current"
             )}
           </Button>
+          {saving && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleCancelSave}
+            >
+              Cancel save
+            </Button>
+          )}
           {!canSave && (
             <span className="text-xs text-muted-foreground">
               Compile a DOCX to make saving available.
@@ -358,12 +507,27 @@ export function ConvexPersistence({
           )}
         </div>
 
+        {uploadProgress && resetKey === resetKeyRef.current && (
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-3">
+              <span>{uploadProgress.kind} upload</span>
+              <span>{formatUploadPercentage(uploadProgress)}%</span>
+            </div>
+            <progress
+              className="h-1.5 w-full accent-primary"
+              max={uploadProgress.totalBytes || 1}
+              value={uploadProgress.loadedBytes}
+              aria-label={`${uploadProgress.kind} upload progress`}
+            />
+          </div>
+        )}
+
         <p
           aria-live="polite"
           aria-atomic="true"
           className="text-xs text-muted-foreground"
         >
-          {status}
+          {resetKey === resetKeyRef.current ? status : persistenceOffStatus}
         </p>
 
         {enabled && (
@@ -411,6 +575,19 @@ export function ConvexPersistence({
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
+                        <Button
+                          nativeButton={false}
+                          render={
+                            <Link
+                              to="/templates/$templateId"
+                              params={{ templateId: item.templateId }}
+                            />
+                          }
+                          variant="outline"
+                          size="xs"
+                        >
+                          Open template
+                        </Button>
                         <Button
                           type="button"
                           variant="destructive"
@@ -509,4 +686,18 @@ function formatSavedAt(timestamp: number) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(timestamp))
+}
+
+function formatUploadPercentage(progress: UploadProgress) {
+  if (progress.totalBytes === 0) return 100
+  return Math.floor((progress.loadedBytes / progress.totalBytes) * 100)
+}
+
+function isAbortError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError"
+  )
 }

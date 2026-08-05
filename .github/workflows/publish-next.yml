@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   publish:
-    if: ${{ inputs.confirmation == 'publish-next' }}
+    if: ${{ inputs.confirmation == 'publish-next' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment: npm
     steps:
@@ -32,14 +32,11 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
       - run: bun run ci
-      - name: Verify next prerelease mode
-        run: |
-          test -f .changeset/pre.json
-          test "$(node -p "require('./.changeset/pre.json').mode")" = "pre"
-          test "$(node -p "require('./.changeset/pre.json').tag")" = "next"
+      - name: Verify Changesets prerelease configuration and lockstep versions
+        run: bun run release:validate
       - name: Publish approved prerelease artifacts with provenance
         run: |
-          for package in core docx fonts images layout template pdf engine browser; do
+          for package in core docx fonts images layout template pdf engine browser devtools apex-docx-pdf; do
             directory="packages/$package/dist"
             name="$(node -p "require('./$directory/package.json').name")"
             version="$(node -p "require('./$directory/package.json').version")"

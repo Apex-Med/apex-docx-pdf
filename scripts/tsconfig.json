@@ -1,0 +1,25 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "browser-determinism/**/*.ts",
+    "browser-determinism/**/*.mts",
+    "check-browser-determinism.ts",
+    "check-cross-runtime.ts",
+    "check-playground-smoke.ts",
+    "offline-font-configuration.ts",
+    "runtime-core-suite.ts",
+    "runtime-render-smoke.ts"
+  ]
+}

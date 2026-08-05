@@ -13,7 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as SupportRouteImport } from './routes/support'
+import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSplatRouteImport } from './routes/docs.$'
+import { Route as TemplatesTemplateIdRouteImport } from './routes/templates.$templateId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -35,10 +37,20 @@ const SupportRoute = SupportRouteImport.update({
   path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
+} as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
   id: '/$',
   path: '/$',
   getParentRoute: () => DocsRoute,
+} as any)
+const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
+  id: '/templates/$templateId',
+  path: '/templates/$templateId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -47,13 +59,16 @@ export interface FileRoutesByFullPath {
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/docs/': typeof DocsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/docs': typeof DocsRouteWithChildren
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/docs': typeof DocsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +77,36 @@ export interface FileRoutesById {
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/docs/': typeof DocsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/docs' | '/playground' | '/support' | '/docs/$'
+  fullPaths:
+    | '/'
+    | '/docs'
+    | '/playground'
+    | '/support'
+    | '/docs/$'
+    | '/templates/$templateId'
+    | '/docs/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/docs' | '/playground' | '/support' | '/docs/$'
-  id: '__root__' | '/' | '/docs' | '/playground' | '/support' | '/docs/$'
+  to:
+    | '/'
+    | '/playground'
+    | '/support'
+    | '/docs/$'
+    | '/templates/$templateId'
+    | '/docs'
+  id:
+    | '__root__'
+    | '/'
+    | '/docs'
+    | '/playground'
+    | '/support'
+    | '/docs/$'
+    | '/templates/$templateId'
+    | '/docs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +114,7 @@ export interface RootRouteChildren {
   DocsRoute: typeof DocsRouteWithChildren
   PlaygroundRoute: typeof PlaygroundRoute
   SupportRoute: typeof SupportRoute
+  TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -108,6 +147,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
     '/docs/$': {
       id: '/docs/$'
       path: '/$'
@@ -115,15 +161,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSplatRouteImport
       parentRoute: typeof DocsRoute
     }
+    '/templates/$templateId': {
+      id: '/templates/$templateId'
+      path: '/templates/$templateId'
+      fullPath: '/templates/$templateId'
+      preLoaderRoute: typeof TemplatesTemplateIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface DocsRouteChildren {
   DocsSplatRoute: typeof DocsSplatRoute
+  DocsIndexRoute: typeof DocsIndexRoute
 }
 
 const DocsRouteChildren: DocsRouteChildren = {
   DocsSplatRoute: DocsSplatRoute,
+  DocsIndexRoute: DocsIndexRoute,
 }
 
 const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
@@ -133,6 +188,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocsRoute: DocsRouteWithChildren,
   PlaygroundRoute: PlaygroundRoute,
   SupportRoute: SupportRoute,
+  TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

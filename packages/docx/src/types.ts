@@ -39,8 +39,23 @@ export type ParsedDocxPageField = Readonly<{
   displayText: string
 }>
 
+export type ParsedDocxBreak = Readonly<{
+  type: "docx-break"
+  source: SourceLocation
+  kind: "line" | "page"
+}>
+
+export type ParsedDocxTab = Readonly<{
+  type: "docx-tab"
+  source: SourceLocation
+}>
+
 export type ParsedDocxInline =
-  ParsedDocxText | ParsedDocxImage | ParsedDocxPageField
+  | ParsedDocxText
+  | ParsedDocxImage
+  | ParsedDocxPageField
+  | ParsedDocxBreak
+  | ParsedDocxTab
 
 export type ParsedDocxRunProperties = Readonly<{
   fontFamily: string
@@ -49,6 +64,8 @@ export type ParsedDocxRunProperties = Readonly<{
   fontStyle: FontStyle
   underline: boolean
   color: string
+  highlightColor: string | null
+  verticalAlignment: "baseline" | "superscript" | "subscript"
 }>
 
 export type ParsedDocxLineSpacing =
@@ -77,6 +94,7 @@ export type ParsedDocxParagraphProperties = Readonly<{
   widowControl: boolean
   pageBreakBefore: boolean
   numbering: ParsedDocxParagraphNumbering | null
+  tabStops: readonly Readonly<{ position: number; alignment: "left" }>[]
 }>
 
 export type ParsedDocxParagraphNumbering = Readonly<{
@@ -127,6 +145,13 @@ export type ParsedDocxTableBorders = Readonly<{
   insideVertical: ParsedDocxTableBorder | null
 }>
 
+export type ParsedDocxTableCellBorders = Readonly<{
+  top: ParsedDocxTableBorder | null
+  right: ParsedDocxTableBorder | null
+  bottom: ParsedDocxTableBorder | null
+  left: ParsedDocxTableBorder | null
+}>
+
 export type ParsedDocxTableCell = Readonly<{
   type: "docx-table-cell"
   source: SourceLocation
@@ -137,6 +162,7 @@ export type ParsedDocxTableCell = Readonly<{
   verticalMerge: "none" | "restart" | "continue"
   verticalAlignment: "top" | "center" | "bottom"
   fillColor: string | null
+  borders: ParsedDocxTableCellBorders
   paragraphs: readonly ParsedDocxParagraph[]
 }>
 
@@ -167,7 +193,16 @@ export type ParsedDocxTable = Readonly<{
   rows: readonly ParsedDocxTableRow[]
 }>
 
-export type ParsedDocxBlock = ParsedDocxParagraph | ParsedDocxTable
+export type ParsedDocxHorizontalRule = Readonly<{
+  type: "docx-horizontal-rule"
+  source: SourceLocation
+  properties: ParsedDocxParagraphProperties
+  heightTwips: number
+  color: string
+}>
+
+export type ParsedDocxBlock =
+  ParsedDocxParagraph | ParsedDocxTable | ParsedDocxHorizontalRule
 
 export type ParsedDocxSectionProperties = Readonly<{
   pageWidth: number
@@ -240,7 +275,10 @@ export type DocxParseOptions = Readonly<{
     maxImageDimensionPixels?: number
     maxImagePixels?: number
   }>
-  /** Unsupported meaningful OOXML is an error by default. */
+  /**
+   * Controls only documented safe fallbacks. Invalid, unsafe, or otherwise
+   * lossy OOXML remains an error in every mode. Defaults to `strict`.
+   */
   unsupportedFeatures?: "strict" | "compatible" | "lenient"
   signal?: AbortSignal
 }>

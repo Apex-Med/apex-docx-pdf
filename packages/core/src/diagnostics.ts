@@ -1,6 +1,10 @@
 import type { NodeId } from "./ids"
 
 export type DiagnosticSeverity = "info" | "warning" | "error"
+/**
+ * Controls only explicitly classified unsupported-feature fallbacks.
+ * Invalid input, security failures, and unclassified content loss always fail.
+ */
 export type UnsupportedFeatureMode = "strict" | "compatible" | "lenient"
 
 export type SourceLocation = Readonly<{

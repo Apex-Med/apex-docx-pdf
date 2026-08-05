@@ -8,6 +8,7 @@ import type {
   ParsedDocxDocument,
   ParsedDocxHeaderFooter,
   ParsedDocxImageAsset,
+  ParsedDocxHorizontalRule,
   ParsedDocxInline,
   ParsedDocxNumberingDefinition,
   ParsedDocxNumberingLevelDefinition,
@@ -19,6 +20,8 @@ import type {
   ParsedDocxTable,
   ParsedDocxTableBorder,
   ParsedDocxTableBorders,
+  ParsedDocxTableCell,
+  ParsedDocxTableCellBorders,
   ParsedDocxText,
 } from "./types"
 import type { ValidatedDocxPackage } from "./zip"
@@ -92,6 +95,7 @@ const DEFAULT_PARAGRAPH: ParsedDocxParagraphProperties = Object.freeze({
   widowControl: true,
   pageBreakBefore: false,
   numbering: null,
+  tabStops: Object.freeze([]),
 })
 const DEFAULT_RUN: ParsedDocxRunProperties = Object.freeze({
   fontFamily: "Calibri",
@@ -100,6 +104,8 @@ const DEFAULT_RUN: ParsedDocxRunProperties = Object.freeze({
   fontStyle: "normal",
   underline: false,
   color: "000000",
+  highlightColor: null,
+  verticalAlignment: "baseline",
 })
 
 function localName(name: string): string {
@@ -1447,17 +1453,41 @@ function resolveOfficeDocumentPart(
   return { ok: true, value: officeDocumentPart }
 }
 
-function unsupportedSeverity(
+type ContinuingUnsupportedFeatureMode = "compatible" | "lenient"
+
+function unsupportedFeatureMode(
   options: DocxParseOptions
-): "error" | "warning" | "info" {
-  switch (options.unsupportedFeatures ?? "strict") {
-    case "compatible":
-      return "warning"
-    case "lenient":
-      return "info"
-    default:
-      return "error"
-  }
+): "strict" | ContinuingUnsupportedFeatureMode {
+  return options.unsupportedFeatures ?? "strict"
+}
+
+function canApplyUnsupportedFallback(
+  options: DocxParseOptions,
+  minimumMode: ContinuingUnsupportedFeatureMode
+): boolean {
+  const mode = unsupportedFeatureMode(options)
+  return mode === "lenient" || (mode === "compatible" && minimumMode === mode)
+}
+
+function reportUnsupportedFallback(
+  diagnostics: ReturnType<typeof diagnostic>[],
+  message: string,
+  location: ReturnType<typeof source>,
+  options: DocxParseOptions,
+  minimumMode: ContinuingUnsupportedFeatureMode,
+  feature: string,
+  fallback: string
+): boolean {
+  if (!canApplyUnsupportedFallback(options, minimumMode)) return false
+  const mode = unsupportedFeatureMode(options)
+  diagnostics.push({
+    code: "DOCX_UNSUPPORTED_FEATURE_FALLBACK",
+    severity: "warning",
+    message,
+    source: location,
+    details: { mode, feature, fallback },
+  })
+  return true
 }
 
 function reportUnsupported(
@@ -1467,9 +1497,16 @@ function reportUnsupported(
   location: ReturnType<typeof source>,
   options: DocxParseOptions
 ): void {
-  diagnostics.push(
-    diagnostic(code, message, unsupportedSeverity(options), location)
-  )
+  diagnostics.push({
+    code,
+    severity: "error",
+    message,
+    source: location,
+    details: {
+      mode: unsupportedFeatureMode(options),
+      fallback: "none",
+    },
+  })
   diagnostics.push(
     diagnostic(
       "DOCX_CONTENT_LOSS",
@@ -1487,6 +1524,8 @@ type PartialRunProperties = Readonly<{
   italic?: boolean
   underline?: boolean
   color?: string
+  highlightColor?: string | null
+  verticalAlignment?: "baseline" | "superscript" | "subscript"
 }>
 
 type PartialParagraphProperties = Readonly<{
@@ -1503,6 +1542,7 @@ type PartialParagraphProperties = Readonly<{
   pageBreakBefore?: boolean
   numberingId?: number | null
   numberingLevel?: number
+  tabStops?: readonly Readonly<{ position: number; alignment: "left" }>[]
 }>
 
 type ParsedStyle = Readonly<{
@@ -1515,12 +1555,20 @@ type ParsedStyle = Readonly<{
   basedOnSource?: ReturnType<typeof source>
 }>
 
+type ParsedTableStyle = Readonly<{
+  id: string
+  basedOn?: string
+  element: OrderedElement
+  source: ReturnType<typeof source>
+}>
+
 type StyleSheet = Readonly<{
   paragraphDefaults: PartialParagraphProperties
   runDefaults: PartialRunProperties
   defaultParagraphStyleId?: string
   defaultCharacterStyleId?: string
   styles: ReadonlyMap<string, ParsedStyle>
+  tableStyles: ReadonlyMap<string, ParsedTableStyle>
 }>
 
 const EMPTY_STYLE_SHEET: StyleSheet = Object.freeze({
@@ -1529,6 +1577,7 @@ const EMPTY_STYLE_SHEET: StyleSheet = Object.freeze({
   defaultParagraphStyleId: undefined,
   defaultCharacterStyleId: undefined,
   styles: new Map(),
+  tableStyles: new Map(),
 })
 
 function booleanProperty(
@@ -1543,6 +1592,22 @@ function integer(value: string | undefined): number | undefined {
   if (value === undefined || !/^-?\d+$/u.test(value)) return undefined
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) ? parsed : undefined
+}
+
+function roundedNonNegativeDecimal(
+  value: string | undefined
+): number | undefined {
+  if (value === undefined || !/^\d+(?:\.\d+)?$/u.test(value)) return undefined
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined
+  const rounded = Math.round(parsed)
+  return Number.isSafeInteger(rounded) ? rounded : undefined
+}
+
+function nonNegativeDecimal(value: string | undefined): number | undefined {
+  if (value === undefined || !/^\d+(?:\.\d+)?$/u.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
 function nonNegativeInteger(
@@ -1670,17 +1735,128 @@ const PARAGRAPH_PROPERTY_NAMES = new Set([
   "widowControl",
   "pageBreakBefore",
   "numPr",
+  "tabs",
   "sectPr",
+  "rPr",
+  "pBdr",
+  "shd",
 ])
 const RUN_PROPERTY_NAMES = new Set([
   "rStyle",
   "rFonts",
   "b",
+  "bCs",
   "i",
+  "iCs",
   "u",
   "color",
   "sz",
+  "szCs",
+  "rtl",
+  "lang",
+  "vertAlign",
+  "highlight",
 ])
+
+const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = Object.freeze({
+  black: "000000",
+  blue: "0000FF",
+  cyan: "00FFFF",
+  green: "00FF00",
+  magenta: "FF00FF",
+  red: "FF0000",
+  yellow: "FFFF00",
+  white: "FFFFFF",
+  darkBlue: "000080",
+  darkCyan: "008080",
+  darkGreen: "008000",
+  darkMagenta: "800080",
+  darkRed: "800000",
+  darkYellow: "808000",
+  darkGray: "808080",
+  lightGray: "C0C0C0",
+})
+
+function validateNoOpParagraphBorders(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): void {
+  if (element === undefined) return
+  const sides = childElements(element)
+  const allowedSides = new Set([
+    "top",
+    "left",
+    "bottom",
+    "right",
+    "between",
+    "bar",
+  ])
+  const noOp =
+    sides.length > 0 &&
+    sides.every(({ name, element: side }) => {
+      const sideAttributes = Object.fromEntries(
+        Object.entries(attributes(side)).map(([key, value]) => [
+          localName(key),
+          decodeXmlReferences(value),
+        ])
+      )
+      return (
+        allowedSides.has(localName(name)) &&
+        Object.keys(sideAttributes).every((key) =>
+          ["val", "sz", "space", "color"].includes(key)
+        ) &&
+        (sideAttributes.val === "nil" || sideAttributes.val === "none") &&
+        (sideAttributes.sz === undefined || sideAttributes.sz === "0") &&
+        (sideAttributes.space === undefined || sideAttributes.space === "0") &&
+        (sideAttributes.color === undefined ||
+          sideAttributes.color === "auto") &&
+        childElements(side).length === 0
+      )
+    })
+  if (!noOp) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      "Paragraph borders are supported only when every declared side is an explicit nil/none no-op.",
+      source(part, xmlPath)
+    )
+  }
+}
+
+function validateNoOpParagraphShading(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): void {
+  if (element === undefined) return
+  const shadingAttributes = Object.fromEntries(
+    Object.entries(attributes(element)).map(([key, value]) => [
+      localName(key),
+      decodeXmlReferences(value),
+    ])
+  )
+  const noOp =
+    Object.keys(shadingAttributes).every((key) =>
+      ["val", "fill", "color"].includes(key)
+    ) &&
+    shadingAttributes.val === "clear" &&
+    (shadingAttributes.fill === undefined ||
+      shadingAttributes.fill === "auto") &&
+    (shadingAttributes.color === undefined ||
+      shadingAttributes.color === "auto") &&
+    childElements(element).length === 0
+  if (!noOp) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      "Paragraph shading is supported only as clear with auto fill and color.",
+      source(part, xmlPath)
+    )
+  }
+}
 
 function parseParagraphProperties(
   element: OrderedElement | undefined,
@@ -1712,6 +1888,18 @@ function parseParagraphProperties(
     xmlPath,
     diagnostics
   )
+  validateNoOpParagraphBorders(
+    child(element, "pBdr")?.element,
+    part,
+    `${xmlPath}/w:pBdr[1]`,
+    diagnostics
+  )
+  validateNoOpParagraphShading(
+    child(element, "shd")?.element,
+    part,
+    `${xmlPath}/w:shd[1]`,
+    diagnostics
+  )
   const alignmentValue = attr(child(element, "jc")?.element, "val")
   let alignment: ParsedDocxParagraphProperties["alignment"] | undefined
   if (alignmentValue !== undefined) {
@@ -1740,10 +1928,11 @@ function parseParagraphProperties(
   const spacing = child(element, "spacing")?.element
   const before = integer(attr(spacing, "before"))
   const after = integer(attr(spacing, "after"))
-  const line = integer(attr(spacing, "line"))
+  const rawLine = attr(spacing, "line")
+  const line = roundedNonNegativeDecimal(rawLine)
   const lineRule = attr(spacing, "lineRule")
   let lineSpacing: PartialParagraphProperties["lineSpacing"]
-  if (line !== undefined && line >= 0) {
+  if (line !== undefined) {
     if (lineRule === undefined || lineRule === "auto") {
       lineSpacing = { rule: "auto", value240ths: line }
     } else if (lineRule === "exact" || lineRule === "atLeast") {
@@ -1756,11 +1945,25 @@ function parseParagraphProperties(
         source(part, `${xmlPath}/w:spacing[1]`)
       )
     }
-  } else if (attr(spacing, "line") !== undefined || lineRule !== undefined) {
+  } else if (rawLine !== undefined) {
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      "Line spacing requires a non-negative integer w:line value.",
+      "Line spacing requires a non-negative decimal w:line value that rounds to a safe integer.",
+      source(part, `${xmlPath}/w:spacing[1]`)
+    )
+  } else if (lineRule === "exact" || lineRule === "atLeast") {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Line-spacing rule '${lineRule}' requires a w:line value.`,
+      source(part, `${xmlPath}/w:spacing[1]`)
+    )
+  } else if (lineRule !== undefined && lineRule !== "auto") {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Line-spacing rule '${lineRule}' is not supported.`,
       source(part, `${xmlPath}/w:spacing[1]`)
     )
   }
@@ -1819,6 +2022,74 @@ function parseParagraphProperties(
       diagnostics
     )
   }
+  const tabs = child(element, "tabs")?.element
+  const tabStops: Array<Readonly<{ position: number; alignment: "left" }>> = []
+  if (tabs !== undefined) {
+    if (children(element, "tabs").length > 1) {
+      reportFormattingProblem(
+        diagnostics,
+        "DOCX_INVALID_STYLE_VALUE",
+        "Paragraph properties must contain at most one tabs collection.",
+        source(part, `${xmlPath}/w:tabs[2]`)
+      )
+    }
+    validatePropertyChildren(
+      tabs,
+      new Set(["tab"]),
+      part,
+      `${xmlPath}/w:tabs[1]`,
+      diagnostics
+    )
+    const seen = new Set<number>()
+    for (const [index, tab] of children(tabs, "tab").entries()) {
+      validatePropertyAttributes(
+        tabs,
+        { tab: new Set(["val", "pos", "leader"]) },
+        part,
+        `${xmlPath}/w:tabs[1]`,
+        diagnostics
+      )
+      const tabPath = `${xmlPath}/w:tabs[1]/w:tab[${index + 1}]`
+      const alignment = attr(tab.element, "val")
+      const position = integer(attr(tab.element, "pos"))
+      const leader = attr(tab.element, "leader")
+      if (
+        (alignment !== "left" && alignment !== "start") ||
+        position === undefined ||
+        position <= 0 ||
+        (leader !== undefined && leader !== "none")
+      ) {
+        reportFormattingProblem(
+          diagnostics,
+          "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+          "Tab stops require a positive integer position, left/start alignment, and no leader.",
+          source(part, tabPath)
+        )
+        continue
+      }
+      if (seen.has(position)) {
+        reportFormattingProblem(
+          diagnostics,
+          "DOCX_INVALID_STYLE_VALUE",
+          `Tab-stop position ${position} is duplicated.`,
+          source(part, tabPath)
+        )
+        continue
+      }
+      seen.add(position)
+      tabStops.push({ position, alignment: "left" })
+    }
+    tabStops.sort((left, right) => left.position - right.position)
+  }
+  // w:pPr/w:rPr formats Word's paragraph mark, not the paragraph's rendered
+  // glyph runs. Validate it using the same bounded profile, but do not merge it
+  // into paragraph text styling.
+  parseRunProperties(
+    child(element, "rPr")?.element,
+    part,
+    `${xmlPath}/w:rPr[1]`,
+    diagnostics
+  )
   const rawNumberingId = attr(
     child(numbering ?? element, "numId")?.element,
     "val"
@@ -1892,6 +2163,7 @@ function parseParagraphProperties(
     ...(numberingLevel === undefined || numberingLevel < 0 || numberingLevel > 8
       ? {}
       : { numberingLevel }),
+    ...(tabs === undefined ? {} : { tabStops: Object.freeze(tabStops) }),
   }
 }
 
@@ -1913,21 +2185,138 @@ function parseRunProperties(
     element,
     {
       rStyle: new Set(["val"]),
-      rFonts: new Set(["ascii", "hAnsi"]),
+      rFonts: new Set(["ascii", "hAnsi", "cs", "eastAsia"]),
       b: new Set(["val"]),
+      bCs: new Set(["val"]),
       i: new Set(["val"]),
+      iCs: new Set(["val"]),
       u: new Set(["val"]),
       color: new Set(["val"]),
       sz: new Set(["val"]),
+      szCs: new Set(["val"]),
+      rtl: new Set(["val"]),
+      lang: new Set(["val", "eastAsia", "bidi"]),
+      vertAlign: new Set(["val"]),
+      highlight: new Set(["val"]),
     },
     part,
     xmlPath,
     diagnostics
   )
   const fonts = child(element, "rFonts")?.element
-  const fontFamily = attr(fonts, "ascii") ?? attr(fonts, "hAnsi")
+  const asciiFont = attr(fonts, "ascii")
+  const highAnsiFont = attr(fonts, "hAnsi")
+  const fontFamily = asciiFont ?? highAnsiFont
+  const complexScriptFont = attr(fonts, "cs")
+  const eastAsiaFont = attr(fonts, "eastAsia")
   const color = attr(child(element, "color")?.element, "val")
   const size = integer(attr(child(element, "sz")?.element, "val"))
+  const complexScriptSize = integer(
+    attr(child(element, "szCs")?.element, "val")
+  )
+  const bold = booleanProperty(child(element, "b")?.element)
+  const complexScriptBold = booleanProperty(child(element, "bCs")?.element)
+  const italic = booleanProperty(child(element, "i")?.element)
+  const complexScriptItalic = booleanProperty(child(element, "iCs")?.element)
+  const verticalAlignment = attr(child(element, "vertAlign")?.element, "val")
+  const highlightElement = child(element, "highlight")?.element
+  const highlight = attr(highlightElement, "val")
+  const highlightColor =
+    highlight === "none"
+      ? null
+      : highlight === undefined
+        ? undefined
+        : HIGHLIGHT_COLORS[highlight]
+  if (children(element, "highlight").length > 1) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      "Run properties must contain at most one highlight value.",
+      source(part, `${xmlPath}/w:highlight[2]`)
+    )
+  }
+  if (children(element, "vertAlign").length > 1) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      "Run properties must contain at most one vertical alignment value.",
+      source(part, `${xmlPath}/w:vertAlign[2]`)
+    )
+  }
+  if (
+    asciiFont !== undefined &&
+    highAnsiFont !== undefined &&
+    asciiFont !== highAnsiFont
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      `Run fonts w:ascii ('${asciiFont}') and w:hAnsi ('${highAnsiFont}') conflict for supported LTR Latin text.`,
+      source(part, `${xmlPath}/w:rFonts[1]`)
+    )
+  }
+  if (highlightElement !== undefined && highlightColor === undefined) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Run highlight '${highlight ?? "<missing>"}' is outside the supported fixed-color palette.`,
+      source(part, `${xmlPath}/w:highlight[1]`)
+    )
+  }
+  if (
+    verticalAlignment !== undefined &&
+    verticalAlignment !== "baseline" &&
+    verticalAlignment !== "superscript" &&
+    verticalAlignment !== "subscript"
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Run vertical alignment '${verticalAlignment}' is invalid.`,
+      source(part, `${xmlPath}/w:vertAlign[1]`)
+    )
+  }
+  for (const [attribute, scriptFont] of [
+    ["w:cs", complexScriptFont],
+    ["w:eastAsia", eastAsiaFont],
+  ] as const) {
+    if (
+      scriptFont !== undefined &&
+      (fontFamily === undefined || scriptFont !== fontFamily)
+    ) {
+      reportFormattingProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+        `Run font ${attribute} ('${scriptFont}') is not equivalent to the supported LTR Latin font ('${fontFamily ?? "<unspecified>"}').`,
+        source(part, `${xmlPath}/w:rFonts[1]`)
+      )
+    }
+  }
+  for (const [property, latinValue, complexValue] of [
+    ["w:szCs", size, complexScriptSize],
+    ["w:bCs", bold, complexScriptBold],
+    ["w:iCs", italic, complexScriptItalic],
+  ] as const) {
+    if (
+      complexValue !== undefined &&
+      (latinValue === undefined || complexValue !== latinValue)
+    ) {
+      reportFormattingProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+        `Run property ${property} is not equivalent to its supported LTR Latin property.`,
+        source(part, `${xmlPath}/${property}[1]`)
+      )
+    }
+  }
+  if (booleanProperty(child(element, "rtl")?.element) === true) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      "Right-to-left run formatting is not supported.",
+      source(part, `${xmlPath}/w:rtl[1]`)
+    )
+  }
   if (color !== undefined && !/^[0-9a-f]{6}$/iu.test(color)) {
     reportFormattingProblem(
       diagnostics,
@@ -1954,12 +2343,8 @@ function parseRunProperties(
     formatting: {
       ...(fontFamily === undefined ? {} : { fontFamily }),
       ...(size === undefined || size < 0 ? {} : { fontSizeHalfPoints: size }),
-      ...(booleanProperty(child(element, "b")?.element) === undefined
-        ? {}
-        : { bold: booleanProperty(child(element, "b")?.element) }),
-      ...(booleanProperty(child(element, "i")?.element) === undefined
-        ? {}
-        : { italic: booleanProperty(child(element, "i")?.element) }),
+      ...(bold === undefined ? {} : { bold }),
+      ...(italic === undefined ? {} : { italic }),
       ...(underlineElement === undefined
         ? {}
         : {
@@ -1970,6 +2355,12 @@ function parseRunProperties(
       ...(color !== undefined && /^[0-9a-f]{6}$/iu.test(color)
         ? { color: color.toUpperCase() }
         : {}),
+      ...(verticalAlignment === "baseline" ||
+      verticalAlignment === "superscript" ||
+      verticalAlignment === "subscript"
+        ? { verticalAlignment }
+        : {}),
+      ...(highlightColor === undefined ? {} : { highlightColor }),
     },
   }
 }
@@ -2596,6 +2987,7 @@ function parseStyleSheet(
   let defaultParagraphStyleId: string | undefined
   let defaultCharacterStyleId: string | undefined
   const styles = new Map<string, ParsedStyle>()
+  const tableStyles = new Map<string, ParsedTableStyle>()
   const rootCounts = new Map<string, number>()
   for (const current of childElements(root)) {
     const name = localName(current.name)
@@ -2648,6 +3040,26 @@ function parseStyleSheet(
     }
     const id = attr(current.element, "styleId")
     const type = attr(current.element, "type")
+    if (id !== undefined && type === "table") {
+      if (tableStyles.has(id)) {
+        diagnostics.push(
+          diagnostic(
+            "DOCX_DUPLICATE_STYLE",
+            `Table style '${id}' is defined more than once.`,
+            "error",
+            source(stylesPart, currentPath)
+          )
+        )
+      } else {
+        tableStyles.set(id, {
+          id,
+          basedOn: attr(child(current.element, "basedOn")?.element, "val"),
+          element: current.element,
+          source: source(stylesPart, currentPath),
+        })
+      }
+      continue
+    }
     if (id === undefined || (type !== "paragraph" && type !== "character")) {
       if (type !== "table" && type !== "numbering") {
         reportFormattingProblem(
@@ -2752,6 +3164,7 @@ function parseStyleSheet(
     defaultParagraphStyleId,
     defaultCharacterStyleId,
     styles,
+    tableStyles,
   }
 }
 
@@ -2886,6 +3299,74 @@ function completeRunProperties(
   }
 }
 
+function exactK3HorizontalRulePict(element: OrderedElement): boolean {
+  if (element.name !== "w:pict") return false
+  if (Object.keys(attributes(element)).length !== 0) return false
+  const pictChildren = childElements(element)
+  const rectangle = pictChildren[0]
+  if (
+    pictChildren.length !== 1 ||
+    rectangle?.name !== "v:rect" ||
+    childElements(rectangle.element).length !== 0
+  )
+    return false
+  const expected: Readonly<Record<string, string>> = {
+    style: "width:0.0pt;height:1.5pt",
+    "o:hr": "t",
+    "o:hrstd": "t",
+    "o:hralign": "center",
+    fillcolor: "#A0A0A0",
+    stroked: "f",
+  }
+  const actual = attributes(rectangle.element)
+  return (
+    Object.keys(actual).length === Object.keys(expected).length &&
+    Object.entries(expected).every(([name, value]) => actual[name] === value)
+  )
+}
+
+/**
+ * Recognizes only the two isolated Word VML rule paragraphs present in K3.
+ * Empty runs and bookmark/proofing markers are harmless, but any other inline
+ * content keeps the paragraph on the normal fail-closed pict path.
+ */
+function exactK3HorizontalRuleParagraphPictPath(
+  element: OrderedElement,
+  xmlPath: string
+): string | undefined {
+  let pictPath: string | undefined
+  const paragraphCounts = new Map<string, number>()
+  for (const paragraphChild of childElements(element)) {
+    const childName = localName(paragraphChild.name)
+    const childCount = (paragraphCounts.get(childName) ?? 0) + 1
+    paragraphCounts.set(childName, childCount)
+    if (
+      childName === "pPr" ||
+      childName === "bookmarkStart" ||
+      childName === "bookmarkEnd" ||
+      childName === "proofErr"
+    )
+      continue
+    if (childName !== "r") return undefined
+    const runPath = `${xmlPath}/${paragraphChild.name}[${childCount}]`
+    const runCounts = new Map<string, number>()
+    for (const runChild of childElements(paragraphChild.element)) {
+      const runChildName = localName(runChild.name)
+      const runChildCount = (runCounts.get(runChildName) ?? 0) + 1
+      runCounts.set(runChildName, runChildCount)
+      if (runChildName === "rPr") continue
+      if (
+        runChildName !== "pict" ||
+        pictPath !== undefined ||
+        !exactK3HorizontalRulePict(runChild.element)
+      )
+        return undefined
+      pictPath = `${runPath}/${runChild.name}[${runChildCount}]`
+    }
+  }
+  return pictPath
+}
+
 function parseRun(
   element: OrderedElement,
   part: string,
@@ -2895,7 +3376,10 @@ function parseRun(
   sheet: StyleSheet,
   paragraphRunProperties: PartialRunProperties,
   media: MediaContext,
-  fieldState: { current?: ComplexFieldState }
+  fieldState: { current?: ComplexFieldState },
+  tabStopsAvailable: boolean,
+  pageBreaksAllowed: boolean,
+  allowedHorizontalRulePictPath?: string
 ): ParsedDocxRun {
   const texts: ParsedDocxText[] = []
   const inlines: ParsedDocxInline[] = []
@@ -2921,6 +3405,106 @@ function parseRun(
       } else {
         texts.push(parsedText)
         inlines.push(parsedText)
+      }
+    } else if (name === "br" || name === "cr") {
+      const breakPath = `${xmlPath}/${current.name}[${count}]`
+      const allowedAttributes =
+        name === "br" ? new Set(["type", "clear"]) : new Set<string>()
+      const unknownAttribute = Object.keys(attributes(current.element)).find(
+        (attributeName) => !allowedAttributes.has(localName(attributeName))
+      )
+      const type =
+        name === "cr"
+          ? "textWrapping"
+          : (attr(current.element, "type") ?? "textWrapping")
+      const clear = attr(current.element, "clear")
+      const supportedLine =
+        type === "textWrapping" && (clear === undefined || clear === "none")
+      const supportedPage =
+        type === "page" && clear === undefined && pageBreaksAllowed
+      const simpleElement =
+        unknownAttribute === undefined &&
+        childElements(current.element).length === 0
+      if ((supportedLine || supportedPage) && simpleElement) {
+        inlines.push({
+          type: "docx-break",
+          source: source(part, breakPath),
+          kind: supportedPage ? "page" : "line",
+        })
+      } else {
+        reportUnsupported(
+          diagnostics,
+          "DOCX_UNSUPPORTED_INLINE",
+          unknownAttribute !== undefined
+            ? `Break attribute '${unknownAttribute}' is not supported.`
+            : childElements(current.element).length > 0
+              ? "Break elements cannot contain child elements."
+              : type === "page" && !pageBreaksAllowed
+                ? "Manual page breaks are supported only in main-document body paragraphs."
+                : `Break type '${type}' with clear '${clear ?? "<absent>"}' is outside the supported line/page-break profile.`,
+          source(part, breakPath),
+          options
+        )
+      }
+    } else if (name === "tab") {
+      const tabPath = `${xmlPath}/${current.name}[${count}]`
+      const simpleElement =
+        Object.keys(attributes(current.element)).length === 0 &&
+        childElements(current.element).length === 0
+      if (tabStopsAvailable && simpleElement) {
+        inlines.push({ type: "docx-tab", source: source(part, tabPath) })
+      } else {
+        reportUnsupported(
+          diagnostics,
+          "DOCX_UNSUPPORTED_INLINE",
+          !simpleElement
+            ? "Word tab elements cannot contain attributes or child elements."
+            : "A Word tab element requires at least one explicit supported paragraph tab stop.",
+          source(part, tabPath),
+          options
+        )
+      }
+    } else if (name === "lastRenderedPageBreak") {
+      const location = source(part, `${xmlPath}/${current.name}[${count}]`)
+      if (
+        !reportUnsupportedFallback(
+          diagnostics,
+          "Ignored Word's last-rendered-page-break pagination hint; this engine paginates from the supported document model.",
+          location,
+          options,
+          "compatible",
+          "lastRenderedPageBreak",
+          "ignore-pagination-hint"
+        )
+      ) {
+        reportUnsupported(
+          diagnostics,
+          "DOCX_UNSUPPORTED_INLINE",
+          "Word's last-rendered-page-break pagination hint is not part of the strict supported profile.",
+          location,
+          options
+        )
+      }
+    } else if (name === "softHyphen") {
+      const location = source(part, `${xmlPath}/${current.name}[${count}]`)
+      if (
+        !reportUnsupportedFallback(
+          diagnostics,
+          "Replaced a discretionary soft-hyphen hint with an empty inline; surrounding text remains in source order.",
+          location,
+          options,
+          "lenient",
+          "softHyphen",
+          "empty-inline"
+        )
+      ) {
+        reportUnsupported(
+          diagnostics,
+          "DOCX_UNSUPPORTED_INLINE",
+          "A discretionary soft hyphen is outside this mode's supported profile.",
+          location,
+          options
+        )
       }
     } else if (name === "drawing") {
       const image = parseDrawing(
@@ -3028,6 +3612,12 @@ function parseRun(
       } else {
         fieldState.current.instruction += textContent(current.element)
       }
+    } else if (
+      name === "pict" &&
+      allowedHorizontalRulePictPath === `${xmlPath}/${current.name}[${count}]`
+    ) {
+      // The paragraph owner materializes this isolated safe profile as a
+      // semantic full-width block. It is intentionally not an inline glyph.
     } else if (name !== "rPr") {
       reportUnsupported(
         diagnostics,
@@ -3108,7 +3698,9 @@ function parseParagraph(
   sheet: StyleSheet,
   numberingDefinitions: ReadonlyMap<string, ParsedDocxNumberingDefinition>,
   hasNumberingPart: boolean,
-  media: MediaContext
+  media: MediaContext,
+  pageBreaksAllowed: boolean,
+  allowedHorizontalRulePictPath?: string
 ): ParsedDocxParagraph {
   const paragraphPropertiesElement = child(element, "pPr")?.element
   const paragraphPropertiesPath = `${xmlPath}/w:pPr[1]`
@@ -3168,7 +3760,10 @@ function parseParagraph(
           sheet,
           paragraphRunProperties,
           media,
-          fieldState
+          fieldState,
+          effectiveParagraphProperties.tabStops.length > 0,
+          pageBreaksAllowed,
+          allowedHorizontalRulePictPath
         )
       )
     } else if (childName === "fldSimple") {
@@ -3249,6 +3844,13 @@ const EMPTY_TABLE_BORDERS: ParsedDocxTableBorders = Object.freeze({
   insideVertical: null,
 })
 
+const EMPTY_TABLE_CELL_BORDERS: ParsedDocxTableCellBorders = Object.freeze({
+  top: null,
+  right: null,
+  bottom: null,
+  left: null,
+})
+
 function singularTableChild(
   element: OrderedElement | undefined,
   name: string,
@@ -3313,6 +3915,125 @@ function validateTableAttributes(
   }
 }
 
+function tableStyleCompatibility(
+  styleId: string,
+  sheet: StyleSheet,
+  seen = new Set<string>()
+): Readonly<{ compatible: boolean; requiresDirectCellPadding: boolean }> {
+  if (seen.has(styleId)) {
+    return { compatible: false, requiresDirectCellPadding: false }
+  }
+  const style = sheet.tableStyles.get(styleId)
+  if (style === undefined) {
+    return { compatible: false, requiresDirectCellPadding: false }
+  }
+  const nextSeen = new Set(seen).add(styleId)
+  const inherited =
+    style.basedOn === undefined
+      ? { compatible: true, requiresDirectCellPadding: false }
+      : tableStyleCompatibility(style.basedOn, sheet, nextSeen)
+  let compatible = inherited.compatible
+  let requiresDirectCellPadding = inherited.requiresDirectCellPadding
+  for (const current of childElements(style.element)) {
+    const name = localName(current.name)
+    if (name === "name" || name === "basedOn") continue
+    if (name === "tblPr") {
+      for (const property of childElements(current.element)) {
+        const propertyName = localName(property.name)
+        if (propertyName === "tblCellMar") {
+          requiresDirectCellPadding = true
+        } else if (
+          propertyName !== "tblStyleRowBandSize" &&
+          propertyName !== "tblStyleColBandSize"
+        ) {
+          compatible = false
+        }
+      }
+      continue
+    }
+    if (name === "tblStylePr") {
+      // Conditional formatting is a proven no-op only when its property
+      // containers are empty. tblLook can then be retained as metadata.
+      for (const property of childElements(current.element)) {
+        if (
+          Object.keys(attributes(property.element)).length > 0 ||
+          childElements(property.element).length > 0
+        ) {
+          compatible = false
+        }
+      }
+      continue
+    }
+    compatible = false
+  }
+  return { compatible, requiresDirectCellPadding }
+}
+
+function roundTableGridWidths(
+  columns: readonly Readonly<{
+    element: OrderedElement
+    path: string
+  }>[],
+  part: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): readonly number[] {
+  const valid: Readonly<{ value: number }>[] = columns.flatMap(
+    ({ element, path }) => {
+      validateTableAttributes(element, new Set(["w"]), part, path, diagnostics)
+      const value = nonNegativeDecimal(attr(element, "w"))
+      if (
+        value === undefined ||
+        value <= 0 ||
+        value > Number.MAX_SAFE_INTEGER
+      ) {
+        reportTableProblem(
+          diagnostics,
+          "DOCX_INVALID_TABLE_VALUE",
+          "Each gridCol width must be a positive decimal twip value that rounds within the safe integer range.",
+          source(part, path)
+        )
+        return []
+      }
+      return [{ value }]
+    }
+  )
+  if (valid.length === 0) return []
+  const rawTotal = valid.reduce((sum, column) => sum + column.value, 0)
+  const roundedTotal = Math.round(rawTotal)
+  const widths = valid.map((column) => Math.floor(column.value))
+  const floorTotal = widths.reduce((sum, width) => sum + width, 0)
+  if (
+    !Number.isSafeInteger(roundedTotal) ||
+    !Number.isSafeInteger(floorTotal)
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE_VALUE",
+      "The combined table-grid width exceeds the safe integer twip range.",
+      source(part, columns[0]?.path ?? "/w:tblGrid[1]")
+    )
+    return []
+  }
+  const remainder = roundedTotal - floorTotal
+  const allocationOrder = valid
+    .map((column, index) => ({
+      ...column,
+      index,
+    }))
+    .sort(
+      (left, right) =>
+        right.value -
+          Math.floor(right.value) -
+          (left.value - Math.floor(left.value)) || left.index - right.index
+    )
+  for (let index = 0; index < remainder; index += 1) {
+    const column = allocationOrder[index]
+    if (column !== undefined)
+      widths[column.index] = (widths[column.index] ?? 0) + 1
+  }
+  return widths
+}
+
 function parseTableWidth(
   element: OrderedElement | undefined,
   part: string,
@@ -3337,12 +4058,12 @@ function parseTableWidth(
   ) {
     return null
   }
-  const width = integer(rawWidth)
+  const width = roundedNonNegativeDecimal(rawWidth)
   if (type !== "dxa") {
     reportTableProblem(
       diagnostics,
       "DOCX_UNSUPPORTED_TABLE_PROPERTY",
-      `Table width type '${type}' is not supported; use integer twips ('dxa')${allowAuto ? " or auto" : ""}.`,
+      `Table width type '${type}' is not supported; use decimal twips ('dxa')${allowAuto ? " or auto" : ""}.`,
       source(part, xmlPath)
     )
     return undefined
@@ -3351,7 +4072,7 @@ function parseTableWidth(
     reportTableProblem(
       diagnostics,
       "DOCX_INVALID_TABLE_VALUE",
-      "Table width must be a non-negative safe integer twip value.",
+      "Table width must be a non-negative decimal twip value that rounds within the safe integer range.",
       source(part, xmlPath)
     )
     return undefined
@@ -3491,6 +4212,84 @@ function parseTableBorders(
   }
 }
 
+function parseTableCellBorders(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): ParsedDocxTableCellBorders {
+  if (element === undefined) return EMPTY_TABLE_CELL_BORDERS
+  validateTableChildren(
+    element,
+    new Set(["top", "right", "bottom", "left"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const border = (name: "top" | "right" | "bottom" | "left") =>
+    parseTableBorder(
+      singularTableChild(element, name, part, xmlPath, diagnostics),
+      part,
+      `${xmlPath}/w:${name}[1]`,
+      diagnostics
+    )
+  return {
+    top: border("top"),
+    right: border("right"),
+    bottom: border("bottom"),
+    left: border("left"),
+  }
+}
+
+function tableBordersEqual(
+  left: ParsedDocxTableBorder,
+  right: ParsedDocxTableBorder
+): boolean {
+  return (
+    left.style === right.style &&
+    left.color === right.color &&
+    left.size === right.size &&
+    left.space === right.space
+  )
+}
+
+function reportConflictingDirectCellBorders(
+  rows: ParsedDocxTable["rows"],
+  diagnostics: ReturnType<typeof diagnostic>[]
+): void {
+  const conflict = (
+    first: ParsedDocxTableBorder | null,
+    second: ParsedDocxTableBorder | null,
+    location: ParsedDocxTableCell["source"]
+  ): void => {
+    if (first === null || second === null || tableBordersEqual(first, second))
+      return
+    reportTableProblem(
+      diagnostics,
+      "DOCX_AMBIGUOUS_TABLE",
+      "Adjacent direct cell borders conflict on one shared table edge.",
+      location
+    )
+  }
+  for (const [rowIndex, row] of rows.entries()) {
+    for (const [cellIndex, cell] of row.cells.entries()) {
+      const previous = row.cells[cellIndex - 1]
+      if (previous !== undefined)
+        conflict(previous.borders.right, cell.borders.left, cell.source)
+      const previousRow = rows[rowIndex - 1]
+      if (previousRow === undefined || cell.verticalMerge === "continue")
+        continue
+      for (const above of previousRow.cells) {
+        const overlaps =
+          above.columnIndex < cell.columnIndex + cell.columnSpan &&
+          cell.columnIndex < above.columnIndex + above.columnSpan
+        if (overlaps)
+          conflict(above.borders.bottom, cell.borders.top, cell.source)
+      }
+    }
+  }
+}
+
 function parseCellPadding(
   element: OrderedElement | undefined,
   part: string,
@@ -3548,6 +4347,69 @@ function parseCellPadding(
   }
 }
 
+function parseDirectCellPadding(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): { top: number; right: number; bottom: number; left: number } | undefined {
+  if (element === undefined) return undefined
+  validateTableChildren(
+    element,
+    new Set(["top", "start", "bottom", "end", "left", "right"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const end = singularTableChild(element, "end", part, xmlPath, diagnostics)
+  const right = singularTableChild(element, "right", part, xmlPath, diagnostics)
+  const start = singularTableChild(element, "start", part, xmlPath, diagnostics)
+  const left = singularTableChild(element, "left", part, xmlPath, diagnostics)
+  if (
+    (end !== undefined && right !== undefined) ||
+    (start !== undefined && left !== undefined)
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_AMBIGUOUS_TABLE",
+      "Direct cell margins cannot define both logical and legacy values for the same side.",
+      source(part, xmlPath)
+    )
+  }
+  const selected = {
+    top: singularTableChild(element, "top", part, xmlPath, diagnostics),
+    right: end ?? right,
+    bottom: singularTableChild(element, "bottom", part, xmlPath, diagnostics),
+    left: start ?? left,
+  }
+  if (Object.values(selected).some((side) => side === undefined)) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      "Direct cell margins must specify all four sides because the semantic table model has one uniform padding value.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  const parseSide = (name: keyof typeof selected): number | undefined =>
+    parseTableWidth(
+      selected[name],
+      part,
+      `${xmlPath}/w:${name}[1]`,
+      diagnostics,
+      false
+    ) ?? undefined
+  const padding = {
+    top: parseSide("top"),
+    right: parseSide("right"),
+    bottom: parseSide("bottom"),
+    left: parseSide("left"),
+  }
+  return Object.values(padding).some((side) => side === undefined)
+    ? undefined
+    : (padding as { top: number; right: number; bottom: number; left: number })
+}
+
 function parseTableBoolean(
   element: OrderedElement | undefined,
   part: string,
@@ -3585,7 +4447,7 @@ function parseRowHeight(
     xmlPath,
     diagnostics
   )
-  const value = integer(attr(element, "val"))
+  const value = roundedNonNegativeDecimal(attr(element, "val"))
   const rawRule = attr(element, "hRule") ?? "auto"
   if (
     value === undefined ||
@@ -3597,7 +4459,7 @@ function parseRowHeight(
       rawRule === "auto"
         ? "DOCX_UNSUPPORTED_TABLE_PROPERTY"
         : "DOCX_INVALID_TABLE_VALUE",
-      "Row height must use a non-negative integer twip value with hRule 'exact' or 'atLeast'.",
+      "Row height must use a non-negative decimal twip value that rounds within the safe integer range with hRule 'exact' or 'atLeast'.",
       source(part, xmlPath)
     )
     return null
@@ -3614,7 +4476,14 @@ function parseCellFill(
   if (element === undefined) return null
   validateTableAttributes(
     element,
-    new Set(["val", "fill", "color"]),
+    new Set([
+      "val",
+      "fill",
+      "color",
+      "themeFill",
+      "themeFillTint",
+      "themeFillShade",
+    ]),
     part,
     xmlPath,
     diagnostics
@@ -3622,6 +4491,22 @@ function parseCellFill(
   const pattern = attr(element, "val") ?? "clear"
   const foreground = attr(element, "color") ?? "auto"
   const fill = attr(element, "fill")
+  const themeFill = attr(element, "themeFill")
+  const themeTint = attr(element, "themeFillTint")
+  const themeShade = attr(element, "themeFillShade")
+  if (
+    themeFill !== undefined ||
+    themeTint !== undefined ||
+    themeShade !== undefined
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      `Theme cell shading '${themeFill ?? "<missing themeFill>"}' cannot be resolved without mapping the document theme.`,
+      source(part, xmlPath)
+    )
+    return null
+  }
   if (pattern !== "clear" || foreground.toLowerCase() !== "auto") {
     reportTableProblem(
       diagnostics,
@@ -3631,7 +4516,8 @@ function parseCellFill(
     )
     return null
   }
-  if (fill === undefined || !/^[0-9a-f]{6}$/iu.test(fill)) {
+  if (fill === undefined || fill.toLowerCase() === "auto") return null
+  if (!/^[0-9a-f]{6}$/iu.test(fill)) {
     reportTableProblem(
       diagnostics,
       "DOCX_INVALID_TABLE_VALUE",
@@ -3701,47 +4587,133 @@ function parseTable(
   if (tableProperties !== undefined) {
     validateTableChildren(
       tableProperties,
-      new Set(["tblW", "tblLayout", "tblBorders", "tblCellMar"]),
+      new Set([
+        "tblStyle",
+        "tblW",
+        "jc",
+        "tblLayout",
+        "tblLook",
+        "tblBorders",
+        "tblCellMar",
+      ]),
       part,
       `${xmlPath}/w:tblPr[1]`,
       diagnostics
     )
   }
-  const columnWidths: number[] = []
+  const propertiesPath = `${xmlPath}/w:tblPr[1]`
+  const tableStyleElement = singularTableChild(
+    tableProperties,
+    "tblStyle",
+    part,
+    propertiesPath,
+    diagnostics
+  )
+  validateTableAttributes(
+    tableStyleElement,
+    new Set(["val"]),
+    part,
+    `${propertiesPath}/w:tblStyle[1]`,
+    diagnostics
+  )
+  const tableStyleId = attr(tableStyleElement, "val")
+  const tableStyle =
+    tableStyleId === undefined
+      ? { compatible: true, requiresDirectCellPadding: false }
+      : tableStyleCompatibility(tableStyleId, sheet)
+  if (
+    tableStyleElement !== undefined &&
+    (tableStyleId === undefined || !tableStyle.compatible)
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      `Table style '${tableStyleId ?? "<missing>"}' is missing, cyclic, or contains visual formatting outside the bounded direct-formatting profile.`,
+      source(part, `${propertiesPath}/w:tblStyle[1]`)
+    )
+  }
+  const alignmentElement = singularTableChild(
+    tableProperties,
+    "jc",
+    part,
+    propertiesPath,
+    diagnostics
+  )
+  validateTableAttributes(
+    alignmentElement,
+    new Set(["val"]),
+    part,
+    `${propertiesPath}/w:jc[1]`,
+    diagnostics
+  )
+  const alignment = attr(alignmentElement, "val")
+  if (
+    alignmentElement !== undefined &&
+    alignment !== "left" &&
+    alignment !== "start"
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      `Table alignment '${alignment ?? "<missing>"}' is not supported by the semantic table model; only the default left/start alignment is a no-op.`,
+      source(part, `${propertiesPath}/w:jc[1]`)
+    )
+  }
+  const lookElement = singularTableChild(
+    tableProperties,
+    "tblLook",
+    part,
+    propertiesPath,
+    diagnostics
+  )
+  validateTableAttributes(
+    lookElement,
+    new Set([
+      "val",
+      "firstRow",
+      "lastRow",
+      "firstColumn",
+      "lastColumn",
+      "noHBand",
+      "noVBand",
+    ]),
+    part,
+    `${propertiesPath}/w:tblLook[1]`,
+    diagnostics
+  )
+  if (lookElement !== undefined && !tableStyle.compatible) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      "tblLook cannot be applied because the referenced table style has unresolved conditional formatting.",
+      source(part, `${propertiesPath}/w:tblLook[1]`)
+    )
+  }
+  const gridColumns: { element: OrderedElement; path: string }[] = []
+  const gridChanges: { element: OrderedElement; path: string }[] = []
   const gridCounts = new Map<string, number>()
   for (const gridChild of childElements(tableGrid)) {
     throwIfAborted(options.signal)
     const name = localName(gridChild.name)
     const count = (gridCounts.get(name) ?? 0) + 1
     gridCounts.set(name, count)
+    const path = `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`
+    if (name === "tblGridChange") {
+      gridChanges.push({ element: gridChild.element, path })
+      continue
+    }
     if (name !== "gridCol") {
       reportTableProblem(
         diagnostics,
         "DOCX_UNSUPPORTED_TABLE_PROPERTY",
         `Table grid child '${gridChild.name}' is not supported.`,
-        source(part, `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`)
+        source(part, path)
       )
       continue
     }
-    validateTableAttributes(
-      gridChild.element,
-      new Set(["w"]),
-      part,
-      `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`,
-      diagnostics
-    )
-    const width = integer(attr(gridChild.element, "w"))
-    if (width === undefined || width <= 0) {
-      reportTableProblem(
-        diagnostics,
-        "DOCX_INVALID_TABLE_VALUE",
-        "Each gridCol width must be a positive safe integer twip value.",
-        source(part, `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`)
-      )
-      continue
-    }
-    columnWidths.push(width)
+    gridColumns.push({ element: gridChild.element, path })
   }
+  const columnWidths = [...roundTableGridWidths(gridColumns, part, diagnostics)]
   if (columnWidths.length === 0) {
     reportTableProblem(
       diagnostics,
@@ -3751,6 +4723,50 @@ function parseTable(
     )
     return undefined
   }
+  for (const change of gridChanges) {
+    validateTableAttributes(
+      change.element,
+      new Set(["id"]),
+      part,
+      change.path,
+      diagnostics
+    )
+    const archivedGrid = singularTableChild(
+      change.element,
+      "tblGrid",
+      part,
+      change.path,
+      diagnostics
+    )
+    const archivedChildren =
+      archivedGrid === undefined
+        ? []
+        : childElements(archivedGrid).map((entry, index) => ({
+            element: entry.element,
+            path: `${change.path}/w:tblGrid[1]/${entry.name}[${index + 1}]`,
+            name: localName(entry.name),
+          }))
+    const archivedWidths = roundTableGridWidths(
+      archivedChildren
+        .filter((entry) => entry.name === "gridCol")
+        .map(({ element, path }) => ({ element, path })),
+      part,
+      diagnostics
+    )
+    if (
+      archivedGrid === undefined ||
+      archivedChildren.some((entry) => entry.name !== "gridCol") ||
+      archivedWidths.length !== columnWidths.length ||
+      archivedWidths.some((width, index) => width !== columnWidths[index])
+    ) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        "tblGridChange is accepted only when its archived grid is equivalent to the current deterministic grid.",
+        source(part, change.path)
+      )
+    }
+  }
   const gridWidth = safeTableWidthSum(
     columnWidths,
     part,
@@ -3758,7 +4774,6 @@ function parseTable(
     diagnostics
   )
   if (gridWidth === undefined) return undefined
-  const propertiesPath = `${xmlPath}/w:tblPr[1]`
   const preferredWidth = parseTableWidth(
     singularTableChild(
       tableProperties,
@@ -3826,7 +4841,7 @@ function parseTable(
     `${propertiesPath}/w:tblBorders[1]`,
     diagnostics
   )
-  const cellPadding = parseCellPadding(
+  let cellPadding = parseCellPadding(
     singularTableChild(
       tableProperties,
       "tblCellMar",
@@ -3840,6 +4855,11 @@ function parseTable(
   )
 
   const rows: ParsedDocxTable["rows"][number][] = []
+  const directCellPaddings: Readonly<{
+    value: { top: number; right: number; bottom: number; left: number }
+    path: string
+  }>[] = []
+  let cellCount = 0
   const tableCounts = new Map<string, number>()
   let sawNonHeader = false
   const activeVerticalMerges = new Map<
@@ -3954,6 +4974,7 @@ function parseTable(
         )
         continue
       }
+      cellCount += 1
       const cellProperties = singularTableChild(
         rowChild.element,
         "tcPr",
@@ -3964,12 +4985,53 @@ function parseTable(
       if (cellProperties !== undefined) {
         validateTableChildren(
           cellProperties,
-          new Set(["tcW", "gridSpan", "vMerge", "shd", "vAlign"]),
+          new Set([
+            "tcW",
+            "gridSpan",
+            "vMerge",
+            "tcBorders",
+            "shd",
+            "tcMar",
+            "vAlign",
+          ]),
           part,
           `${cellPath}/w:tcPr[1]`,
           diagnostics
         )
       }
+      const directPaddingPath = `${cellPath}/w:tcPr[1]/w:tcMar[1]`
+      const directPadding = parseDirectCellPadding(
+        singularTableChild(
+          cellProperties,
+          "tcMar",
+          part,
+          `${cellPath}/w:tcPr[1]`,
+          diagnostics
+        ),
+        part,
+        directPaddingPath,
+        diagnostics
+      )
+      if (directPadding !== undefined) {
+        directCellPaddings.push({
+          value: directPadding,
+          path: directPaddingPath,
+        })
+      }
+      const directBordersPath = `${cellPath}/w:tcPr[1]/w:tcBorders[1]`
+      const directBordersElement = singularTableChild(
+        cellProperties,
+        "tcBorders",
+        part,
+        `${cellPath}/w:tcPr[1]`,
+        diagnostics
+      )
+      const directBorders = parseTableCellBorders(
+        directBordersElement,
+        part,
+        directBordersPath,
+        diagnostics
+      )
       const spanElement = singularTableChild(
         cellProperties,
         "gridSpan",
@@ -4135,7 +5197,8 @@ function parseTable(
               sheet,
               numberingDefinitions,
               hasNumberingPart,
-              media
+              media,
+              false
             )
           )
         } else {
@@ -4166,6 +5229,7 @@ function parseTable(
         verticalMerge,
         verticalAlignment,
         fillColor,
+        borders: directBorders,
         paragraphs,
       })
       columnIndex += columnSpan
@@ -4209,6 +5273,42 @@ function parseTable(
       source(part, xmlPath)
     )
     return undefined
+  }
+  reportConflictingDirectCellBorders(rows, diagnostics)
+  if (directCellPaddings.length > 0) {
+    const first = directCellPaddings[0]?.value
+    const uniform = directCellPaddings.every(
+      ({ value }) =>
+        value.top === first?.top &&
+        value.right === first.right &&
+        value.bottom === first.bottom &&
+        value.left === first.left
+    )
+    if (
+      first === undefined ||
+      directCellPaddings.length !== cellCount ||
+      !uniform
+    ) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        "Direct cell margins can be mapped only when every cell specifies the same complete four-side padding.",
+        source(part, directCellPaddings[0]?.path ?? xmlPath)
+      )
+    } else {
+      cellPadding = first
+    }
+  }
+  if (
+    tableStyle.requiresDirectCellPadding &&
+    directCellPaddings.length !== cellCount
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      `Table style '${tableStyleId ?? "<missing>"}' supplies inherited cell margins that are not fully overridden by direct cell margins.`,
+      source(part, `${propertiesPath}/w:tblStyle[1]`)
+    )
   }
   return {
     type: "docx-table",
@@ -4444,7 +5544,8 @@ function parseHeaderFooterPart(
           sheet,
           numberingDefinitions,
           hasNumberingPart,
-          context
+          context,
+          false
         )
       )
     } else {
@@ -4621,6 +5722,10 @@ export function parseValidatedDocx(
       )
     }
     if (name === "p") {
+      const horizontalRulePictPath = exactK3HorizontalRuleParagraphPictPath(
+        current.element,
+        currentPath
+      )
       const paragraph = parseParagraph(
         current.element,
         officeDocumentPart.value,
@@ -4630,11 +5735,25 @@ export function parseValidatedDocx(
         sheet,
         numberingDefinitionsById,
         numberingPart.part !== undefined,
-        media
+        media,
+        true,
+        horizontalRulePictPath
       )
-      paragraphs.push(paragraph)
-      blocks.push(paragraph)
-      sectionBlocks.push(paragraph)
+      if (horizontalRulePictPath === undefined) {
+        paragraphs.push(paragraph)
+        blocks.push(paragraph)
+        sectionBlocks.push(paragraph)
+      } else {
+        const horizontalRule: ParsedDocxHorizontalRule = {
+          type: "docx-horizontal-rule",
+          source: source(officeDocumentPart.value, horizontalRulePictPath),
+          properties: paragraph.properties,
+          heightTwips: 30,
+          color: "A0A0A0",
+        }
+        blocks.push(horizontalRule)
+        sectionBlocks.push(horizontalRule)
+      }
       const paragraphSectionProperties = child(
         child(current.element, "pPr")?.element ?? current.element,
         "sectPr"

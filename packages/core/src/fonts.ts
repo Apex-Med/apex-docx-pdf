@@ -6,7 +6,8 @@ declare const glyphIdBrand: unique symbol
 
 export type FontFaceId = string & { readonly [fontFaceIdBrand]: true }
 export type GlyphId = number & { readonly [glyphIdBrand]: true }
-export type FontWeight = 400 | 700
+/** CSS/OpenType static font weights supported by the renderer contract. */
+export type FontWeight = 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900
 export type FontStyle = "normal" | "italic"
 export type FontProgramKind = "truetype" | "opentype-cff"
 
@@ -33,6 +34,10 @@ export type FontFaceRegistration = Readonly<{
 export type FontAlias = Readonly<{
   from: string
   to: string
+  /** Optional face selection for family names that encode a weight. */
+  weight?: FontWeight
+  /** Optional face selection for family names that encode a style. */
+  style?: FontStyle
 }>
 
 export type FontConfiguration = Readonly<{

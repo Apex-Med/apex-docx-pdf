@@ -10,6 +10,8 @@ import {
   type ResourceLimits,
   type SemanticBlock,
   type SemanticHeaderFooter,
+  type SemanticImage,
+  type SemanticImageAsset,
   type SemanticInline,
   type SemanticParagraph,
   type SemanticTable,
@@ -98,6 +100,123 @@ type ExpansionState = {
   textBytes: number
   stopped: boolean
   diagnostics: Diagnostic[]
+  assets: SemanticImageAsset[]
+  imageBytes: number
+  imageOrdinal: number
+}
+
+type ImageReplacement = Readonly<{
+  image: SemanticImage
+  asset: SemanticImageAsset
+}>
+
+function positiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0
+}
+
+function resolveImageValue(
+  value: unknown,
+  placeholder: ParsedPlaceholder,
+  state: ExpansionState,
+  limits: ResourceLimits,
+  iterationKey?: string
+): ImageReplacement | ResolvedValue {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {
+      ok: false,
+      code: "TEMPLATE_IMAGE_VALUE_TYPE",
+      message:
+        "Expected an image value object with explicit bytes and dimensions",
+    }
+  }
+  const image = value as Readonly<Record<string, unknown>>
+  const mimeType = image.mimeType
+  const rawBytes = image.bytes
+  const bytes =
+    rawBytes instanceof Uint8Array
+      ? Array.from(rawBytes)
+      : Array.isArray(rawBytes) &&
+          rawBytes.every(
+            (byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255
+          )
+        ? rawBytes.slice()
+        : undefined
+  if (
+    (mimeType !== "image/png" && mimeType !== "image/jpeg") ||
+    bytes === undefined ||
+    bytes.length === 0 ||
+    !positiveSafeInteger(image.pixelWidth) ||
+    !positiveSafeInteger(image.pixelHeight) ||
+    !positiveSafeInteger(image.width) ||
+    !positiveSafeInteger(image.height) ||
+    (image.preserveAspectRatio !== undefined &&
+      typeof image.preserveAspectRatio !== "boolean") ||
+    (image.altText !== undefined && typeof image.altText !== "string")
+  ) {
+    return {
+      ok: false,
+      code: "TEMPLATE_IMAGE_VALUE_TYPE",
+      message:
+        "Image values require PNG/JPEG Uint8Array bytes, positive pixel dimensions, positive twip bounds, and valid optional metadata",
+    }
+  }
+  if (
+    state.assets.length >= limits.maxImageCount ||
+    bytes.length > limits.maxImageBytes ||
+    state.imageBytes + bytes.length > limits.maxImageBytes ||
+    image.pixelWidth > limits.maxImageDimensionPixels ||
+    image.pixelHeight > limits.maxImageDimensionPixels ||
+    image.pixelWidth * image.pixelHeight > limits.maxImagePixels
+  ) {
+    return {
+      ok: false,
+      code: "TEMPLATE_IMAGE_LIMIT",
+      message: "The dynamic image exceeds the configured image resource limits",
+    }
+  }
+  const preserve = image.preserveAspectRatio !== false
+  let width = image.width
+  let height = image.height
+  if (preserve) {
+    const intrinsicRatio = image.pixelWidth / image.pixelHeight
+    if (width / height > intrinsicRatio)
+      width = Math.max(1, Math.round(height * intrinsicRatio))
+    else height = Math.max(1, Math.round(width / intrinsicRatio))
+  }
+  const ordinal = state.imageOrdinal
+  state.imageOrdinal += 1
+  state.imageBytes += bytes.length
+  const suffix =
+    iterationKey === undefined ? `${ordinal}` : `${iterationKey}-${ordinal}`
+  const assetId = `template-image:${placeholder.node.id}:${suffix}`
+  const asset: SemanticImageAsset = {
+    type: "imageAsset",
+    id: assetId,
+    source: placeholder.source,
+    packagePath: `template-data/${suffix}`,
+    mimeType,
+    bytes,
+    pixelWidth: image.pixelWidth,
+    pixelHeight: image.pixelHeight,
+  }
+  return {
+    asset,
+    image: {
+      type: "image",
+      id: expandedId(placeholder.node.id, iterationKey, `~image-${ordinal}`),
+      source: placeholder.source,
+      assetId,
+      width: width as SemanticImage["width"],
+      height: height as SemanticImage["height"],
+      aspect: {
+        pixelWidth: image.pixelWidth,
+        pixelHeight: image.pixelHeight,
+        intrinsicRatio: image.pixelWidth / image.pixelHeight,
+        preserve,
+      },
+      ...(image.altText === undefined ? {} : { altText: image.altText }),
+    },
+  }
 }
 
 function limitsFor(options: TemplateResolveOptions): ResourceLimits {
@@ -352,20 +471,34 @@ function resolveParagraph(
     state.diagnostics.push(...parsed.diagnostics)
     return undefined
   }
-  const replacements: { placeholder: ParsedPlaceholder; text: string }[] = []
+  const replacements: Array<
+    Readonly<{
+      placeholder: ParsedPlaceholder
+      value: string | ImageReplacement
+    }>
+  > = []
   for (const placeholder of parsed.placeholders) {
     throwIfAborted(options.signal)
     const located = lookup(context, placeholder.path, limits)
-    const result: ResolvedValue = located.found
-      ? applyFormatters(
-          located.value,
-          fieldKinds.get(canonicalPath(context, placeholder.path)) ??
-            placeholder.kind,
-          placeholder.formatters,
-          options
-        )
+    const result: ResolvedValue | ImageReplacement = located.found
+      ? placeholder.kind === "image"
+        ? resolveImageValue(
+            located.value,
+            placeholder,
+            state,
+            limits,
+            iterationKey
+          )
+        : applyFormatters(
+            located.value,
+            fieldKinds.get(canonicalPath(context, placeholder.path)) ??
+              placeholder.kind,
+            placeholder.formatters,
+            options
+          )
       : { ok: false, code: located.code, message: located.message }
-    if (result.ok) replacements.push({ placeholder, text: result.text })
+    if ("image" in result) replacements.push({ placeholder, value: result })
+    else if (result.ok) replacements.push({ placeholder, value: result.text })
     else {
       state.diagnostics.push(
         diagnostic(
@@ -375,7 +508,7 @@ function resolveParagraph(
           result.message
         )
       )
-      replacements.push({ placeholder, text: "" })
+      replacements.push({ placeholder, value: "" })
     }
   }
   const children: SemanticInline[] = []
@@ -417,7 +550,12 @@ function resolveParagraph(
       append,
       appendNonText
     )
-    append(replacement.placeholder.node, replacement.text, false)
+    if (typeof replacement.value === "string")
+      append(replacement.placeholder.node, replacement.value, false)
+    else {
+      children.push(replacement.value.image)
+      state.assets.push(replacement.value.asset)
+    }
     cursor = replacement.placeholder.end
   }
   sourcePieces(
@@ -918,6 +1056,12 @@ export function resolveTemplate(
     textBytes: 0,
     stopped: false,
     diagnostics: [...compiled.diagnostics],
+    assets: compiled.source.assets.slice(),
+    imageBytes: compiled.source.assets.reduce(
+      (total, asset) => total + asset.bytes.length,
+      0
+    ),
+    imageOrdinal: 0,
   }
   if (hasErrors(state.diagnostics))
     return { ok: false, diagnostics: state.diagnostics }
@@ -949,11 +1093,14 @@ export function resolveTemplate(
     }
     for (const block of section.blocks) {
       if (block.type === "paragraph") paragraphs.push(block)
-      else {
+      else if (block.type === "table") {
         flushParagraphs()
         blocks.push(
           resolveTable(block, data, fieldKinds, options, limits, state)
         )
+      } else {
+        flushParagraphs()
+        blocks.push(block)
       }
     }
     flushParagraphs()
@@ -965,6 +1112,7 @@ export function resolveTemplate(
     ok: true,
     value: {
       ...compiled.source,
+      assets: state.assets,
       headers,
       footers,
       sections,

@@ -243,6 +243,31 @@ function schemaForKind(kind: TemplateFieldKind): MutableSchema {
       return { type: "boolean" }
     case "date":
       return { type: "string", format: "date-time" }
+    case "image":
+      return {
+        type: "object",
+        properties: {
+          mimeType: { enum: ["image/png", "image/jpeg"] },
+          bytes: {
+            description: "Uint8Array supplied through the TypeScript API",
+          },
+          pixelWidth: { type: "integer", minimum: 1 },
+          pixelHeight: { type: "integer", minimum: 1 },
+          width: { type: "integer", minimum: 1 },
+          height: { type: "integer", minimum: 1 },
+          preserveAspectRatio: { type: "boolean" },
+          altText: { type: "string" },
+        },
+        required: [
+          "mimeType",
+          "bytes",
+          "pixelWidth",
+          "pixelHeight",
+          "width",
+          "height",
+        ],
+        additionalProperties: false,
+      }
     case "array":
       return { type: "array", items: objectSchema() }
     default:
@@ -304,6 +329,17 @@ function starterForKind(kind: TemplateFieldKind): unknown {
       return "1970-01-01T00:00:00.000Z"
     case "array":
       return [{}]
+    case "image":
+      return {
+        mimeType: "image/png",
+        bytes: [],
+        pixelWidth: 1,
+        pixelHeight: 1,
+        width: 1,
+        height: 1,
+        preserveAspectRatio: true,
+        altText: "",
+      }
     default:
       return ""
   }
@@ -372,6 +408,8 @@ function compileParagraphs(
         const markerPath = marker.path
         if (markerPath === undefined) continue
         const canonical = qualify(markerPath, stack)
+        if (state.placeholderNodes[marker.node.id] === undefined)
+          state.placeholderNodes[marker.node.id] = canonical
         addField(
           state.fields,
           canonical,
@@ -436,7 +474,7 @@ function compileParagraphs(
         contentLossDiagnostic(
           paragraph.source,
           paragraph,
-          "dynamic image template tag"
+          "non-canonical dynamic image template tag"
         )
       )
     for (const placeholder of parsed.placeholders) {
@@ -529,6 +567,8 @@ function compileTable(table: SemanticTable, state: CompileState): void {
         const markerPath = marker.path
         if (markerPath === undefined) continue
         const canonical = qualify(markerPath, rowStack)
+        if (state.placeholderNodes[marker.node.id] === undefined)
+          state.placeholderNodes[marker.node.id] = canonical
         addField(
           state.fields,
           canonical,
@@ -648,9 +688,11 @@ export async function compileTemplate(
     }
     for (const block of section.blocks) {
       if (block.type === "paragraph") paragraphs.push(block)
-      else {
+      else if (block.type === "table") {
         flushParagraphs()
         compileTable(block, state)
+      } else {
+        flushParagraphs()
       }
     }
     flushParagraphs()

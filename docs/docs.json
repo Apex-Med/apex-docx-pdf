@@ -45,7 +45,14 @@
       {
         "group": "Operating the renderer",
         "icon": "settings-2",
-        "pages": ["browser", "determinism", "security", "bun-vercel", "convex"]
+        "pages": [
+          "browser",
+          "determinism",
+          "security",
+          "bun-vercel",
+          "deployment-runbook",
+          "convex"
+        ]
       },
       {
         "group": "Reference",

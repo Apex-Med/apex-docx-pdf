@@ -3,8 +3,6 @@ title: "Representative examples"
 description: "Interactive authoring patterns for supported letters, invoices, reports, legal lists, tables, page furniture, images, loops, and conditions."
 ---
 
-# Representative examples
-
 Use these patterns to plan a Word template, then build the actual layout in a DOCX editor. The tabs and accordions make the examples easier to compare; they are documentation controls, not an embedded renderer. Compile the real DOCX in the local playground and inspect its contract and diagnostics before production use.
 
 <Note>
@@ -201,16 +199,18 @@ Use these patterns to plan a Word template, then build the actual layout in a DO
   tags and not values in the render JSON.
 </Accordion>
 
-  <Accordion title="Static images">
+  <Accordion title="Static and dynamic images">
     Insert a PNG or JPEG into the DOCX as an inline image with an explicit
     positive size. The image must be stored through an internal package
     relationship. Keep proof that you own or are licensed to use and
     redistribute the asset; record its source and license with the template.
 
-    Dynamic image tags remain unsupported. Render data cannot fetch, select,
-    replace, resize, or conditionally source an image. External images,
-    floating/anchored placement, crop, rotation, and SVG are also outside the
-    current profile.
+    For data-owned inline media, author `{{@image logo}}` and supply explicit
+    PNG/JPEG bytes, pixel dimensions, and physical twip bounds. The engine
+    never fetches an image URL. Non-canonical image tags, external images,
+    floating/anchored placement, crop, rotation, and SVG remain outside the
+    current profile. Dynamic alt text is semantic only because current PDFs
+    are untagged.
 
   </Accordion>
 </AccordionGroup>

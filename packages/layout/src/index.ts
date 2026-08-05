@@ -19,6 +19,7 @@ import {
   type PositionedGlyph,
   type Rect,
   type ResolvedDocument,
+  type ResolvedHorizontalRule,
   type ResolvedInline,
   type ResolvedParagraph,
   type ResolvedTable,
@@ -76,6 +77,8 @@ type Cluster = Readonly<{
   ascent: Twip
   descent: Twip
   lineGap: Twip
+  /** Relative to the paragraph baseline; positive display-list y moves down. */
+  baselineShift: Twip
   whitespace: boolean
   preserveSpace: boolean
   faceId?: FontFaceId
@@ -84,6 +87,7 @@ type Cluster = Readonly<{
   underlineThickness: Twip
   atom?:
     | Readonly<{ type: "image"; assetId: string; height: Twip }>
+    | Readonly<{ type: "tab" }>
     | Readonly<{
         type: "pageField"
         field: "PAGE" | "NUMPAGES"
@@ -101,6 +105,8 @@ type Token = Readonly<{
   whitespace: boolean
   hardBreak: boolean
   preserveSpace: boolean
+  pageBreak?: boolean
+  tabSourceNodeId?: NodeId
 }>
 
 type MeasuredLine = Readonly<{
@@ -110,6 +116,7 @@ type MeasuredLine = Readonly<{
   descent: Twip
   lineGap: Twip
   wrapped: boolean
+  pageBreakAfter?: boolean
 }>
 
 type LineBox = Readonly<{ x: Twip; width: Twip }>
@@ -146,6 +153,12 @@ type PreparedTableCell = Readonly<{
   contentWidth: Twip
   topInset: Twip
   bottomInset: Twip
+  borders: Readonly<{
+    top: TableBorder | null
+    right: TableBorder | null
+    bottom: TableBorder | null
+    left: TableBorder | null
+  }>
   contentHeight: Twip
   paragraphs: readonly PreparedCellParagraph[]
   mergeOwnerRow: number | null
@@ -173,9 +186,15 @@ type PreparedTable = Readonly<{
   headerHeight: Twip
 }>
 
+type PreparedHorizontalRule = Readonly<{
+  rule: ResolvedHorizontalRule
+  height: Twip
+}>
+
 type PreparedBlock =
   | Readonly<{ type: "paragraph"; value: PreparedParagraph }>
   | Readonly<{ type: "table"; value: PreparedTable }>
+  | Readonly<{ type: "horizontalRule"; value: PreparedHorizontalRule }>
 
 type PendingPageField = Readonly<{
   type: "pending-page-field"
@@ -192,6 +211,40 @@ type PendingPageField = Readonly<{
   digitAdvances: ReadonlyMap<string, Twip>
   reservedDigits: number
 }>
+
+/**
+ * Deterministic Word script presentation rule. The semantic font size remains
+ * unchanged (including K3's 18-half-point runs); superscript/subscript glyphs
+ * render at 2/3 size. Superscript shifts up by 1/3 of the original size and
+ * subscript shifts down by 1/6. All arithmetic rounds once to integer twips.
+ */
+function scriptPresentation(style: TextStyle): Readonly<{
+  style: TextStyle
+  baselineShift: Twip
+}> {
+  const alignment = style.verticalAlignment ?? "baseline"
+  if (alignment === "baseline") return { style, baselineShift: twips(0) }
+  const fontSize = twips(Math.max(1, Math.round((style.fontSize * 2) / 3)))
+  const baselineShift =
+    alignment === "superscript"
+      ? twips(-Math.round(style.fontSize / 3))
+      : twips(Math.round(style.fontSize / 6))
+  return {
+    style: { ...style, fontSize },
+    baselineShift,
+  }
+}
+
+function shiftedVerticalMetrics(
+  ascent: Twip,
+  descent: Twip,
+  baselineShift: Twip
+): Readonly<{ ascent: Twip; descent: Twip }> {
+  return {
+    ascent: twips(Math.max(0, ascent - baselineShift)),
+    descent: twips(Math.max(0, descent + baselineShift)),
+  }
+}
 
 type InternalDisplayItem = DisplayListItem | PendingPageField
 
@@ -439,6 +492,26 @@ export function layoutDocument(
           ),
         }
       }
+      if (block.type === "horizontalRule") {
+        if (!Number.isSafeInteger(block.height) || block.height <= 0)
+          throw new RangeError(
+            "Horizontal-rule height must be a positive safe-integer twip value"
+          )
+        return {
+          type: "horizontalRule",
+          value: {
+            rule: block,
+            height: safeTwipSum(
+              [
+                block.properties.spacingBefore,
+                block.height,
+                block.properties.spacingAfter,
+              ],
+              "Horizontal-rule block height exceeds the safe integer range"
+            ),
+          },
+        }
+      }
       const paragraph = prepareParagraph(
         block,
         sectionContentWidth,
@@ -479,6 +552,76 @@ export function layoutDocument(
           diagnostics,
           events,
           options.signal
+        )
+        continue
+      }
+      if (block.type === "horizontalRule") {
+        const { rule, height } = block.value
+        let contentBottom = twips(
+          current.page.contentBounds.y + current.page.contentBounds.height
+        )
+        if (height > current.page.contentBounds.height)
+          throw new RangeError(
+            "Horizontal-rule block is taller than a writable fresh page"
+          )
+        if (
+          rule.properties.pageBreakBefore &&
+          current.y !== current.page.contentBounds.y
+        ) {
+          current = createPage(section, "page-break-before", rule.id)
+          contentBottom = twips(
+            current.page.contentBounds.y + current.page.contentBounds.height
+          )
+        }
+        const next = prepared[paragraphIndex + 1]
+        const keepHeight =
+          rule.properties.keepWithNext && next?.type === "paragraph"
+            ? safeTwipSum(
+                [height, next.value.height],
+                "Keep-with-next rule chain exceeds the safe integer range"
+              )
+            : height
+        if (
+          current.y !== current.page.contentBounds.y &&
+          current.y + keepHeight > contentBottom &&
+          keepHeight <= current.page.contentBounds.height
+        ) {
+          current = createPage(
+            section,
+            rule.properties.keepWithNext
+              ? "keep-with-next"
+              : "horizontal-rule-overflow",
+            rule.id
+          )
+        }
+        current.y = twips(current.y + rule.properties.spacingBefore)
+        const centerY = twips(current.y + Math.floor(rule.height / 2))
+        current.items.push({
+          type: "line",
+          sourceNodeId: rule.id,
+          x1: current.page.contentBounds.x,
+          y1: centerY,
+          x2: twips(
+            current.page.contentBounds.x + current.page.contentBounds.width
+          ),
+          y2: centerY,
+          width: rule.height,
+          color: rule.color,
+        })
+        events.push({
+          pageNumber: current.page.pageNumber,
+          sourceNodeId: rule.id,
+          kind: "block",
+          bounds: {
+            x: current.page.contentBounds.x,
+            y: current.y,
+            width: current.page.contentBounds.width,
+            height: rule.height,
+          },
+          reason: "word-vml-horizontal-rule",
+        })
+        current.y = twips(
+          current.y + rule.height + rule.properties.spacingAfter
         )
         continue
       }
@@ -603,9 +746,19 @@ export function layoutDocument(
         }
         if (capacity === 0) capacity = 1
 
+        const manualBreakOffset = lines
+          .slice(lineIndex)
+          .findIndex((line) => line.pageBreakAfter === true)
+        if (manualBreakOffset >= 0)
+          capacity = Math.min(capacity, manualBreakOffset + 1)
+
         const remaining = lines.length - lineIndex
         let breakReason = "line-overflow"
-        if (paragraph.properties.widowControl && lines.length >= 4) {
+        if (
+          paragraph.properties.widowControl &&
+          lines.length >= 4 &&
+          manualBreakOffset < 0
+        ) {
           if (
             lineIndex === 0 &&
             capacity === 1 &&
@@ -726,8 +879,13 @@ export function layoutDocument(
             height: twips(current.y - fragmentStartY),
           },
         })
-        if (lineIndex < lines.length) {
-          current = createPage(section, breakReason, paragraph.id)
+        const manualPageBreak = lines[lineIndex - 1]?.pageBreakAfter === true
+        if (lineIndex < lines.length || manualPageBreak) {
+          current = createPage(
+            section,
+            manualPageBreak ? "manual-page-break" : breakReason,
+            paragraph.id
+          )
           contentBottom = twips(
             current.page.contentBounds.y + current.page.contentBounds.height
           )
@@ -997,20 +1155,9 @@ function prepareTable(
         throw new RangeError("Invalid vertical merge value")
       }
 
-      const leftBorder =
-        cell.columnIndex === 0
-          ? table.borders.left
-          : table.borders.insideVertical
-      const rightBorder =
-        cell.columnIndex + cell.columnSpan === table.columnWidths.length
-          ? table.borders.right
-          : table.borders.insideVertical
-      const topBorder =
-        rowIndex === 0 ? table.borders.top : table.borders.insideHorizontal
-      const bottomBorder =
-        rowIndex === table.rows.length - 1
-          ? table.borders.bottom
-          : table.borders.insideHorizontal
+      const cellBorders = resolveCellBorders(table, rowIndex, cell)
+      const { left: leftBorder, right: rightBorder } = cellBorders
+      const { top: topBorder, bottom: bottomBorder } = cellBorders
       const leftInset = safeTwipSum(
         [table.cellPadding.left, borderSpace(leftBorder)],
         "Invalid table cell inset"
@@ -1084,6 +1231,7 @@ function prepareTable(
         contentWidth: twips(contentWidth),
         topInset,
         bottomInset,
+        borders: cellBorders,
         contentHeight: paragraphTop,
         paragraphs: Object.freeze(paragraphs),
         mergeOwnerRow,
@@ -1483,12 +1631,10 @@ function emitTableRowFragment(
     )
     const isMergeContinuation = cell.cell.verticalMerge === "continue"
     if (isFirstFragment) {
-      const topBorder =
-        row.index === 0 ? table.borders.top : table.borders.insideHorizontal
       if (!isMergeContinuation)
         emitBorder(
           current.items,
-          topBorder,
+          cell.borders.top,
           cell.cell.id,
           x,
           rowY,
@@ -1501,7 +1647,7 @@ function emitTableRowFragment(
     if (isLastFragment && row.index === prepared.rows.length - 1) {
       emitBorder(
         current.items,
-        table.borders.bottom,
+        cell.borders.bottom,
         cell.cell.id,
         x,
         twips(rowY + height),
@@ -1509,18 +1655,22 @@ function emitTableRowFragment(
         true
       )
     }
-    const leftBorder =
-      cell.cell.columnIndex === 0
-        ? table.borders.left
-        : table.borders.insideVertical
-    emitBorder(current.items, leftBorder, cell.cell.id, x, rowY, height, false)
+    emitBorder(
+      current.items,
+      cell.borders.left,
+      cell.cell.id,
+      x,
+      rowY,
+      height,
+      false
+    )
     if (
       cell.cell.columnIndex + cell.cell.columnSpan ===
       table.columnWidths.length
     ) {
       emitBorder(
         current.items,
-        table.borders.right,
+        cell.borders.right,
         cell.cell.id,
         twips(x + cell.width),
         rowY,
@@ -1817,18 +1967,164 @@ function emitBorder(
 
 function validateBorders(table: ResolvedTable): void {
   for (const border of Object.values(table.borders)) {
-    if (!border) continue
-    if (
-      !["none", "single", "double", "dotted", "dashed"].includes(
-        border.style
-      ) ||
-      !Number.isSafeInteger(border.width) ||
-      border.width < 0 ||
-      !Number.isSafeInteger(border.space) ||
-      border.space < 0 ||
-      typeof border.color !== "string"
+    validateBorder(border)
+  }
+  for (const row of table.rows) {
+    for (const cell of row.cells) {
+      if (cell.borders === undefined)
+        throw new RangeError("Invalid table cell borders")
+      for (const border of Object.values(cell.borders)) validateBorder(border)
+    }
+  }
+}
+
+function validateBorder(border: TableBorder | null): void {
+  if (!border) return
+  if (
+    !["none", "single", "double", "dotted", "dashed"].includes(border.style) ||
+    !Number.isSafeInteger(border.width) ||
+    border.width < 0 ||
+    !Number.isSafeInteger(border.space) ||
+    border.space < 0 ||
+    typeof border.color !== "string"
+  )
+    throw new RangeError("Invalid table border")
+}
+
+function bordersEqual(
+  left: TableBorder | null,
+  right: TableBorder | null
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.style === right.style &&
+      left.color === right.color &&
+      left.width === right.width &&
+      left.space === right.space)
+  )
+}
+
+function verticalMergeOwnerCell(
+  table: ResolvedTable,
+  rowIndex: number,
+  cell: ResolvedTableCell
+): ResolvedTableCell {
+  if (cell.verticalMerge !== "continue") return cell
+  for (let index = rowIndex - 1; index >= 0; index -= 1) {
+    const candidate = table.rows[index]?.cells.find(
+      (entry) =>
+        entry.columnIndex === cell.columnIndex &&
+        entry.columnSpan === cell.columnSpan
     )
-      throw new RangeError("Invalid table border")
+    if (candidate?.verticalMerge === "restart") return candidate
+    if (candidate?.verticalMerge !== "continue") break
+  }
+  throw new RangeError("Invalid vertical merge continuation chain")
+}
+
+function sharedDirectBorder(
+  candidates: readonly (TableBorder | null)[]
+): TableBorder | null | undefined {
+  const direct = candidates.filter(
+    (border): border is TableBorder => border !== null
+  )
+  const first = direct[0]
+  if (first === undefined) return undefined
+  if (direct.some((border) => !bordersEqual(first, border)))
+    throw new RangeError("Conflicting direct borders on a shared table edge")
+  return first
+}
+
+function resolveCellBorders(
+  table: ResolvedTable,
+  rowIndex: number,
+  cell: ResolvedTableCell
+): PreparedTableCell["borders"] {
+  const row = table.rows[rowIndex]
+  if (row === undefined) throw new RangeError("Invalid table row")
+  const owner = verticalMergeOwnerCell(table, rowIndex, cell)
+  const previous = row.cells.find(
+    (candidate) =>
+      candidate.columnIndex + candidate.columnSpan === cell.columnIndex
+  )
+  const next = row.cells.find(
+    (candidate) => cell.columnIndex + cell.columnSpan === candidate.columnIndex
+  )
+  const previousRow = table.rows[rowIndex - 1]
+  const nextRow = table.rows[rowIndex + 1]
+  const overlapping = (
+    adjacentRow: ResolvedTableRow | undefined
+  ): readonly ResolvedTableCell[] =>
+    adjacentRow?.cells.filter(
+      (candidate) =>
+        candidate.columnIndex < cell.columnIndex + cell.columnSpan &&
+        cell.columnIndex < candidate.columnIndex + candidate.columnSpan
+    ) ?? []
+  const above = overlapping(previousRow)
+  const below = overlapping(nextRow)
+  const sameMergeAbove =
+    cell.verticalMerge === "continue" &&
+    above.length === 1 &&
+    above[0]?.columnIndex === cell.columnIndex &&
+    above[0]?.columnSpan === cell.columnSpan
+  const sameMergeBelow =
+    below.length === 1 &&
+    below[0]?.verticalMerge === "continue" &&
+    below[0]?.columnIndex === cell.columnIndex &&
+    below[0]?.columnSpan === cell.columnSpan
+  const directFrom = (
+    adjacent: ResolvedTableCell | undefined,
+    adjacentRowIndex: number,
+    side: "top" | "right" | "bottom" | "left"
+  ): TableBorder | null =>
+    adjacent === undefined
+      ? null
+      : verticalMergeOwnerCell(table, adjacentRowIndex, adjacent).borders[side]
+  const directTop = sameMergeAbove
+    ? null
+    : sharedDirectBorder([
+        owner.borders.top,
+        ...above.map((candidate) =>
+          directFrom(candidate, rowIndex - 1, "bottom")
+        ),
+      ])
+  const directBottom = sameMergeBelow
+    ? null
+    : sharedDirectBorder([
+        owner.borders.bottom,
+        ...below.map((candidate) => directFrom(candidate, rowIndex + 1, "top")),
+      ])
+  const directLeft = sharedDirectBorder([
+    owner.borders.left,
+    directFrom(previous, rowIndex, "right"),
+  ])
+  const directRight = sharedDirectBorder([
+    owner.borders.right,
+    directFrom(next, rowIndex, "left"),
+  ])
+  return {
+    top: sameMergeAbove
+      ? null
+      : (directTop ??
+        (rowIndex === 0 ? table.borders.top : table.borders.insideHorizontal)),
+    bottom: sameMergeBelow
+      ? null
+      : (directBottom ??
+        (rowIndex === table.rows.length - 1
+          ? table.borders.bottom
+          : table.borders.insideHorizontal)),
+    left:
+      directLeft ??
+      (cell.columnIndex === 0
+        ? table.borders.left
+        : table.borders.insideVertical),
+    right:
+      directRight ??
+      (cell.columnIndex + cell.columnSpan === table.columnWidths.length
+        ? table.borders.right
+        : table.borders.insideVertical),
   }
 }
 
@@ -1910,6 +2206,7 @@ function prepareImageCluster(
     ascent: image.height,
     descent: twips(0),
     lineGap: twips(0),
+    baselineShift: twips(0),
     whitespace: false,
     preserveSpace: true,
     underlineOffset: twips(0),
@@ -1929,6 +2226,8 @@ function preparePageFieldCluster(
 ): Cluster {
   if (field.format !== "decimal")
     throw new TypeError("Only decimal PAGE and NUMPAGES fields are supported")
+  const presentation = scriptPresentation(field.style)
+  let resolvedStyle = presentation.style
   let widestDigit = twips(0)
   const digitAdvances = new Map<string, Twip>()
   let embedded:
@@ -1939,7 +2238,7 @@ function preparePageFieldCluster(
     | undefined
   if (typography.kind === "standard") {
     for (const digit of "0123456789") {
-      const advance = typography.metrics.measureText(digit, field.style)
+      const advance = typography.metrics.measureText(digit, presentation.style)
       if (!Number.isSafeInteger(advance) || advance < 0)
         throw new RangeError(
           "Page-field digit advances must be non-negative safe integers"
@@ -1954,10 +2253,16 @@ function preparePageFieldCluster(
       style: field.style.fontStyle,
     })
     const face = typography.fonts.face(match.faceId)
+    resolvedStyle = {
+      ...presentation.style,
+      fontFamily: face.family,
+      fontWeight: face.weight,
+      fontStyle: face.style,
+    }
     const shaped = typography.shaper.shape({
       face,
       text: "0123456789",
-      fontSize: field.style.fontSize,
+      fontSize: presentation.style.fontSize,
       direction: "ltr",
     })
     const digits = new Map<string, readonly ShapedGlyph[]>()
@@ -1983,24 +2288,34 @@ function preparePageFieldCluster(
     }
     embedded = Object.freeze({ faceId: match.faceId, digits })
   }
-  const height = twips(Math.max(1, Math.round((field.style.fontSize * 6) / 5)))
-  const ascent = twips(Math.round((height * 4) / 5))
+  const height = twips(
+    Math.max(1, Math.round((presentation.style.fontSize * 6) / 5))
+  )
+  const rawAscent = twips(Math.round((height * 4) / 5))
+  const verticalMetrics = shiftedVerticalMetrics(
+    rawAscent,
+    twips(height - rawAscent),
+    presentation.baselineShift
+  )
   return Object.freeze({
     text: "9".repeat(digits),
-    style: field.style,
+    style: resolvedStyle,
     sourceNodeId: field.id,
     width: safeTwipSum(
       Array.from({ length: digits }, () => widestDigit),
       "Page-field reservation exceeds the safe integer range"
     ),
-    ascent,
-    descent: twips(height - ascent),
+    ascent: verticalMetrics.ascent,
+    descent: verticalMetrics.descent,
     lineGap: twips(0),
+    baselineShift: presentation.baselineShift,
     whitespace: false,
     preserveSpace: true,
-    underlineOffset: twips(Math.max(1, Math.round(field.style.fontSize / 10))),
+    underlineOffset: twips(
+      Math.max(1, Math.round(presentation.style.fontSize / 10))
+    ),
     underlineThickness: twips(
-      Math.max(1, Math.round(field.style.fontSize / 20))
+      Math.max(1, Math.round(presentation.style.fontSize / 20))
     ),
     atom: Object.freeze({
       type: "pageField",
@@ -2422,7 +2737,12 @@ function addCompatibilityDiagnostics(
 ): void {
   if (typography.kind === "standard") {
     for (const child of paragraph.children) {
-      if (child.type === "image") continue
+      if (
+        child.type === "image" ||
+        child.type === "break" ||
+        child.type === "tab"
+      )
+        continue
       if (child.style.fontFamily !== "Helvetica") {
         diagnostics.push({
           code: "layout/font-fallback",
@@ -2513,7 +2833,11 @@ function measureParagraph(
       )
     )
   }
-  const finish = (wrapped: boolean, force = false): void => {
+  const finish = (
+    wrapped: boolean,
+    force = false,
+    pageBreakAfter = false
+  ): void => {
     trimTrailingWhitespace()
     if (clusters.length > 0 || force) {
       const emptyMetrics = emptyLineMetrics(paragraph, typography)
@@ -2524,6 +2848,7 @@ function measureParagraph(
         descent: descent || emptyMetrics.descent,
         lineGap: lineGap || emptyMetrics.lineGap,
         wrapped,
+        ...(pageBreakAfter ? { pageBreakAfter: true } : {}),
       })
     }
     clusters = []
@@ -2535,8 +2860,45 @@ function measureParagraph(
 
   for (const token of tokens) {
     throwIfAborted(signal)
+    if (token.pageBreak) {
+      finish(false, true, true)
+      continue
+    }
     if (token.hardBreak) {
       finish(false, true)
+      continue
+    }
+    if (token.tabSourceNodeId !== undefined) {
+      const firstLineOffset =
+        lines.length === 0 ? properties.firstLineIndent : 0
+      const currentPosition = properties.indentStart + firstLineOffset + width
+      const stop = properties.tabStops?.find(
+        (candidate) => candidate.position > currentPosition
+      )
+      if (stop === undefined) {
+        throw new RangeError(
+          "Word tab has no explicit left tab stop after the current line position"
+        )
+      }
+      const advance = twips(stop.position - currentPosition)
+      if (width + advance > boxWidth()) {
+        throw new RangeError("Word tab stop exceeds the writable line box")
+      }
+      append({
+        text: "",
+        style: IMAGE_STYLE,
+        sourceNodeId: token.tabSourceNodeId,
+        width: advance,
+        ascent: twips(0),
+        descent: twips(0),
+        lineGap: twips(0),
+        baselineShift: twips(0),
+        whitespace: false,
+        preserveSpace: true,
+        underlineOffset: twips(0),
+        underlineThickness: twips(0),
+        atom: { type: "tab" },
+      })
       continue
     }
     if (token.whitespace && clusters.length === 0 && !token.preserveSpace)
@@ -2578,6 +2940,26 @@ function prepareTokens(
   const result: Token[] = []
   for (const child of paragraph.children) {
     throwIfAborted(signal)
+    if (child.type === "break") {
+      result.push({
+        clusters: Object.freeze([]),
+        whitespace: false,
+        hardBreak: child.kind === "line",
+        preserveSpace: true,
+        ...(child.kind === "page" ? { pageBreak: true } : {}),
+      })
+      continue
+    }
+    if (child.type === "tab") {
+      result.push({
+        clusters: Object.freeze([]),
+        whitespace: false,
+        hardBreak: false,
+        preserveSpace: true,
+        tabSourceNodeId: child.id,
+      })
+      continue
+    }
     if (child.type === "image") {
       validateImage(child, assets)
       result.push({
@@ -2639,28 +3021,35 @@ function prepareStandardRun(
   child: Extract<ResolvedInline, { type: "text" }>,
   metrics: Phase1FontMetrics
 ): readonly IndexedCluster[] {
-  const height = metrics.lineHeight(child.style)
-  const ascent = twips(Math.round((height * 4) / 5))
-  const descent = twips(height - ascent)
+  const presentation = scriptPresentation(child.style)
+  const height = metrics.lineHeight(presentation.style)
+  const rawAscent = twips(Math.round((height * 4) / 5))
+  const rawDescent = twips(height - rawAscent)
+  const { ascent, descent } = shiftedVerticalMetrics(
+    rawAscent,
+    rawDescent,
+    presentation.baselineShift
+  )
   const result: IndexedCluster[] = []
   let start = 0
   for (const character of child.text) {
     result.push({
       start,
       text: character,
-      style: child.style,
+      style: presentation.style,
       sourceNodeId: child.id,
-      width: metrics.measureText(character, child.style),
+      width: metrics.measureText(character, presentation.style),
       ascent,
       descent,
       lineGap: twips(0),
+      baselineShift: presentation.baselineShift,
       whitespace: /^[\t ]$/u.test(character),
       preserveSpace: child.preserveSpace === true,
       underlineOffset: twips(
-        Math.max(1, Math.round(child.style.fontSize / 10))
+        Math.max(1, Math.round(presentation.style.fontSize / 10))
       ),
       underlineThickness: twips(
-        Math.max(1, Math.round(child.style.fontSize / 20))
+        Math.max(1, Math.round(presentation.style.fontSize / 20))
       ),
     })
     start += character.length
@@ -2673,12 +3062,19 @@ function prepareEmbeddedRun(
   typography: Extract<Typography, { kind: "embedded" }>,
   diagnostics: Diagnostic[]
 ): readonly IndexedCluster[] {
+  const presentation = scriptPresentation(child.style)
   const match = typography.fonts.matchFace({
     family: child.style.fontFamily,
     weight: child.style.fontWeight,
     style: child.style.fontStyle,
   })
   const face = typography.fonts.face(match.faceId)
+  const resolvedStyle = {
+    ...presentation.style,
+    fontFamily: face.family,
+    fontWeight: face.weight,
+    fontStyle: face.style,
+  }
   // Paragraph controls are layout boundaries, not font glyphs. Replacing each
   // UTF-16 code unit with a space preserves cluster offsets while still making
   // exactly one shaping call for the semantic run.
@@ -2686,7 +3082,7 @@ function prepareEmbeddedRun(
   const shaped = typography.shaper.shape({
     face,
     text: shapingText,
-    fontSize: child.style.fontSize,
+    fontSize: presentation.style.fontSize,
     direction: "ltr",
   })
   if (match.kind === "face-fallback" || match.kind === "family-fallback") {
@@ -2706,7 +3102,11 @@ function prepareEmbeddedRun(
     else grouped.set(key, [glyph])
   }
   const scale = (units: number): Twip =>
-    twips(Math.round((units * child.style.fontSize) / face.metrics.unitsPerEm))
+    twips(
+      Math.round(
+        (units * presentation.style.fontSize) / face.metrics.unitsPerEm
+      )
+    )
   return [...grouped.values()]
     .sort(
       (left, right) =>
@@ -2716,19 +3116,25 @@ function prepareEmbeddedRun(
       const first = glyphs[0] as ShapedGlyph
       const end = Math.max(...glyphs.map((glyph) => glyph.clusterEnd))
       const text = child.text.slice(first.clusterStart, end)
+      const verticalMetrics = shiftedVerticalMetrics(
+        twips(Math.max(0, shaped.ascent)),
+        twips(Math.abs(shaped.descent)),
+        presentation.baselineShift
+      )
       return {
         start: first.clusterStart,
         text,
-        style: child.style,
+        style: resolvedStyle,
         sourceNodeId: child.id,
         width: twips(
           glyphs.reduce((total, glyph) => total + glyph.advanceX, 0)
         ),
-        ascent: twips(Math.max(0, shaped.ascent)),
+        ascent: verticalMetrics.ascent,
         // OpenType descenders are conventionally negative; layout stores the
         // positive depth below the baseline.
-        descent: twips(Math.abs(shaped.descent)),
+        descent: verticalMetrics.descent,
         lineGap: twips(Math.max(0, shaped.lineGap)),
+        baselineShift: presentation.baselineShift,
         whitespace: /^[\t ]+$/u.test(text),
         preserveSpace: child.preserveSpace === true,
         faceId: match.faceId,
@@ -2773,8 +3179,10 @@ function emptyLineMetrics(
   paragraph: ResolvedParagraph,
   typography: Typography
 ): Readonly<{ ascent: Twip; descent: Twip; lineGap: Twip }> {
-  const child = paragraph.children[0]
-  if (child && child.type !== "image" && typography.kind === "standard") {
+  const child = paragraph.children.find(
+    (candidate) => candidate.type === "text" || candidate.type === "pageField"
+  )
+  if (child && typography.kind === "standard") {
     const height = typography.metrics.lineHeight(child.style)
     const ascent = twips(Math.round((height * 4) / 5))
     return { ascent, descent: twips(height - ascent), lineGap: twips(0) }
@@ -2983,6 +3391,9 @@ function materializeItem(
         sourceNodeId: item.sourceNodeId,
         text,
         faceId: item.embedded.faceId,
+        fontFamily: item.style.fontFamily,
+        fontWeight: item.style.fontWeight,
+        fontStyle: item.style.fontStyle,
         glyphs: Object.freeze(
           [...text].flatMap((digit) => {
             const glyphs = item.embedded?.digits.get(digit)
@@ -3002,6 +3413,8 @@ function materializeItem(
         ),
         fontSize: item.style.fontSize,
         color: item.style.color,
+        highlightColor: item.style.highlightColor,
+        verticalAlignment: item.style.verticalAlignment,
         x: item.x,
         baselineY: item.baselineY,
         width: item.width,
@@ -3012,19 +3425,41 @@ function materializeItem(
         sourceNodeId: item.sourceNodeId,
         text,
         fontFamily: item.style.fontFamily,
+        fontWeight: item.style.fontWeight,
+        fontStyle: item.style.fontStyle,
         fontSize: item.style.fontSize,
         color: item.style.color,
+        highlightColor: item.style.highlightColor,
+        verticalAlignment: item.style.verticalAlignment,
         x: item.x,
         baselineY: item.baselineY,
         // Retain the conservative maxPages reservation; actual digits never
         // reshape or move neighboring content after the immutable page plan exists.
         width: item.width,
       }
-  if (!item.style.underline) return [run]
+  const highlight: DisplayListItem[] = item.style.highlightColor
+    ? [
+        {
+          type: "rectangle",
+          sourceNodeId: item.sourceNodeId,
+          bounds: {
+            x: item.x,
+            y: twips(
+              item.baselineY - Math.round((item.style.fontSize * 4) / 5)
+            ),
+            width: item.width,
+            height: item.style.fontSize,
+          },
+          fillColor: item.style.highlightColor,
+        },
+      ]
+    : []
+  if (!item.style.underline) return [...highlight, run]
   const underlineOffset = twips(
     Math.max(1, Math.round(item.style.fontSize / 10))
   )
   return [
+    ...highlight,
     run,
     {
       type: "line",
@@ -3058,6 +3493,7 @@ function emitLine(
         0
       )
     )
+    const shiftedBaselineY = twips(baselineY + first.baselineShift)
     const run: GlyphRun = first.faceId
       ? {
           type: "glyph-run",
@@ -3065,11 +3501,16 @@ function emitLine(
           sourceNodeId: first.sourceNodeId,
           text,
           faceId: first.faceId,
+          fontFamily: first.style.fontFamily,
+          fontWeight: first.style.fontWeight,
+          fontStyle: first.style.fontStyle,
           glyphs: Object.freeze(positionedGlyphs(segment)),
           fontSize: first.style.fontSize,
           color: first.style.color,
+          highlightColor: first.style.highlightColor,
+          verticalAlignment: first.style.verticalAlignment,
           x,
-          baselineY,
+          baselineY: shiftedBaselineY,
           width,
         }
       : {
@@ -3078,21 +3519,40 @@ function emitLine(
           sourceNodeId: first.sourceNodeId,
           text,
           fontFamily: first.style.fontFamily,
+          fontWeight: first.style.fontWeight,
+          fontStyle: first.style.fontStyle,
           fontSize: first.style.fontSize,
           color: first.style.color,
+          highlightColor: first.style.highlightColor,
+          verticalAlignment: first.style.verticalAlignment,
           x,
-          baselineY,
+          baselineY: shiftedBaselineY,
           width,
         }
+    if (first.style.highlightColor) {
+      items.push({
+        type: "rectangle",
+        sourceNodeId: first.sourceNodeId,
+        bounds: {
+          x,
+          y: twips(
+            shiftedBaselineY - Math.round((first.style.fontSize * 4) / 5)
+          ),
+          width,
+          height: first.style.fontSize,
+        },
+        fillColor: first.style.highlightColor,
+      })
+    }
     items.push(run)
     if (first.style.underline) {
       items.push({
         type: "line",
         sourceNodeId: first.sourceNodeId,
         x1: x,
-        y1: twips(baselineY + first.underlineOffset),
+        y1: twips(shiftedBaselineY + first.underlineOffset),
         x2: twips(x + width),
-        y2: twips(baselineY + first.underlineOffset),
+        y2: twips(shiftedBaselineY + first.underlineOffset),
         width: first.underlineThickness,
         color: first.style.color,
       })
@@ -3104,7 +3564,9 @@ function emitLine(
   for (const [index, cluster] of line.clusters.entries()) {
     if (cluster.atom) {
       flush()
-      if (cluster.atom.type === "image") {
+      if (cluster.atom.type === "tab") {
+        // A tab advances x to its resolved stop without emitting PDF text.
+      } else if (cluster.atom.type === "image") {
         items.push({
           type: "image",
           sourceNodeId: cluster.sourceNodeId,
@@ -3123,7 +3585,7 @@ function emitLine(
           field: cluster.atom.field,
           style: cluster.style,
           x,
-          baselineY,
+          baselineY: twips(baselineY + cluster.baselineShift),
           width: cluster.width,
           ...(cluster.atom.embedded ? { embedded: cluster.atom.embedded } : {}),
           digitAdvances: cluster.atom.digitAdvances,

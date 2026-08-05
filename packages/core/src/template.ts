@@ -1,6 +1,23 @@
 import type { Diagnostic, SourceLocation } from "./diagnostics"
 import type { DocumentHash, NodeId } from "./ids"
 import type { SemanticDocument } from "./document"
+import type { Twip } from "./units"
+
+/**
+ * Caller-owned value accepted by a canonical `{{@image path}}` template tag.
+ * Width and height are physical layout bounds in twips. The engine never
+ * resolves URLs: callers must provide the complete PNG or JPEG bytes.
+ */
+export type TemplateImageValue = Readonly<{
+  mimeType: "image/png" | "image/jpeg"
+  bytes: Uint8Array
+  pixelWidth: number
+  pixelHeight: number
+  width: Twip
+  height: Twip
+  preserveAspectRatio?: boolean
+  altText?: string
+}>
 
 export type TemplateFieldKind =
   | "string"

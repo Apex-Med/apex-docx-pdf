@@ -41,6 +41,32 @@ function createTemplateArgs() {
   }
 }
 
+async function registeredUpload(
+  t: ReturnType<typeof convexTest>,
+  kind: "docx" | "pdf",
+  bytes: string
+) {
+  return await t.run(async (ctx) => {
+    const contentType =
+      kind === "docx"
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : "application/pdf"
+    const now = Date.now()
+    const uploadIntentId = await ctx.db.insert("uploadIntents", {
+      sessionId: sessionA,
+      kind,
+      status: "awaitingUpload",
+      createdAt: now,
+      expiresAt: now + 60_000,
+    })
+    const storageId = await ctx.storage.store(
+      new Blob([bytes], { type: contentType })
+    )
+    await ctx.db.patch(uploadIntentId, { status: "registered", storageId })
+    return { storageId, uploadIntentId }
+  })
+}
+
 describe("Convex Phase 7 ownership and persistence", () => {
   test("isolates template reads and indexed history by anonymous session", async () => {
     const t = convexTest(schema, modules)
@@ -71,16 +97,10 @@ describe("Convex Phase 7 ownership and persistence", () => {
 
   test("validates stored artifact metadata and only reuses persisted PDFs", async () => {
     const t = convexTest(schema, modules)
-    const docxStorageId = await t.run((ctx) =>
-      ctx.storage.store(
-        new Blob(["synthetic-docx"], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        })
-      )
-    )
+    const docxUpload = await registeredUpload(t, "docx", "synthetic-docx")
     const templateId = await t.mutation(api.templates.create, {
       ...createTemplateArgs(),
-      originalFileStorageId: docxStorageId,
+      originalFileUploadIntentId: docxUpload.uploadIntentId,
     })
     const renderId = await t.mutation(api.renders.begin, {
       sessionId: sessionA,
@@ -114,13 +134,11 @@ describe("Convex Phase 7 ownership and persistence", () => {
       cacheKey: persistedCacheKey,
       diagnosticsSummary,
     })
-    const pdfStorageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob(["%PDF-1.7\n"], { type: "application/pdf" }))
-    )
+    const pdfUpload = await registeredUpload(t, "pdf", "%PDF-1.7\n")
     await t.mutation(api.renders.complete, {
       sessionId: sessionA,
       renderId: persistedRenderId,
-      pdfStorageId,
+      pdfUploadIntentId: pdfUpload.uploadIntentId,
       pageCount: 1,
       diagnosticsSummary,
     })
@@ -130,7 +148,10 @@ describe("Convex Phase 7 ownership and persistence", () => {
         sessionId: sessionA,
         cacheKey: persistedCacheKey,
       })
-    ).toMatchObject({ _id: persistedRenderId, pdfStorageId })
+    ).toMatchObject({
+      _id: persistedRenderId,
+      pdfStorageId: pdfUpload.storageId,
+    })
     expect(
       await t.query(api.renders.findCached, {
         sessionId: sessionB,
@@ -162,16 +183,10 @@ describe("Convex Phase 7 ownership and persistence", () => {
 
   test("deletes render and template storage through bounded internal cleanup", async () => {
     const t = convexTest(schema, modules)
-    const docxStorageId = await t.run((ctx) =>
-      ctx.storage.store(
-        new Blob(["synthetic-docx"], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        })
-      )
-    )
+    const docxUpload = await registeredUpload(t, "docx", "synthetic-docx")
     const templateId = await t.mutation(api.templates.create, {
       ...createTemplateArgs(),
-      originalFileStorageId: docxStorageId,
+      originalFileUploadIntentId: docxUpload.uploadIntentId,
     })
     const renderId = await t.mutation(api.renders.begin, {
       sessionId: sessionA,
@@ -183,13 +198,11 @@ describe("Convex Phase 7 ownership and persistence", () => {
       cacheKey,
       diagnosticsSummary,
     })
-    const pdfStorageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob(["%PDF-1.7\n"], { type: "application/pdf" }))
-    )
+    const pdfUpload = await registeredUpload(t, "pdf", "%PDF-1.7\n")
     await t.mutation(api.renders.complete, {
       sessionId: sessionA,
       renderId,
-      pdfStorageId,
+      pdfUploadIntentId: pdfUpload.uploadIntentId,
       pageCount: 1,
       diagnosticsSummary,
     })
@@ -208,10 +221,10 @@ describe("Convex Phase 7 ownership and persistence", () => {
       await t.query(api.templates.get, { sessionId: sessionA, templateId })
     ).toBeNull()
     expect(
-      await t.run((ctx) => ctx.db.system.get("_storage", docxStorageId))
+      await t.run((ctx) => ctx.db.system.get("_storage", docxUpload.storageId))
     ).toBeNull()
     expect(
-      await t.run((ctx) => ctx.db.system.get("_storage", pdfStorageId))
+      await t.run((ctx) => ctx.db.system.get("_storage", pdfUpload.storageId))
     ).toBeNull()
   })
 })

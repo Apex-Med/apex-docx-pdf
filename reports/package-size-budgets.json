@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "basis": "npm pack --dry-run compressed and unpacked byte counts for built dist directories",
+  "aggregate": {
+    "maxPackedBytes": 2700000,
+    "maxUnpackedBytes": 6600000
+  },
+  "packages": {
+    "apex-docx-pdf": { "maxPackedBytes": 8000, "maxUnpackedBytes": 22000 },
+    "browser": { "maxPackedBytes": 18000, "maxUnpackedBytes": 70000 },
+    "core": { "maxPackedBytes": 17000, "maxUnpackedBytes": 65000 },
+    "devtools": { "maxPackedBytes": 14000, "maxUnpackedBytes": 45000 },
+    "docx": { "maxPackedBytes": 140000, "maxUnpackedBytes": 720000 },
+    "engine": { "maxPackedBytes": 26000, "maxUnpackedBytes": 105000 },
+    "fonts": { "maxPackedBytes": 2300000, "maxUnpackedBytes": 4700000 },
+    "images": { "maxPackedBytes": 38000, "maxUnpackedBytes": 160000 },
+    "layout": { "maxPackedBytes": 82000, "maxUnpackedBytes": 390000 },
+    "pdf": { "maxPackedBytes": 40000, "maxUnpackedBytes": 165000 },
+    "template": { "maxPackedBytes": 52000, "maxUnpackedBytes": 260000 }
+  }
+}

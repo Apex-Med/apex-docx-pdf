@@ -1,0 +1,35 @@
+{
+  "plain-template-formatting": {
+    "status": "rendered",
+    "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+    "pageCount": 1,
+    "searchableText": "Golden Cross-runtime proofDeterministic trace evidence.",
+    "pdfValid": true,
+    "pdfSha256": "60c180f29495e1ab35ac53cd04cabd0e41a6e4c79a6075cbb4010814ada3d4db",
+    "traceSha256": "bbdaf68e12d9533503ce64c7e740afd2ed99b86dc8faf59f3b36e556b29e58b0"
+  },
+  "table-row-expansion": {
+    "status": "rendered",
+    "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+    "pageCount": 4,
+    "searchableText": "ITEMQTYItem 011Item 022Item 033Item 044Item 055Item 066\nITEMQTYItem 077Item 088Item 099Item 1010Item 1111\nITEMQTYItem 1212Item 1313Item 1414Item 1515Item 1616Item 1717\nITEMQTYItem 1818Template tail",
+    "pdfValid": true,
+    "pdfSha256": "a7c42d10103915a36f2aaa980480a85a001240f7611a42ae23dc5f70323d2af4",
+    "traceSha256": "d34364efd429da9284ad808317689cd44a62d930a6d9d08453a77e2c9dd73112"
+  },
+  "static-images-sections": {
+    "status": "rendered",
+    "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+    "pageCount": 3,
+    "searchableText": "Header Amara Mokoena Before PNG  between JPEG  after images1.First numbered body itemTable leftTable right2.Second numbered body itemFooter Amara Mokoena — Page 1 of 3\nHeader Amara Mokoena Landscape section for Amara MokoenaFooter Amara Mokoena — Page 2 of 3\nHeader Amara Mokoena Portrait closing sectionFooter Amara Mokoena — Page 3 of 3",
+    "pdfValid": true,
+    "pdfSha256": "624a280a8f0b36aa94695f5f3e370aaff5d735af4c8933636758543a6fd7c6d1",
+    "traceSha256": "cdd5ab23d1268836b3704f6238b5c8e5d92518adf34c35f226648d773a041237"
+  },
+  "missing-required-template-data": {
+    "status": "rejected",
+    "operation": "render",
+    "code": "engine/template-data",
+    "diagnosticCodes": ["TEMPLATE_VALUE_MISSING"]
+  }
+}

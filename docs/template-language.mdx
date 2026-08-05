@@ -3,8 +3,6 @@ title: "Template language"
 description: "Current values, safe formatters, body/header/footer blocks, static-inline barriers, and generated contracts."
 ---
 
-# Template language
-
 Engine version `0.0.0-phase.7` resolves typed values, safe formatters, bounded whole-paragraph block tags in the body and reusable headers/footers, and dedicated whole-row table blocks. It never evaluates JavaScript or arbitrary helper code.
 
 ## Value tags
@@ -120,18 +118,49 @@ The JSON Schema nests objects and array-item objects deterministically, marks di
 
 Date starter values use the fixed offset-bearing timestamp `1970-01-01T00:00:00.000Z`.
 
+## Dynamic images
+
+Use the canonical image tag wherever an inline value is valid:
+
+```text
+{{@image company.logo}}
+```
+
+The compiled manifest infers `company.logo` as an `image` field. Before layout,
+the render value must provide complete PNG or JPEG bytes, positive pixel
+dimensions, and positive physical layout bounds in twips:
+
+```ts
+const data = {
+  company: {
+    logo: {
+      mimeType: "image/png",
+      bytes: logoBytes,
+      pixelWidth: 512,
+      pixelHeight: 256,
+      width: 2880,
+      height: 1440,
+      preserveAspectRatio: true,
+      altText: "Apex company logo",
+    },
+  },
+}
+```
+
+`bytes` is a `Uint8Array` in the TypeScript API; the browser playground also
+accepts the equivalent JSON byte array. Width and height are bounding-box
+dimensions, so aspect preservation may reduce one dimension. Alt text is
+retained in the semantic document, but the current PDF output is untagged and
+does not expose it as accessibility metadata.
+
+The renderer never resolves an image URL. `{{image logo}}`, `{{logo:image}}`,
+and malformed `@image` directives are rejected rather than interpreted as an
+alternate syntax.
+
 ## Limits and unsupported tags
 
 Expression depth and object traversal are bounded. Input JSON nodes and text bytes, loop iterations, expanded nodes, and expanded text are cumulative across a render; every JSON array also has a per-array item bound. Nested loops share the same expansion budgets. Applications may deliberately review engine limit overrides, but templates cannot bypass them.
 
-Dynamic image tags remain unsupported everywhere, including headers, footers, and table cells:
-
-```text
-{{@image logo}}
-{{logo:image}}
-{{image logo}}
-```
-
-Static relationship-owned DOCX images are supported because they are existing immutable document content. They are not represented in the generated data manifest/schema and cannot be selected, replaced, resized, fetched, or conditionally sourced by an image tag.
+Static relationship-owned DOCX images remain existing immutable document content. They are not represented in the generated data manifest/schema and cannot be replaced by render data. Dynamic images share the same cumulative image count, byte, pixel, decoded-work, and page limits as static resources.
 
 Malformed, nested-inline, unclosed, unbalanced, or unsafe tags are errors. `engine.compile()` throws when DOCX normalization or template compilation cannot produce an acceptable template; applications should preserve its diagnostics.

@@ -3,9 +3,7 @@ title: "Getting started"
 description: "Compile a supported DOCX template and render a searchable PDF."
 ---
 
-# Getting started
-
-Use a standard DOCX containing supported paragraphs, text runs, fixed-grid tables, static inline PNG/JPEG images, and deterministic `nextPage` sections. Phase 6 also supports inherited default headers/footers, reusable header/footer template values, decimal page fields, whole-paragraph and dedicated table-row blocks, safe formatters, DOCX numbering, and bounded pagination controls.
+Use a standard DOCX containing supported paragraphs, text runs, fixed-grid tables, static inline PNG/JPEG images, canonical `{{@image path}}` placeholders, and deterministic `nextPage` sections. Phase 6 also supports inherited default headers/footers, reusable header/footer template values, decimal page fields, whole-paragraph and dedicated table-row blocks, safe formatters, DOCX numbering, and bounded pagination controls. Dynamic image render data must contain explicit bytes and dimensions; the engine never fetches image URLs.
 
 ## 1. Prepare a template
 
@@ -34,8 +32,20 @@ Before using any template, accept or reject every tracked change and remove ever
 
 The engine requires an explicit `locale` and `timeZone` for every render.
 
+From this repository's current source, install the workspace and run the example
+against the local `apex-docx-pdf` package:
+
+```bash
+bun install --frozen-lockfile
+```
+
+The package metadata is prepared at `0.1.0-next.0`, but the npm prerelease is
+still approval-gated. After it is published, an external consumer can install
+the same umbrella entrypoint with `bun add apex-docx-pdf@next`. These docs do not
+claim that the npm tag exists yet.
+
 ```ts
-import { createDocxPdfEngine } from "@apex-docx-pdf/engine"
+import { createDocxPdfEngine } from "apex-docx-pdf"
 
 const engine = await createDocxPdfEngine()
 const templateBytes = new Uint8Array(
@@ -78,6 +88,8 @@ For an image, embed a PNG or JPEG as an internal DOCX relationship and use inlin
 </Note>
 
 The zero-argument engine uses the historical built-in Helvetica fallback. For document fonts, create the engine with an explicit `fonts` configuration containing the exact TrueType `Uint8Array` programs. Formatting receives the render's explicit `locale` and `timeZone`; it never reads ambient defaults. See [font handling](/font-handling) and [template language](/template-language).
+
+In the current workspace, advanced consumers can import the fixed-version `@apex-docx-pdf/*` packages directly. After publication, those packages can be installed from npm at `0.1.0-next.0`. Browser-worker bindings live in `@apex-docx-pdf/browser`; the React display-list preview is an opt-in `@apex-docx-pdf/devtools` peer and is not pulled into the umbrella.
 
 ## 3. Inspect before rendering
 

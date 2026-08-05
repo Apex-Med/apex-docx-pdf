@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { validatePdfStructure } from "@apex-docx-pdf/testkit"
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
+import { loadOfflineFontConfiguration } from "../../../scripts/offline-font-configuration"
 
 import {
   ENGINE_VERSION,
@@ -53,6 +54,123 @@ async function notoSansRegular(): Promise<Uint8Array> {
 }
 
 describe("engine vertical slice", () => {
+  test("inspects template-specific fonts and bounded semantic feature sources deterministically", async () => {
+    const runs = Array.from(
+      { length: 25 },
+      (_, index) =>
+        `<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b/><w:i/></w:rPr><w:t>Run ${index}</w:t></w:r>`
+    ).join("")
+    const bytes = sampleDocx(
+      `<w:p>${runs}<w:r><w:lastRenderedPageBreak/></w:r></w:p>`
+    )
+    const engine = await createDocxPdfEngine()
+
+    const first = await engine.inspect(bytes)
+    const second = await engine.inspect(bytes)
+
+    expect(first).toEqual(second)
+    expect(first.documentModelAvailable).toBe(true)
+    expect(first.sourceLimitPerEntry).toBe(20)
+    expect(first.requiredFonts).toEqual([
+      expect.objectContaining({
+        family: "Arial",
+        weight: 700,
+        style: "italic",
+        instanceCount: 25,
+        sourcesTruncated: true,
+      }),
+    ])
+    expect(first.requiredFonts[0]?.sources).toHaveLength(20)
+    expect(first.features).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "paragraph",
+          support: "implemented",
+          instanceCount: 1,
+        }),
+        expect.objectContaining({
+          kind: "unsupported:lastRenderedPageBreak",
+          support: "unsupported",
+          instanceCount: 1,
+        }),
+      ])
+    )
+    expect(first.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "DOCX_UNSUPPORTED_FEATURE_FALLBACK",
+          severity: "warning",
+        }),
+      ])
+    )
+  })
+
+  test("renders bounded dynamic PNG values deterministically without URL resolution", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(
+      sampleDocx(`<w:p><w:r><w:t>Logo {{@image companyLogo}}</w:t></w:r></w:p>`)
+    )
+    expect(compiled.manifest.fields).toEqual([
+      expect.objectContaining({ path: "companyLogo", kind: "image" }),
+    ])
+    const companyLogo = {
+      mimeType: "image/png",
+      bytes: generatedPng(),
+      pixelWidth: 2,
+      pixelHeight: 1,
+      width: 1440,
+      height: 1440,
+      preserveAspectRatio: true,
+      altText: "Apex company logo",
+    } as const
+    const options = {
+      locale: "en-ZA",
+      timeZone: "Africa/Johannesburg",
+    } as const
+    const first = await engine.render(compiled, { companyLogo }, options)
+    const second = await engine.render(compiled, { companyLogo }, options)
+    expect(first.pdf).toEqual(second.pdf)
+    expect(first.documentHash).toBe(second.documentHash)
+    expect(validatePdfStructure(first.pdf).valid).toBe(true)
+    const source = new TextDecoder("latin1").decode(first.pdf)
+    expect(source.match(/\/Subtype \/Image\b/gu)).toHaveLength(1)
+
+    try {
+      await engine.render(
+        compiled,
+        {
+          companyLogo: {
+            ...companyLogo,
+            bytes: Uint8Array.of(1, 2, 3),
+          },
+        },
+        options
+      )
+      throw new Error("expected invalid PNG bytes to fail")
+    } catch (error) {
+      expect(error).toBeInstanceOf(EngineOperationError)
+      expect((error as EngineOperationError).code).toBe("engine/image")
+      expect(
+        (error as EngineOperationError).diagnostics.map(({ code }) => code)
+      ).toContain("images/png-signature")
+    }
+
+    try {
+      await engine.render(
+        compiled,
+        { companyLogo: "https://example.invalid/logo.png" },
+        options
+      )
+      throw new Error("expected URL image input to fail")
+    } catch (error) {
+      expect(error).toBeInstanceOf(EngineOperationError)
+      expect((error as EngineOperationError).code).toBe("engine/template-data")
+      expect(
+        (error as EngineOperationError).diagnostics.map(({ code }) => code)
+      ).toContain("TEMPLATE_IMAGE_VALUE_TYPE")
+    }
+  })
+
   test("renders the deterministic Phase 6 DOCX image, section, header, footer, field, table, and numbering story", async () => {
     const engine = await createDocxPdfEngine()
     const compiled = await engine.compile(buildPhase6DocumentDocx())
@@ -64,6 +182,8 @@ describe("engine vertical slice", () => {
     const data = { patient: { name: "Amara Mokoena" } }
     const first = await engine.render(compiled, data, options)
     const second = await engine.render(compiled, data, options)
+    const preview = await engine.preview(compiled)
+    const repeatedPreview = await engine.preview(compiled)
     const validation = validatePdfStructure(first.pdf)
     const pdfSource = new TextDecoder("latin1").decode(first.pdf)
 
@@ -88,6 +208,25 @@ describe("engine vertical slice", () => {
     expect(first.templateHash).toBe(compiled.templateHash)
     expect(first.resourceUsage).toBeUndefined()
     expect(first.pageCount).toBe(3)
+    expect(preview).toEqual(repeatedPreview)
+    expect(preview.displayList.pages).toHaveLength(3)
+    expect(
+      preview.displayList.pages
+        .flatMap(({ items }) => items)
+        .filter((item) => item.type === "glyph-run")
+        .map(({ text }) => text)
+        .join("")
+    ).toContain("{{patient.name:string}}")
+    expect(Object.values(preview.placeholderNodes)).toContain("patient.name")
+    expect(
+      preview.displayList.pages
+        .flatMap(({ items }) => items)
+        .some(
+          (item) =>
+            item.type === "glyph-run" &&
+            preview.placeholderNodes[item.sourceNodeId] === "patient.name"
+        )
+    ).toBe(true)
     expect(validation.valid).toBe(true)
     expect(validation.errors).toEqual([])
     expect(validation.pageCount).toBe(3)
@@ -286,6 +425,40 @@ describe("engine vertical slice", () => {
     expect(pdfSource).toContain("/ToUnicode")
     expect(pdfSource).toContain("/NotoSans-Regular")
     expect(pdfSource).toContain("<006600660069>")
+  })
+
+  test("embeds distinct static Medium and SemiBold programs selected by DOCX family aliases", async () => {
+    const engine = await createDocxPdfEngine({
+      fonts: await loadOfflineFontConfiguration(),
+    })
+    const compiled = await engine.compile(
+      sampleDocx(`<w:p>
+        <w:r><w:rPr><w:rFonts w:ascii="Inter Medium" w:hAnsi="Inter Medium"/></w:rPr><w:t>Medium face</w:t></w:r>
+        <w:r><w:rPr><w:rFonts w:ascii="Inter SemiBold" w:hAnsi="Inter SemiBold"/></w:rPr><w:t>Semibold face</w:t></w:r>
+        <w:r><w:rPr><w:rFonts w:ascii="Bricolage Grotesque SemiBold" w:hAnsi="Bricolage Grotesque SemiBold"/></w:rPr><w:t>Bricolage face</w:t></w:r>
+      </w:p>`)
+    )
+
+    const preview = await engine.preview(compiled)
+    const runs = preview.displayList.pages.flatMap(({ items }) =>
+      items.filter(
+        (item) => item.type === "glyph-run" && item.fontSource === "embedded"
+      )
+    )
+    expect(runs.map(({ fontWeight }) => fontWeight)).toEqual([500, 600, 600])
+    expect(new Set(runs.map((run) => run.faceId)).size).toBe(3)
+
+    const rendered = await engine.render(
+      compiled,
+      {},
+      { locale: "en-ZA", timeZone: "Africa/Johannesburg" }
+    )
+    const pdfSource = new TextDecoder("latin1").decode(rendered.pdf)
+    expect(validatePdfStructure(rendered.pdf).valid).toBe(true)
+    expect(pdfSource).toContain("/Inter-Medium")
+    expect(pdfSource).toContain("/Inter-SemiBold")
+    expect(pdfSource).toContain("/BricolageGrotesque-SemiBold")
+    expect(pdfSource.match(/\/Subtype \/Type0/gu)).toHaveLength(3)
   })
 
   test("renders conditional repeated paragraphs and explicit-context formatters end to end", async () => {

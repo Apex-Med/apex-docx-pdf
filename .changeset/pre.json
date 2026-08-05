@@ -2,8 +2,10 @@
   "mode": "pre",
   "tag": "next",
   "initialVersions": {
+    "apex-docx-pdf": "0.1.0-next.0",
     "@apex-docx-pdf/browser": "0.1.0-next.0",
     "@apex-docx-pdf/core": "0.1.0-next.0",
+    "@apex-docx-pdf/devtools": "0.1.0-next.0",
     "@apex-docx-pdf/docx": "0.1.0-next.0",
     "@apex-docx-pdf/engine": "0.1.0-next.0",
     "@apex-docx-pdf/fonts": "0.1.0-next.0",

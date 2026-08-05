@@ -25,9 +25,13 @@ export type {
   ParsedDocxSection,
   ParsedDocxBlock,
   ParsedDocxParagraph,
+  ParsedDocxHorizontalRule,
   ParsedDocxRun,
   ParsedDocxTable,
+  ParsedDocxTableBorder,
+  ParsedDocxTableBorders,
   ParsedDocxTableCell,
+  ParsedDocxTableCellBorders,
   ParsedDocxTableRow,
   ParsedDocxText,
 } from "./types"

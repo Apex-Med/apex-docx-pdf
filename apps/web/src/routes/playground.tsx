@@ -7,5 +7,6 @@ export const Route = createFileRoute("/playground")({
 })
 
 function PlaygroundRoute() {
-  return <PlaygroundWorkspace />
+  const { convexEnabled } = Route.useRouteContext()
+  return <PlaygroundWorkspace convexEnabled={convexEnabled} />
 }

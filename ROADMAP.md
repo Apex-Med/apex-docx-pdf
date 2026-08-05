@@ -11,7 +11,9 @@ Apex DOCX PDF is prerelease software built in narrow, testable slices. This road
 - **Phase 5 — Tables: implemented; hardening ongoing.** Engine version `0.0.0-phase.5` adds deterministic fixed-grid table geometry, supported cell and row formatting, row templates, repeated headers, fragmentation, multi-page tables, and source-linked searchable PDF output.
 - **Phase 6 — Static images, sections, headers, footers, and page fields: implemented; hardening ongoing.** Engine version `0.0.0-phase.6` adds bounded inline PNG/JPEG resources, multiple `nextPage` sections, portrait/landscape pages, inherited default headers/footers, header/footer templates, and global decimal page fields.
 - **Phase 7 — Convex integration: implemented; hardening ongoing.** Engine version `0.0.0-phase.7` partitions render caches by engine/template/font/data/options hashes, while the optional app adapter adds anonymous session isolation, direct DOCX/PDF uploads, metadata, realtime render history, and bounded storage cleanup.
-- **Phases 8–10: not complete.** The future phase ordering below follows the original project brief; status may be refined as architecture and fixture evidence develop.
+- **Phase 8 — Landing page and documentation: implemented and browser-verified locally.** The landing page, Mintlify docs, responsive support matrix, interactive examples, community links, and SEO/PWA metadata are present.
+- **Phase 9 — Hardening: local evidence implemented; external proof pending.** Fixed-seed hostile-input tests, resource-limit coverage, Bun benchmarks, package-size measurements, public API review, browser accessibility checks, exact Bun/Node 24/Chromium golden parity, and a Nitro production preview are complete. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
+- **Phase 10 — Release preparation: implemented; publication pending.** Changesets, lockstep prerelease versions, publishable ESM artifacts, package validation, provenance workflow skeletons, and release documentation are ready. The first npm `next` publication remains approval-gated.
 
 ## Phase status and planned phases
 
@@ -35,7 +37,7 @@ Implemented; hardening ongoing. Static PNG/JPEG images must be internal relation
 
 Multiple sections use deterministic `nextPage` breaks with explicit portrait/landscape geometry and matching PDF `MediaBox` values. Default header/footer references inherit until replaced; their content uses exact edge-relative distances (720-twip defaults), can contain bounded template values/formatters/blocks, and is reused across pages. Decimal `PAGE`/`NUMPAGES` fields are globally materialized after pagination from space reserved for the configured maximum-page digit count.
 
-This does not implement dynamic image tags, fetches, external images, anchors/floating placement, crop, rotation, SVG, broad image color/profile conversion, continuous/odd/even section breaks, first/even headers, automatic numbering in headers/footers, or arbitrary fields. The implementation and focused tests are not broad Word, complete cross-runtime, or production proof.
+Canonical `{{@image path}}` values now resolve explicit PNG/JPEG bytes, pixel dimensions, and physical twip bounds into deterministic inline resources. This does not implement non-canonical image tags, fetches, external images, anchors/floating placement, crop, rotation, SVG, broad image color/profile conversion, tagged-PDF accessibility metadata, continuous/odd/even section breaks, first/even headers, automatic numbering in headers/footers, or arbitrary fields. The implementation and focused tests are not broad Word, complete browser-runtime, or production proof.
 
 ### Phase 7 — Convex integration boundary
 
@@ -43,15 +45,15 @@ Implemented; hardening ongoing. The optional adapter uses `convex-helpers` anony
 
 ### Phase 8 — Landing page and documentation
 
-Complete the polished landing page, Mintlify documentation routes, interactive examples, architecture explanation, support matrix, community links, and SEO metadata. Representative redistributable authoring fixtures and complete browser/accessibility proof remain required before this phase can close.
+Implemented and locally browser-verified at 1440 × 900 and 390 × 844. The polished Geist Mono landing page includes interactive examples, architecture and API explanations, a responsive support matrix, GitHub/community links, SEO/PWA metadata, and direct Mintlify documentation routing. Local verification covers the landing page, playground, support matrix, `/docs` plus representative Mintlify deep links, keyboard-operated navigation and tabs, the visible five-family font specimens, overflow, console errors, configured-origin canonical/robots/sitemap output, and path-preserving documentation redirects. Live hosted-origin verification remains part of the external Phase 9 boundary.
 
 ### Phase 9 — Hardening
 
-Add security fixtures, fuzz/property tests, cross-runtime and real-browser determinism, performance benchmarks, Vercel deployment verification, accessibility evidence, package-size budgets, and a formal public API review.
+Local hardening evidence is implemented: security fixtures, a fixed-seed fragmentation corpus, resource-limit and cancellation tests, real-browser rendering and accessibility checks, exact golden PDF/trace parity across separate Bun processes, Node 24, and a real Chromium module worker, Bun benchmarks, enforced publication-tarball size budgets, and a formal public API review. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
 
 ### Phase 10 — Release preparation
 
-Add Changesets, publishable package builds, prerelease versioning, trusted-publishing provenance configuration, release documentation, contribution materials, a reconciled roadmap, and a verified initial prerelease. Actual publication and live deployment stay credential- and approval-gated.
+Preparation is implemented: Changesets, publishable ESM package builds, prerelease versioning, trusted-publishing provenance configuration, release documentation, contribution materials, and a reconciled roadmap. The initial npm prerelease and post-publication verification remain credential- and approval-gated.
 
 ## Principles across every phase
 

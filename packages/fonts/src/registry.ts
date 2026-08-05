@@ -12,6 +12,8 @@ import {
   type FontFaceResource,
   type FontMatch,
   type FontRegistry,
+  type FontStyle,
+  type FontWeight,
   type GlyphId,
   type ShapeTextInput,
   type ShapedGlyph,
@@ -29,7 +31,17 @@ import type {
 const asciiWhitespace = /[\t\n\f\r ]+/gu
 const latinText = /^[\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]*$/u
 
-type FaceKey = `${string}\u0000${400 | 700}\u0000${"normal" | "italic"}`
+type FaceKey = `${string}\u0000${FontWeight}\u0000${FontStyle}`
+
+type ResolvedAlias = Readonly<{
+  family: string
+  weight?: FontWeight
+  style?: FontStyle
+}>
+
+const fontWeights = Object.freeze([
+  100, 200, 300, 400, 500, 600, 700, 800, 900,
+] as const satisfies readonly FontWeight[])
 
 type StoredFace = Readonly<{
   resource: FontFaceResource
@@ -58,11 +70,7 @@ export function normalizeFontFamily(value: string): string {
   return normalized
 }
 
-function keyOf(
-  family: string,
-  weight: 400 | 700,
-  style: "normal" | "italic"
-): FaceKey {
+function keyOf(family: string, weight: FontWeight, style: FontStyle): FaceKey {
   return `${family}\u0000${weight}\u0000${style}`
 }
 
@@ -106,8 +114,11 @@ async function sha256Hex(
 function resolvedAliases(
   configuration: FontConfiguration,
   registeredFamilies: ReadonlySet<string>
-): ReadonlyMap<string, string> {
-  const direct = new Map<string, string>()
+): ReadonlyMap<string, ResolvedAlias> {
+  const direct = new Map<
+    string,
+    Readonly<{ to: string; weight?: FontWeight; style?: FontStyle }>
+  >()
   for (const alias of configuration.aliases ?? []) {
     const from = normalizeFontFamily(alias.from)
     const to = normalizeFontFamily(alias.to)
@@ -119,31 +130,50 @@ function resolvedAliases(
     if (direct.has(from)) {
       throw new FontConfigurationError(`Duplicate font alias '${alias.from}'`)
     }
-    direct.set(from, to)
+    direct.set(from, {
+      to,
+      ...(alias.weight === undefined ? {} : { weight: alias.weight }),
+      ...(alias.style === undefined ? {} : { style: alias.style }),
+    })
   }
 
-  const resolved = new Map<string, string>()
+  const resolved = new Map<string, ResolvedAlias>()
   for (const start of direct.keys()) {
     const visited = new Set<string>()
     let current = start
+    let weight: FontWeight | undefined
+    let style: FontStyle | undefined
     while (direct.has(current)) {
       if (visited.has(current)) {
         throw new FontConfigurationError(`Font alias cycle includes '${start}'`)
       }
       visited.add(current)
-      current = direct.get(current) as string
+      const alias = direct.get(current)
+      if (!alias) break
+      weight ??= alias.weight
+      style ??= alias.style
+      current = alias.to
     }
     if (!registeredFamilies.has(current)) {
       throw new FontConfigurationError(
         `Font alias '${start}' resolves to missing family '${current}'`
       )
     }
-    resolved.set(start, current)
+    resolved.set(start, {
+      family: current,
+      ...(weight === undefined ? {} : { weight }),
+      ...(style === undefined ? {} : { style }),
+    })
   }
   return resolved
 }
 
 function validateRegistration(registration: FontFaceRegistration): void {
+  if (!fontWeights.includes(registration.weight)) {
+    throw new FontConfigurationError(
+      `Font weight '${registration.weight}' is not a supported CSS/OpenType static weight`
+    )
+  }
   if (
     !(registration.bytes instanceof Uint8Array) ||
     registration.bytes.length === 0
@@ -160,6 +190,21 @@ function validateRegistration(registration: FontFaceRegistration): void {
       "A supplied PostScript name cannot be empty"
     )
   }
+}
+
+function weightPreference(weight: FontWeight): readonly FontWeight[] {
+  if (weight === 400) return [400, 500, 300, 200, 100, 600, 700, 800, 900]
+  if (weight === 500) return [500, 400, 300, 200, 100, 600, 700, 800, 900]
+  if (weight < 400) {
+    return [
+      ...fontWeights.filter((candidate) => candidate <= weight).reverse(),
+      ...fontWeights.filter((candidate) => candidate > weight),
+    ]
+  }
+  return [
+    ...fontWeights.filter((candidate) => candidate >= weight),
+    ...fontWeights.filter((candidate) => candidate < weight).reverse(),
+  ]
 }
 
 function scaleMetric(value: number, fontSize: Twip, unitsPerEm: number): Twip {
@@ -206,7 +251,7 @@ class Registry implements ManagedFontRegistry {
   readonly registryHash
   readonly #byId: ReadonlyMap<FontFaceId, StoredFace>
   readonly #byKey: ReadonlyMap<FaceKey, StoredFace>
-  readonly #aliases: ReadonlyMap<string, string>
+  readonly #aliases: ReadonlyMap<string, ResolvedAlias>
   readonly #fallbackFamily: string
   readonly #subsetter?: FontSubsetAdapter
 
@@ -214,7 +259,7 @@ class Registry implements ManagedFontRegistry {
     registryHash: ReturnType<typeof documentHash>,
     byId: ReadonlyMap<FontFaceId, StoredFace>,
     byKey: ReadonlyMap<FaceKey, StoredFace>,
-    aliases: ReadonlyMap<string, string>,
+    aliases: ReadonlyMap<string, ResolvedAlias>,
     fallbackFamily: string,
     subsetter?: FontSubsetAdapter
   ) {
@@ -227,10 +272,21 @@ class Registry implements ManagedFontRegistry {
   }
 
   matchFace(request: FontFaceRequest): FontMatch {
+    if (!fontWeights.includes(request.weight)) {
+      throw new FontConfigurationError(
+        `Font weight '${request.weight}' is not a supported CSS/OpenType static weight`
+      )
+    }
     const requestedFamily = normalizeFontFamily(request.family)
-    const resolvedFamily = this.#aliases.get(requestedFamily) ?? requestedFamily
+    const alias = this.#aliases.get(requestedFamily)
+    const resolvedFamily = alias?.family ?? requestedFamily
+    const effectiveRequest = {
+      ...request,
+      weight: alias?.weight ?? request.weight,
+      style: alias?.style ?? request.style,
+    }
     const exact = this.#byKey.get(
-      keyOf(resolvedFamily, request.weight, request.style)
+      keyOf(resolvedFamily, effectiveRequest.weight, effectiveRequest.style)
     )
     if (exact) {
       return this.#match(
@@ -239,12 +295,18 @@ class Registry implements ManagedFontRegistry {
         requestedFamily === resolvedFamily ? "exact" : "alias"
       )
     }
-    const faceFallback = this.#matchWithinFamily(resolvedFamily, request)
+    const faceFallback = this.#matchWithinFamily(
+      resolvedFamily,
+      effectiveRequest
+    )
     if (faceFallback) {
       return this.#match(faceFallback, request.family, "face-fallback")
     }
 
-    const fallback = this.#matchWithinFamily(this.#fallbackFamily, request)
+    const fallback = this.#matchWithinFamily(
+      this.#fallbackFamily,
+      effectiveRequest
+    )
     if (!fallback) {
       throw new FontConfigurationError(
         "The required regular fallback face is missing"
@@ -257,15 +319,13 @@ class Registry implements ManagedFontRegistry {
     family: string,
     request: FontFaceRequest
   ): StoredFace | undefined {
-    const candidates = [
-      keyOf(family, request.weight, request.style),
-      keyOf(family, 400, request.style),
-      keyOf(family, request.weight, "normal"),
-      keyOf(family, 400, "normal"),
-    ]
-    for (const candidate of new Set(candidates)) {
-      const face = this.#byKey.get(candidate)
-      if (face) return face
+    const styles: readonly FontStyle[] =
+      request.style === "normal" ? ["normal"] : [request.style, "normal"]
+    for (const style of styles) {
+      for (const weight of weightPreference(request.weight)) {
+        const face = this.#byKey.get(keyOf(family, weight, style))
+        if (face) return face
+      }
     }
     return undefined
   }
@@ -540,7 +600,12 @@ export async function createFontRegistry(
         face.resource.style,
         face.resource.faceId,
       ]),
-      ...sortedAliases.flat(),
+      ...sortedAliases.flatMap(([from, alias]) => [
+        from,
+        alias.family,
+        alias.weight === undefined ? "" : String(alias.weight),
+        alias.style ?? "",
+      ]),
     ])
   )
   const byId = new Map(built.map((face) => [face.resource.faceId, face]))

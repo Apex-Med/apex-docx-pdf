@@ -1,177 +1,235 @@
 {
-  "schemaVersion": 1,
-  "measuredAt": "2026-08-05T17:39:15.780Z",
-  "basis": "raw and per-file gzip bytes from current local source/build artifacts",
-  "caveat": "Per-file gzip totals are an inventory aid, not a bundled transfer-size prediction.",
-  "roots": {
-    "packages": {
-      "files": 55,
-      "bytes": 560441,
-      "gzipBytes": 135830
-    },
-    "apps/web/dist": {
-      "files": 46,
-      "bytes": 8432585,
-      "gzipBytes": 3060150
-    }
-  },
+  "schemaVersion": 2,
+  "measuredAt": "2026-08-05T19:26:49.388Z",
+  "basis": "npm pack --dry-run measurements from the current publishable dist directories",
   "packages": {
-    "packages/browser": {
-      "files": 4,
-      "bytes": 14874,
-      "gzipBytes": 4304
+    "apex-docx-pdf": {
+      "directory": "packages/apex-docx-pdf/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 6853,
+      "unpackedBytes": 17709,
+      "entryCount": 6,
+      "javascriptBytes": 203,
+      "declarationBytes": 136,
+      "sourceMapBytes": 89,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 8000,
+        "maxUnpackedBytes": 22000
+      },
+      "remainingPackedBytes": 1147,
+      "remainingUnpackedBytes": 4291
     },
-    "packages/core": {
-      "files": 10,
-      "bytes": 20111,
-      "gzipBytes": 6909
+    "@apex-docx-pdf/browser": {
+      "directory": "packages/browser/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 16246,
+      "unpackedBytes": 60414,
+      "entryCount": 10,
+      "javascriptBytes": 11728,
+      "declarationBytes": 5346,
+      "sourceMapBytes": 25964,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 18000,
+        "maxUnpackedBytes": 70000
+      },
+      "remainingPackedBytes": 1754,
+      "remainingUnpackedBytes": 9586
     },
-    "packages/docx": {
-      "files": 6,
-      "bytes": 174631,
-      "gzipBytes": 36016
+    "@apex-docx-pdf/core": {
+      "directory": "packages/core/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 15465,
+      "unpackedBytes": 54487,
+      "entryCount": 6,
+      "javascriptBytes": 2129,
+      "declarationBytes": 25183,
+      "sourceMapBytes": 9981,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 17000,
+        "maxUnpackedBytes": 65000
+      },
+      "remainingPackedBytes": 1535,
+      "remainingUnpackedBytes": 10513
     },
-    "packages/engine": {
-      "files": 1,
-      "bytes": 15293,
-      "gzipBytes": 3872
+    "@apex-docx-pdf/devtools": {
+      "directory": "packages/devtools/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 11578,
+      "unpackedBytes": 36653,
+      "entryCount": 6,
+      "javascriptBytes": 5794,
+      "declarationBytes": 1091,
+      "sourceMapBytes": 12460,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 14000,
+        "maxUnpackedBytes": 45000
+      },
+      "remainingPackedBytes": 2422,
+      "remainingUnpackedBytes": 8347
     },
-    "packages/fonts": {
-      "files": 6,
-      "bytes": 24119,
-      "gzipBytes": 7205
+    "@apex-docx-pdf/docx": {
+      "directory": "packages/docx/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 122934,
+      "unpackedBytes": 630307,
+      "entryCount": 6,
+      "javascriptBytes": 192308,
+      "declarationBytes": 9550,
+      "sourceMapBytes": 411163,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 140000,
+        "maxUnpackedBytes": 720000
+      },
+      "remainingPackedBytes": 17066,
+      "remainingUnpackedBytes": 89693
     },
-    "packages/images": {
-      "files": 1,
-      "bytes": 36696,
-      "gzipBytes": 9467
+    "@apex-docx-pdf/engine": {
+      "directory": "packages/engine/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 22750,
+      "unpackedBytes": 87450,
+      "entryCount": 6,
+      "javascriptBytes": 23004,
+      "declarationBytes": 632,
+      "sourceMapBytes": 46325,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 26000,
+        "maxUnpackedBytes": 105000
+      },
+      "remainingPackedBytes": 3250,
+      "remainingUnpackedBytes": 17550
     },
-    "packages/layout": {
-      "files": 1,
-      "bytes": 97687,
-      "gzipBytes": 21563
+    "@apex-docx-pdf/fonts": {
+      "directory": "packages/fonts/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 2066224,
+      "unpackedBytes": 4213354,
+      "entryCount": 32,
+      "javascriptBytes": 28070,
+      "declarationBytes": 6440,
+      "sourceMapBytes": 57700,
+      "assetBytes": 4103870,
+      "budget": {
+        "maxPackedBytes": 2300000,
+        "maxUnpackedBytes": 4700000
+      },
+      "remainingPackedBytes": 233776,
+      "remainingUnpackedBytes": 486646
     },
-    "packages/pdf": {
-      "files": 1,
-      "bytes": 39773,
-      "gzipBytes": 9756
+    "@apex-docx-pdf/images": {
+      "directory": "packages/images/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 32023,
+      "unpackedBytes": 125986,
+      "entryCount": 6,
+      "javascriptBytes": 32613,
+      "declarationBytes": 1420,
+      "sourceMapBytes": 74705,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 38000,
+        "maxUnpackedBytes": 160000
+      },
+      "remainingPackedBytes": 5977,
+      "remainingUnpackedBytes": 34014
     },
-    "packages/template": {
-      "files": 4,
-      "bytes": 62979,
-      "gzipBytes": 14721
+    "@apex-docx-pdf/layout": {
+      "directory": "packages/layout/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 70425,
+      "unpackedBytes": 326056,
+      "entryCount": 6,
+      "javascriptBytes": 95845,
+      "declarationBytes": 1748,
+      "sourceMapBytes": 211248,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 82000,
+        "maxUnpackedBytes": 390000
+      },
+      "remainingPackedBytes": 11575,
+      "remainingUnpackedBytes": 63944
     },
-    "packages/testkit": {
-      "files": 5,
-      "bytes": 32460,
-      "gzipBytes": 9287
+    "@apex-docx-pdf/pdf": {
+      "directory": "packages/pdf/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 32687,
+      "unpackedBytes": 131548,
+      "entryCount": 6,
+      "javascriptBytes": 35220,
+      "declarationBytes": 884,
+      "sourceMapBytes": 78174,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 40000,
+        "maxUnpackedBytes": 165000
+      },
+      "remainingPackedBytes": 7313,
+      "remainingUnpackedBytes": 33452
     },
-    "packages/ui": {
-      "files": 16,
-      "bytes": 41818,
-      "gzipBytes": 12730
+    "@apex-docx-pdf/template": {
+      "directory": "packages/template/dist",
+      "version": "0.1.0-next.0",
+      "packedBytes": 44230,
+      "unpackedBytes": 205469,
+      "entryCount": 6,
+      "javascriptBytes": 56461,
+      "declarationBytes": 1640,
+      "sourceMapBytes": 130119,
+      "assetBytes": 0,
+      "budget": {
+        "maxPackedBytes": 52000,
+        "maxUnpackedBytes": 260000
+      },
+      "remainingPackedBytes": 7770,
+      "remainingUnpackedBytes": 54531
     }
   },
-  "largestFiles": [
-    {
-      "path": "apps/web/dist/client/assets/playground-D1Q_zlaN.js",
-      "bytes": 1673942,
-      "gzipBytes": 499704
+  "aggregate": {
+    "packedBytes": 2441415,
+    "unpackedBytes": 5889433,
+    "budget": {
+      "maxPackedBytes": 2700000,
+      "maxUnpackedBytes": 6600000
     },
-    {
-      "path": "apps/web/dist/client/assets/docx_wasm_bg-HWnIvdMf.wasm",
-      "bytes": 1119333,
-      "gzipBytes": 443199
-    },
-    {
-      "path": "apps/web/dist/client/assets/worker-engine-DzMznpxj.js",
-      "bytes": 708746,
-      "gzipBytes": 123612
-    },
-    {
-      "path": "apps/web/dist/client/assets/render.worker-Dh7rlujQ.js",
-      "bytes": 619360,
-      "gzipBytes": 233988
-    },
-    {
-      "path": "apps/web/dist/client/assets/NotoSans-BoldItalic-CP7mkXEB.ttf",
-      "bytes": 534108,
-      "gzipBytes": 269416
-    },
-    {
-      "path": "apps/web/dist/client/assets/NotoSans-Italic-B7xQy_Jx.ttf",
-      "bytes": 530044,
-      "gzipBytes": 269670
-    },
-    {
-      "path": "apps/web/dist/client/assets/NotoSans-Bold-CJgel98A.ttf",
-      "bytes": 515668,
-      "gzipBytes": 261905
-    },
-    {
-      "path": "apps/web/dist/client/assets/NotoSans-Regular-D6NVAeFw.ttf",
-      "bytes": 512588,
-      "gzipBytes": 262418
-    },
-    {
-      "path": "apps/web/dist/server/assets/site-header-C4p0ENQg.js",
-      "bytes": 477803,
-      "gzipBytes": 104188
-    },
-    {
-      "path": "apps/web/dist/client/assets/es-DRpwHNZu.js",
-      "bytes": 382499,
-      "gzipBytes": 163794
-    },
-    {
-      "path": "apps/web/dist/server/assets/playground-C6mXTWzA.js",
-      "bytes": 380307,
-      "gzipBytes": 85377
-    },
-    {
-      "path": "apps/web/dist/client/assets/site-header-MqoEs4cZ.js",
-      "bytes": 189000,
-      "gzipBytes": 62673
-    },
-    {
-      "path": "apps/web/dist/client/assets/client-Brn0H5ZB.js",
-      "bytes": 178863,
-      "gzipBytes": 56460
-    },
-    {
-      "path": "apps/web/dist/server/server.js",
-      "bytes": 178047,
-      "gzipBytes": 44241
-    },
-    {
-      "path": "packages/docx/src/parse.ts",
-      "bytes": 145317,
-      "gzipBytes": 28003
-    },
-    {
-      "path": "apps/web/dist/client/assets/index-yfykdP7D.js",
-      "bytes": 124642,
-      "gzipBytes": 41899
-    },
-    {
-      "path": "packages/layout/src/index.ts",
-      "bytes": 97687,
-      "gzipBytes": 21563
-    },
-    {
-      "path": "apps/web/dist/client/assets/globals-DqDJsl6t.css",
-      "bytes": 87036,
-      "gzipBytes": 14526
-    },
-    {
-      "path": "apps/web/dist/client/assets/pako-CZ_VnyBX.js",
-      "bytes": 45143,
-      "gzipBytes": 14381
-    },
-    {
-      "path": "packages/pdf/src/index.ts",
-      "bytes": 39773,
-      "gzipBytes": 9756
-    }
-  ]
+    "remainingPackedBytes": 258585,
+    "remainingUnpackedBytes": 710567
+  },
+  "fontCatalog": {
+    "families": [
+      "bricolage-grotesque",
+      "geist-mono",
+      "instrument-sans",
+      "instrument-serif",
+      "inter"
+    ],
+    "fontFiles": [
+      "bricolage-grotesque/BricolageGrotesque-Bold.ttf",
+      "bricolage-grotesque/BricolageGrotesque-Medium.ttf",
+      "bricolage-grotesque/BricolageGrotesque-Regular.ttf",
+      "bricolage-grotesque/BricolageGrotesque-SemiBold.ttf",
+      "geist-mono/GeistMono-Bold.ttf",
+      "geist-mono/GeistMono-BoldItalic.ttf",
+      "geist-mono/GeistMono-Italic.ttf",
+      "geist-mono/GeistMono-Regular.ttf",
+      "instrument-sans/InstrumentSans-Bold.ttf",
+      "instrument-sans/InstrumentSans-BoldItalic.ttf",
+      "instrument-sans/InstrumentSans-Italic.ttf",
+      "instrument-sans/InstrumentSans-Regular.ttf",
+      "instrument-serif/InstrumentSerif-Italic.ttf",
+      "instrument-serif/InstrumentSerif-Regular.ttf",
+      "inter/Inter-Bold.ttf",
+      "inter/Inter-BoldItalic.ttf",
+      "inter/Inter-Italic.ttf",
+      "inter/Inter-Medium.ttf",
+      "inter/Inter-Regular.ttf",
+      "inter/Inter-SemiBold.ttf"
+    ]
+  }
 }

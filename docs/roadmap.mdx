@@ -1,11 +1,9 @@
 ---
 title: "Roadmap"
-description: "Phase 7 status and the original future-phase ordering."
+description: "Implemented phases, local hardening evidence, and approval-gated release work."
 ---
 
-# Roadmap
-
-Phases 1–7 form the current implemented renderer and optional persistence slice. Engine version `0.0.0-phase.7` carries the bounded image/section/header/footer/page-field profile forward and partitions render caches by exact compatibility inputs. The reference app adds anonymous-session Convex metadata and direct storage uploads while keeping persistence off by default. Phase 7 is implemented and hardening; it is not a claim of broad Word compatibility, complete cross-runtime proof, production authentication, or production readiness.
+Phases 1–8 form the current implemented renderer, local-first reference application, and Mintlify documentation surface. Engine version `0.0.0-phase.7` carries the bounded image/section/header/footer/page-field profile forward and partitions render caches by exact compatibility inputs. The reference app adds anonymous-session Convex metadata and direct storage uploads while keeping persistence off by default. Local Phase 9 hardening evidence and Phase 10 prerelease preparation are present, including exact agreement across a compact pinned Bun/Node 24/Chromium core suite; this is not a claim of broad Word compatibility, complete cross-runtime or browser-matrix proof, production authentication, live deployment, or published npm artifacts.
 
 ## Phase 4 — Implemented; hardening ongoing
 
@@ -25,11 +23,12 @@ Phases 1–7 form the current implemented renderer and optional persistence slic
 ## Phase 6 — Implemented; hardening ongoing
 
 - Internal relationship-owned PNG/JPEG content with explicit positive inline dimensions, immutable bytes, source links, exact MIME/signature/dimension/profile validation, and count/byte/side/pixel/decoded-work limits.
+- Canonical `{{@image path}}` render values with explicit PNG/JPEG bytes, pixel dimensions, physical twip bounds, deterministic resource IDs, generated schema/starter data, optional aspect preservation, and semantic alt text.
 - Deterministic image preparation and exact-content deduplication; PDF image XObjects use DCT for JPEG, Flate for normalized PNG planes, and grayscale `/SMask` objects for alpha.
 - Multiple deterministic `nextPage` sections with portrait/landscape page geometry and matching per-page PDF `MediaBox` values.
 - Inherited default headers/footers with exact edge-relative distances (720-twip defaults), static images, reusable template values/formatters/paragraph blocks, and global decimal `PAGE`/`NUMPAGES` fields.
 - Binary-safe workspace-PDF validation that follows classic xref offsets and stream lengths, validates upright text/image resources, and extracts searchable per-page text.
-- Explicitly excluded: dynamic image tags/fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields.
+- Explicitly excluded: non-canonical image tags, image fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, tagged-PDF accessibility metadata, continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields.
 
 ## Phase 7 — Implemented; hardening ongoing
 
@@ -38,20 +37,18 @@ Phases 1–7 form the current implemented renderer and optional persistence slic
 - Cursor-paginated history, bounded realtime recent status, completed-PDF cache reuse, owned bearer-URL reads, and scheduled cascading deletion of rows plus storage objects.
 - Explicitly excluded: production authentication/tenant policy, perfect abandoned-upload reclamation, rate limiting, retention compliance, live deployment proof, and treating storage URLs as fine-grained authorization.
 
-## Future phases
-
-The ordering below preserves the original project brief.
+## Later-phase status
 
 ### Phase 8 — Landing page and documentation
 
-Complete the polished landing page, Mintlify documentation routes, interactive examples, architecture explanation, support matrix, GitHub/community links, and SEO metadata, with representative redistributable authoring fixtures and browser proof.
+Implemented and locally browser-verified: polished Geist Mono landing page, Mintlify documentation, interactive examples, architecture explanation, responsive support matrix, GitHub/community links, and SEO/PWA metadata.
 
 ### Phase 9 — Hardening
 
-Add security fixtures, fuzz/property testing, cross-runtime and real-browser determinism, performance benchmarks, Vercel verification, accessibility evidence, package-size review, and a formal public API review.
+Local evidence is implemented: hostile-input and fixed-seed fragmentation tests, resource-limit and cancellation coverage, exact golden PDF/trace parity across separate Bun processes, Node 24, and a real Chromium module worker, real-browser accessibility checks, performance benchmarks, enforced publication-tarball size budgets, public API review, and a Nitro production preview. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
 
 ### Phase 10 — Release preparation
 
-Add Changesets, publishable package builds, prerelease versioning, provenance configuration, release documentation, contribution materials, a reconciled roadmap, and an initial prerelease. Publication and live deployment remain approval-gated.
+Preparation is implemented: Changesets, publishable ESM package builds, prerelease versioning, provenance configuration, release documentation, contribution materials, and a reconciled roadmap. The initial npm prerelease and post-publication consumer/provenance verification remain approval-gated.
 
 Each feature must enter through the staged architecture. Current focused tests establish the local Phase 7 Convex boundary but do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, production authentication, deployment proof, or production readiness.

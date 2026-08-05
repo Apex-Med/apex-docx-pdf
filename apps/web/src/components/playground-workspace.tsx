@@ -33,13 +33,30 @@ import {
   TabsTrigger,
 } from "@workspace/ui/components/tabs"
 import { cn } from "@workspace/ui/lib/utils"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { DocxViewerPreview } from "@/components/extend/docx-viewer"
+import { ConvexPersistence } from "@/components/convex-persistence"
+import { EngineTemplatePreview } from "@/components/engine-template-preview"
 import { PDFViewer } from "@/components/extend/pdf-viewer"
+import { FontCatalogSpecimens } from "@/components/font-catalog-specimens"
 import { JsonEditor } from "@/components/json-editor"
 import { SiteHeader } from "@/components/site-header"
 import { formatJsonIssue, parseTemplateJson } from "@/lib/json-editor"
+import {
+  fieldValidationMessages,
+  formatTemplateDataErrors,
+  parseFiniteNumberInput,
+  readPlaygroundImage,
+  validateTemplateData,
+  type PlaygroundImageValue,
+  type TemplateDataIssue,
+} from "@/lib/playground-data"
+import {
+  emptyPlaygroundTemplateMetadata,
+  initialPlaygroundRenderRevision,
+  invalidatePlaygroundRender,
+  isPlaygroundRenderCurrent,
+} from "@/lib/playground-freshness"
 import {
   addArrayItem,
   concretePath,
@@ -49,15 +66,10 @@ import {
 } from "@/lib/form-data"
 import { SAMPLE_DATA, createSampleDocx } from "@/lib/sample-docx"
 import {
-  BROWSER_PROFILE_LABEL,
   BUNDLED_FONT_PROFILE,
-  PROFILE_CAPABILITIES,
   describeWorkerProgress,
   inspectTemplate,
 } from "@/lib/template-inspection"
-
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 const PLAYGROUND_RENDER_OPTIONS = Object.freeze({
   locale: "en-ZA",
@@ -91,15 +103,18 @@ const idleActivity: Activity = {
   label: "Waiting for a template",
 }
 
-export function PlaygroundWorkspace() {
+export function PlaygroundWorkspace({
+  convexEnabled,
+}: Readonly<{ convexEnabled: boolean }>) {
   const clientRef = useRef<BrowserRendererClient | undefined>(undefined)
   const pdfUrlLeaseRef = useRef<ObjectUrlLease | undefined>(undefined)
-  const docxUrlLeaseRef = useRef<ObjectUrlLease | undefined>(undefined)
   const operationRef = useRef<AbortController | undefined>(undefined)
   const selectionSequenceRef = useRef(0)
+  const renderRevisionRef = useRef(initialPlaygroundRenderRevision)
   const [ready, setReady] = useState(false)
   const [fileName, setFileName] = useState<string>()
   const [fileSize, setFileSize] = useState<number>()
+  const [templateBytes, setTemplateBytes] = useState<Uint8Array<ArrayBuffer>>()
   const [compiled, setCompiled] = useState<BrowserCompileResult>()
   const [data, setData] =
     useState<Readonly<Record<string, unknown>>>(SAMPLE_DATA)
@@ -108,13 +123,19 @@ export function PlaygroundWorkspace() {
   )
   const [jsonError, setJsonError] = useState<string>()
   const [rendered, setRendered] = useState<BrowserRenderResult>()
+  const [renderedData, setRenderedData] =
+    useState<Readonly<Record<string, unknown>>>()
   const [pdfUrl, setPdfUrl] = useState<string>()
-  const [docxUrl, setDocxUrl] = useState<string>()
   const [activity, setActivity] = useState<Activity>(idleActivity)
   const [mobilePanel, setMobilePanel] = useState<WorkspacePanel>("template")
   const [diagnostics, setDiagnostics] = useState<
     BrowserCompileResult["diagnostics"]
   >([])
+  const dataValidation = useMemo(
+    () =>
+      compiled ? validateTemplateData(compiled.jsonSchema, data) : undefined,
+    [compiled, data]
+  )
 
   const createRenderer = useCallback((): BrowserRendererClient => {
     const worker = new Worker(
@@ -129,21 +150,33 @@ export function PlaygroundWorkspace() {
   useEffect(() => {
     const client = createRenderer()
     const pdfLease = new ObjectUrlLease()
-    const docxLease = new ObjectUrlLease()
     clientRef.current = client
     pdfUrlLeaseRef.current = pdfLease
-    docxUrlLeaseRef.current = docxLease
     setReady(true)
     return () => {
       operationRef.current?.abort()
       clientRef.current?.dispose()
       pdfLease.revoke()
-      docxLease.revoke()
       clientRef.current = undefined
       pdfUrlLeaseRef.current = undefined
-      docxUrlLeaseRef.current = undefined
     }
   }, [createRenderer])
+
+  const clearRenderedOutput = useCallback((): void => {
+    setRendered(undefined)
+    setRenderedData(undefined)
+    setPdfUrl(undefined)
+    pdfUrlLeaseRef.current?.revoke()
+  }, [])
+
+  const invalidateRenderedOutput = useCallback((): void => {
+    renderRevisionRef.current = invalidatePlaygroundRender(
+      renderRevisionRef.current
+    )
+    operationRef.current?.abort()
+    clearRenderedOutput()
+    setActivity({ state: "idle", label: "Data changed — render again" })
+  }, [clearRenderedOutput])
 
   const runRender = useCallback(
     async (
@@ -155,6 +188,8 @@ export function PlaygroundWorkspace() {
       operationRef.current?.abort()
       const controller = new AbortController()
       operationRef.current = controller
+      const renderRevision = renderRevisionRef.current
+      clearRenderedOutput()
       setActivity({ state: "working", label: "Resolving data" })
       try {
         const result = await client.render(
@@ -163,19 +198,36 @@ export function PlaygroundWorkspace() {
           PLAYGROUND_RENDER_OPTIONS,
           {
             signal: controller.signal,
-            onProgress: (progress) =>
+            onProgress: (progress) => {
+              if (
+                controller.signal.aborted ||
+                operationRef.current !== controller ||
+                !isPlaygroundRenderCurrent(
+                  renderRevisionRef.current,
+                  renderRevision
+                )
+              )
+                return
               setActivity({
                 state: "working",
                 label: describeWorkerProgress(progress),
                 progress,
-              }),
+              })
+            },
           }
         )
+        if (
+          controller.signal.aborted ||
+          operationRef.current !== controller ||
+          !isPlaygroundRenderCurrent(renderRevisionRef.current, renderRevision)
+        )
+          return
         const url = pdfUrlLeaseRef.current?.replace(
           result.pdf,
           "application/pdf"
         )
         setRendered(result)
+        setRenderedData(renderData)
         setPdfUrl(url)
         setDiagnostics(result.diagnostics)
         setMobilePanel("result")
@@ -186,25 +238,25 @@ export function PlaygroundWorkspace() {
       } catch (error) {
         if (controller.signal.aborted) return
         handleFailure(error, setDiagnostics, setActivity)
+      } finally {
+        if (operationRef.current === controller)
+          operationRef.current = undefined
       }
     },
-    []
+    [clearRenderedOutput]
   )
 
   const compileBytes = useCallback(
     async (bytes: Uint8Array, name: string): Promise<void> => {
       const client = clientRef.current
       if (!client) return
-      operationRef.current?.abort()
+      invalidateRenderedOutput()
       const controller = new AbortController()
       operationRef.current = controller
       setFileName(name)
       setFileSize(bytes.byteLength)
+      setTemplateBytes(new Uint8Array(bytes))
       setCompiled(undefined)
-      setRendered(undefined)
-      setPdfUrl(undefined)
-      pdfUrlLeaseRef.current?.revoke()
-      setDocxUrl(docxUrlLeaseRef.current?.replace(bytes, DOCX_MIME))
       setDiagnostics([])
       setActivity({ state: "working", label: "Validating DOCX package" })
       try {
@@ -219,22 +271,26 @@ export function PlaygroundWorkspace() {
         })
         const starterData =
           name === "apex-sample.docx" ? SAMPLE_DATA : result.starterData
+        const starterError = schemaError(result, starterData)
         setCompiled(result)
         setData(starterData)
         setJsonText(JSON.stringify(starterData, null, 2))
-        setJsonError(undefined)
+        setJsonError(starterError)
         setDiagnostics(result.diagnostics)
         setActivity({
           state: "complete",
           label: `Found ${result.manifest.fields.length} field${result.manifest.fields.length === 1 ? "" : "s"}`,
         })
-        await runRender(result.templateHash, starterData)
+        if (!starterError) await runRender(result.templateHash, starterData)
       } catch (error) {
         if (controller.signal.aborted) return
         handleFailure(error, setDiagnostics, setActivity)
+      } finally {
+        if (operationRef.current === controller)
+          operationRef.current = undefined
       }
     },
-    [runRender]
+    [invalidateRenderedOutput, runRender]
   )
 
   const onFile = useCallback(
@@ -262,43 +318,83 @@ export function PlaygroundWorkspace() {
   )
 
   const onJsonChange = (next: string): void => {
+    invalidateRenderedOutput()
     setJsonText(next)
     const result = parseTemplateJson(next)
     if (result.ok) {
       setData(result.data)
-      setJsonError(undefined)
+      setJsonError(compiled ? schemaError(compiled, result.data) : undefined)
       return
     }
     setJsonError(formatJsonIssue(result.issue))
   }
 
   const commitData = (next: Readonly<Record<string, unknown>>): void => {
+    invalidateRenderedOutput()
     setData(next)
     setJsonText(JSON.stringify(next, null, 2))
-    setJsonError(undefined)
+    setJsonError(compiled ? schemaError(compiled, next) : undefined)
   }
 
   const updateField = (
     field: TemplateField,
     path: string,
-    value: string | boolean
+    value: unknown
   ): void => {
+    const numberValue =
+      field.kind === "number" && typeof value === "string"
+        ? parseFiniteNumberInput(value)
+        : undefined
+    if (
+      field.kind === "number" &&
+      typeof value === "string" &&
+      numberValue === undefined
+    )
+      return
     const parsedValue =
-      field.kind === "number" ? (value === "" ? 0 : Number(value)) : value
+      field.kind === "number" && typeof value === "string"
+        ? numberValue
+        : field.kind === "date" && typeof value === "string" && value !== ""
+          ? `${value}T00:00:00.000Z`
+          : value
     commitData(setPath(data, path, parsedValue))
   }
 
   const cancel = (): void => {
     selectionSequenceRef.current += 1
-    operationRef.current?.abort()
+    invalidateRenderedOutput()
     clientRef.current?.dispose()
     clientRef.current = createRenderer()
+    operationRef.current = undefined
+    const emptyMetadata = emptyPlaygroundTemplateMetadata()
+    setFileName(emptyMetadata.fileName)
+    setFileSize(emptyMetadata.fileSize)
     setCompiled(undefined)
-    setRendered(undefined)
-    setPdfUrl(undefined)
-    pdfUrlLeaseRef.current?.revoke()
+    setTemplateBytes(undefined)
+    setData(SAMPLE_DATA)
+    setJsonText(JSON.stringify(SAMPLE_DATA, null, 2))
+    setJsonError(undefined)
     setDiagnostics([])
+    setMobilePanel("template")
     setActivity({ state: "idle", label: "Operation cancelled" })
+  }
+
+  const removeTemplate = (): void => {
+    selectionSequenceRef.current += 1
+    invalidateRenderedOutput()
+    clientRef.current?.dispose()
+    clientRef.current = createRenderer()
+    operationRef.current = undefined
+    setFileName(undefined)
+    setFileSize(undefined)
+    setTemplateBytes(undefined)
+    setCompiled(undefined)
+    setData(SAMPLE_DATA)
+    setJsonText(JSON.stringify(SAMPLE_DATA, null, 2))
+    setJsonError(undefined)
+    setDiagnostics([])
+    setMobilePanel("template")
+    setActivity(idleActivity)
   }
 
   return (
@@ -311,11 +407,16 @@ export function PlaygroundWorkspace() {
               <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
                 Document playground
               </h1>
-              <Badge variant="secondary">Local-only</Badge>
+              <Badge variant="secondary">
+                {convexEnabled ? "Local-first" : "Local-only"}
+              </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Compile tables, images, sections, headers, and page fields in a
-              Web Worker. Your document and data are never uploaded.
+              Web Worker.
+              {convexEnabled
+                ? " Nothing uploads unless you enable persistence and save."
+                : " Your document and data are never uploaded."}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -351,6 +452,32 @@ export function PlaygroundWorkspace() {
           </div>
         </div>
 
+        {convexEnabled ? (
+          <details className="group shrink-0 border-b bg-background">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2 text-xs font-semibold tracking-wider uppercase focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-5 lg:px-8">
+              <span>Optional cloud persistence</span>
+              <span className="text-muted-foreground group-open:hidden">
+                Off
+              </span>
+              <span className="hidden text-brand group-open:inline">Open</span>
+            </summary>
+            <div className="max-h-[48svh] overflow-y-auto border-t p-4 sm:p-5 lg:px-8">
+              <div className="mx-auto max-w-3xl">
+                <ConvexPersistence
+                  compiled={compiled}
+                  rendered={rendered}
+                  renderedData={renderedData}
+                  templateBytes={templateBytes}
+                  fileName={fileName}
+                  data={data}
+                  renderOptions={PLAYGROUND_RENDER_OPTIONS}
+                  resetKey={`${compiled?.templateHash ?? "none"}:${fileName ?? "none"}`}
+                />
+              </div>
+            </div>
+          </details>
+        ) : null}
+
         <div
           className="z-30 shrink-0 border-b bg-background xl:hidden"
           role="tablist"
@@ -364,7 +491,10 @@ export function PlaygroundWorkspace() {
                   key={panel.id}
                   type="button"
                   role="tab"
+                  id={`playground-tab-${panel.id}`}
+                  aria-controls={`playground-panel-${panel.id}`}
                   aria-selected={selected}
+                  tabIndex={selected ? 0 : -1}
                   className={cn(
                     "relative min-h-12 px-2 py-3 text-center text-xs font-semibold tracking-wider uppercase transition-colors",
                     selected
@@ -372,6 +502,15 @@ export function PlaygroundWorkspace() {
                       : "text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setMobilePanel(panel.id)}
+                  onKeyDown={(event) => {
+                    const nextPanel = panelForKey(event.key, panel.id)
+                    if (!nextPanel) return
+                    event.preventDefault()
+                    setMobilePanel(nextPanel)
+                    document
+                      .getElementById(`playground-tab-${nextPanel}`)
+                      ?.focus()
+                  }}
                 >
                   <span className="mr-1.5 font-mono text-[10px] text-brand">
                     {panel.index}
@@ -388,6 +527,9 @@ export function PlaygroundWorkspace() {
 
         <div className="grid max-h-full min-h-0 flex-1 xl:grid-cols-[minmax(280px,0.82fr)_minmax(340px,1fr)_minmax(440px,1.28fr)]">
           <div
+            id="playground-panel-template"
+            role="tabpanel"
+            aria-labelledby="playground-tab-template"
             className={cn(
               "max-h-full min-h-0 min-w-0",
               mobilePanel === "template" ? "flex" : "hidden xl:flex"
@@ -398,7 +540,6 @@ export function PlaygroundWorkspace() {
               fileName={fileName}
               fileSize={fileSize}
               compiled={compiled}
-              docxUrl={docxUrl}
               diagnostics={diagnostics}
               onFile={onFile}
               onSample={() => {
@@ -406,9 +547,13 @@ export function PlaygroundWorkspace() {
                 operationRef.current?.abort()
                 void compileBytes(createSampleDocx(), "apex-sample.docx")
               }}
+              onRemove={removeTemplate}
             />
           </div>
           <div
+            id="playground-panel-data"
+            role="tabpanel"
+            aria-labelledby="playground-tab-data"
             className={cn(
               "max-h-full min-h-0 min-w-0",
               mobilePanel === "data" ? "flex" : "hidden xl:flex"
@@ -419,18 +564,20 @@ export function PlaygroundWorkspace() {
               data={data}
               jsonText={jsonText}
               jsonError={jsonError}
+              validationIssues={dataValidation?.issues ?? []}
               onJsonChange={onJsonChange}
               onFieldChange={updateField}
               onDataChange={commitData}
               onReset={() => {
                 const next = compiled?.starterData ?? SAMPLE_DATA
-                setData(next)
-                setJsonText(JSON.stringify(next, null, 2))
-                setJsonError(undefined)
+                commitData(next)
               }}
             />
           </div>
           <div
+            id="playground-panel-result"
+            role="tabpanel"
+            aria-labelledby="playground-tab-result"
             className={cn(
               "max-h-full min-h-0 min-w-0",
               mobilePanel === "result" ? "flex" : "hidden xl:flex"
@@ -453,10 +600,10 @@ type TemplatePanelProps = Readonly<{
   fileName?: string
   fileSize?: number
   compiled?: BrowserCompileResult
-  docxUrl?: string
   diagnostics: BrowserCompileResult["diagnostics"]
   onFile: (file: File) => Promise<void>
   onSample: () => void
+  onRemove: () => void
 }>
 
 function TemplatePanel({
@@ -464,12 +611,13 @@ function TemplatePanel({
   fileName,
   fileSize,
   compiled,
-  docxUrl,
   diagnostics,
   onFile,
   onSample,
+  onRemove,
 }: TemplatePanelProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [dragActive, setDragActive] = useState(false)
 
   return (
     <section
@@ -479,7 +627,7 @@ function TemplatePanel({
       <PanelHeader
         index="01"
         title="Template"
-        description="Inspect the bounded DOCX profile, including tables, images, and sections."
+        description="Inspect the bounded DOCX profile."
       />
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4 sm:p-5">
@@ -488,6 +636,7 @@ function TemplatePanel({
             id="template-upload"
             className="sr-only"
             type="file"
+            aria-label="Choose DOCX template"
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             disabled={!ready}
             onChange={(event) => {
@@ -496,36 +645,83 @@ function TemplatePanel({
               event.target.value = ""
             }}
           />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button
-              variant="outline"
-              disabled={!ready}
-              onClick={() => inputRef.current?.click()}
-            >
-              <HugeiconsIcon icon={Upload02Icon} data-icon="inline-start" />
-              {fileName ? "Replace template" : "Choose template"}
-            </Button>
-            <Button variant="outline" disabled={!ready} onClick={onSample}>
-              <HugeiconsIcon icon={File02Icon} data-icon="inline-start" />
-              Use sample template
-            </Button>
-          </div>
+          <fieldset
+            className={cn(
+              "border border-dashed p-4 transition-colors",
+              dragActive ? "border-brand bg-brand/5" : "bg-muted/10"
+            )}
+            onDragEnter={(event) => {
+              event.preventDefault()
+              if (ready) setDragActive(true)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              if (ready) event.dataTransfer.dropEffect = "copy"
+            }}
+            onDragLeave={(event) => {
+              if (
+                !event.currentTarget.contains(
+                  event.relatedTarget as Node | null
+                )
+              ) {
+                setDragActive(false)
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              setDragActive(false)
+              const file = event.dataTransfer.files[0]
+              if (ready && file) void onFile(file)
+            }}
+          >
+            <legend className="sr-only">DOCX template upload</legend>
+            <p className="text-center text-xs text-muted-foreground">
+              Drag and drop a DOCX template here, or use the file picker.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <Button
+                variant="outline"
+                disabled={!ready}
+                onClick={() => inputRef.current?.click()}
+              >
+                <HugeiconsIcon icon={Upload02Icon} data-icon="inline-start" />
+                {fileName ? "Replace template" : "Choose template"}
+              </Button>
+              <Button variant="outline" disabled={!ready} onClick={onSample}>
+                <HugeiconsIcon icon={File02Icon} data-icon="inline-start" />
+                Use sample template
+              </Button>
+            </div>
+          </fieldset>
           <p className="mt-2 text-xs text-muted-foreground">
             .docx · validated locally · 20 MB limit
           </p>
 
           {fileName ? (
             <div className="mt-4 border p-4">
-              <p className="truncate text-sm font-medium" title={fileName}>
-                {fileName}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                <span>{formatBytes(fileSize ?? 0)}</span>
-                <span>
-                  {compiled
-                    ? `${compiled.templateHash.slice(0, 12)}…`
-                    : "hashing…"}
-                </span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium" title={fileName}>
+                    {fileName}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                    <span>{formatBytes(fileSize ?? 0)}</span>
+                    <span>
+                      {compiled
+                        ? `${compiled.templateHash.slice(0, 12)}…`
+                        : "hashing…"}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={onRemove}
+                >
+                  <HugeiconsIcon icon={Delete02Icon} data-icon="inline-start" />
+                  Remove template
+                </Button>
               </div>
             </div>
           ) : null}
@@ -542,12 +738,14 @@ function TemplatePanel({
               <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
             </TabsList>
             <TabsContent value="preview" className="pt-5">
-              <TemplatePreview docxUrl={docxUrl} fileName={fileName} />
-              <p className="mt-3 border-l-2 border-brand pl-3 text-xs leading-5 text-muted-foreground">
-                Placeholder highlighting is not available in this preview. The
-                preview viewer is not connected to the engine’s placeholder node
-                map, so use Fields to inspect detected paths.
-              </p>
+              <TemplatePreview compiled={compiled} />
+              {compiled ? (
+                <p className="mt-3 border-l-2 border-brand pl-3 text-xs leading-5 text-muted-foreground">
+                  The engine lays out the unresolved template source.
+                  Highlighted runs are linked to canonical field paths through
+                  its placeholder node map.
+                </p>
+              ) : null}
             </TabsContent>
             <TabsContent value="features" className="pt-5">
               <TemplateInspectionPanel
@@ -663,56 +861,135 @@ function TemplateInspectionPanel({
 
       <section
         className="border-t pt-5"
-        aria-labelledby="profile-capabilities-title"
+        aria-labelledby="detected-features-title"
       >
         <p className="text-[10px] font-semibold tracking-widest text-brand uppercase">
-          Profile capabilities
+          Detected document structures
         </p>
-        <h3
-          id="profile-capabilities-title"
-          className="mt-1 text-sm font-semibold"
-        >
-          {BROWSER_PROFILE_LABEL}
+        <h3 id="detected-features-title" className="mt-1 text-sm font-semibold">
+          Template-specific feature instances
         </h3>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          These describe renderer support, not features detected in this
-          document. BrowserCompileResult does not expose per-template instances
-          for these structures.
+          Counts cover the bounded semantic document model. Source paths show up
+          to {compiled.inspection.sourceLimitPerEntry} instances per feature.
         </p>
         <div className="mt-4 divide-y border">
-          {PROFILE_CAPABILITIES.map((capability) => (
-            <div key={capability.label} className="p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium">{capability.label}</p>
-                <Badge variant="secondary">{capability.support}</Badge>
+          {inspection.features.length === 0 ? (
+            <p className="p-3 text-xs text-muted-foreground">
+              {inspection.documentModelAvailable
+                ? "No modeled document structures detected."
+                : "A semantic document model was not available; see diagnostics."}
+            </p>
+          ) : (
+            inspection.features.map((feature) => (
+              <div key={feature.kind} className="p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium">
+                    {formatFeatureKind(feature.kind)}
+                  </p>
+                  <Badge
+                    variant={
+                      feature.support === "unsupported"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                  >
+                    {feature.instanceCount} · {feature.support}
+                  </Badge>
+                </div>
+                <InspectionSources
+                  sources={feature.sources}
+                  truncated={feature.sourcesTruncated}
+                />
               </div>
-              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                {capability.detail}
-              </p>
-            </div>
-          ))}
+            ))
+          )}
         </div>
+        {compiled.inspection.featuresTruncated ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Showing {compiled.inspection.entryLimit} of{" "}
+            {compiled.inspection.featureEntryCount} feature kinds.
+          </p>
+        ) : null}
       </section>
 
       <section className="border-t pt-5" aria-labelledby="font-profile-title">
         <p className="text-[10px] font-semibold tracking-widest text-brand uppercase">
-          Required font registry
+          Required font faces
         </p>
         <h3 id="font-profile-title" className="mt-1 text-sm font-semibold">
-          {BUNDLED_FONT_PROFILE.family}
+          Template-specific typography
         </h3>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          These are the family, weight, and style combinations requested by this
+          document. Aliases and fallback resolution happen inside the worker.
+        </p>
+        <div className="mt-4 divide-y border">
+          {inspection.requiredFonts.length === 0 ? (
+            <p className="p-3 text-xs text-muted-foreground">
+              No font requests were available from the semantic model.
+            </p>
+          ) : (
+            inspection.requiredFonts.map((font) => (
+              <div
+                key={`${font.family}-${font.weight}-${font.style}`}
+                className="p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium">{font.family}</p>
+                  <Badge variant="secondary">
+                    {font.weight} · {font.style} · {font.instanceCount}
+                  </Badge>
+                </div>
+                <InspectionSources
+                  sources={font.sources}
+                  truncated={font.sourcesTruncated}
+                />
+              </div>
+            ))
+          )}
+        </div>
+        {compiled.inspection.requiredFontsTruncated ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Showing {compiled.inspection.entryLimit} of{" "}
+            {compiled.inspection.requiredFontEntryCount} requested faces.
+          </p>
+        ) : null}
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Source samples are capped at {compiled.inspection.sourceLimitPerEntry}{" "}
+          per face; counts remain complete within parser resource limits.
+        </p>
+      </section>
+
+      <section
+        className="border-t pt-5"
+        aria-labelledby="bundled-font-catalog-title"
+      >
+        <p className="text-[10px] font-semibold tracking-widest text-brand uppercase">
+          Always available
+        </p>
+        <h3
+          id="bundled-font-catalog-title"
+          className="mt-1 text-sm font-semibold"
+        >
+          Bundled offline font catalog
+        </h3>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          Every specimen below uses the same pinned static TrueType asset that
+          the browser worker can embed in a PDF.
+        </p>
+        <FontCatalogSpecimens />
         <dl className="mt-4 space-y-3 border p-3 text-xs">
           <div>
-            <dt className="text-muted-foreground">Bundled faces</dt>
+            <dt className="text-muted-foreground">Bundled families</dt>
             <dd className="mt-1 leading-5">
-              {BUNDLED_FONT_PROFILE.faces.join(" · ")}
+              {BUNDLED_FONT_PROFILE.families.join(" · ")}
             </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Mapped aliases</dt>
             <dd className="mt-1 leading-5">
-              {BUNDLED_FONT_PROFILE.aliases.join(", ")} →{" "}
-              {BUNDLED_FONT_PROFILE.fallbackFamily}
+              {BUNDLED_FONT_PROFILE.aliases.join(" · ")}
             </dd>
           </div>
           <div>
@@ -722,12 +999,38 @@ function TemplateInspectionPanel({
             </dd>
           </div>
         </dl>
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-          Font bytes stay bundled inside the worker and are not shown here.
-        </p>
       </section>
     </div>
   )
+}
+
+function InspectionSources({
+  sources,
+  truncated,
+}: Readonly<{
+  sources: BrowserCompileResult["inspection"]["features"][number]["sources"]
+  truncated: boolean
+}>) {
+  return (
+    <div className="mt-2 space-y-1 font-mono text-[10px] leading-4 text-muted-foreground">
+      {sources.map((source) => (
+        <p
+          key={`${source.part}:${source.xmlPath}:${source.line ?? ""}:${source.column ?? ""}`}
+          className="break-all"
+        >
+          {source.part} · {source.xmlPath}
+        </p>
+      ))}
+      {truncated ? <p>Additional source locations omitted.</p> : null}
+    </div>
+  )
+}
+
+function formatFeatureKind(kind: string): string {
+  const value = kind.startsWith("unsupported:")
+    ? `Unsupported · ${kind.slice("unsupported:".length)}`
+    : kind
+  return value.replace(/([a-z])([A-Z])/g, "$1 $2")
 }
 
 function InspectionMetric({
@@ -779,12 +1082,9 @@ type DataPanelProps = Readonly<{
   data: Readonly<Record<string, unknown>>
   jsonText: string
   jsonError?: string
+  validationIssues: readonly TemplateDataIssue[]
   onJsonChange: (value: string) => void
-  onFieldChange: (
-    field: TemplateField,
-    path: string,
-    value: string | boolean
-  ) => void
+  onFieldChange: (field: TemplateField, path: string, value: unknown) => void
   onDataChange: (value: Readonly<Record<string, unknown>>) => void
   onReset: () => void
 }>
@@ -794,6 +1094,7 @@ function DataPanel({
   data,
   jsonText,
   jsonError,
+  validationIssues,
   onJsonChange,
   onFieldChange,
   onDataChange,
@@ -881,6 +1182,7 @@ function DataPanel({
                         field={field}
                         value={getPath(data, field.path)}
                         concreteDataPath={field.path}
+                        validationIssues={validationIssues}
                         onChange={(value) =>
                           onFieldChange(field, field.path, value)
                         }
@@ -895,6 +1197,7 @@ function DataPanel({
                         fields={compiled.manifest.fields}
                         indexes={[]}
                         data={data}
+                        validationIssues={validationIssues}
                         onFieldChange={onFieldChange}
                         onDataChange={onDataChange}
                       />
@@ -1094,31 +1397,18 @@ function Status({
 }
 
 function TemplatePreview({
-  docxUrl,
-  fileName,
-}: Readonly<{ docxUrl?: string; fileName?: string }>) {
-  const [isDark, setIsDark] = useState(false)
-
-  if (!docxUrl) {
+  compiled,
+}: Readonly<{ compiled?: BrowserCompileResult }>) {
+  if (!compiled) {
     return (
       <EmptyState
         title="No template loaded"
-        description="The DOCX preview will appear after you upload or open a sample template."
+        description="The engine preview will appear after you upload or open a sample template."
       />
     )
   }
 
-  return (
-    <DocxViewerPreview
-      key={docxUrl}
-      src={docxUrl}
-      fileName={fileName}
-      isDark={isDark}
-      onIsDarkChange={setIsDark}
-      showUpload={false}
-      className="h-[min(48svh,420px)] overflow-hidden border bg-background"
-    />
-  )
+  return <EngineTemplatePreview preview={compiled.templatePreview} />
 }
 
 function FieldList({ fields }: Readonly<{ fields: readonly TemplateField[] }>) {
@@ -1153,14 +1443,23 @@ function FieldInput({
   field,
   value,
   concreteDataPath,
+  validationIssues,
   onChange,
 }: Readonly<{
   field: TemplateField
   value: unknown
   concreteDataPath: string
-  onChange: (value: string | boolean) => void
+  validationIssues: readonly TemplateDataIssue[]
+  onChange: (value: unknown) => void
 }>) {
   const id = `field-${concreteDataPath.replaceAll(/[^a-zA-Z0-9_-]/gu, "-")}`
+  const errors = fieldValidationMessages(
+    validationIssues,
+    concreteDataPath,
+    field.kind === "image"
+  )
+  const errorId = `${id}-validation-error`
+  const invalid = errors.length > 0
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -1180,7 +1479,16 @@ function FieldInput({
           {field.kind}
         </span>
       </div>
-      {field.kind === "boolean" ? (
+      {field.kind === "image" ? (
+        <ImageFieldInput
+          id={id}
+          value={value}
+          errors={errors}
+          concreteDataPath={concreteDataPath}
+          validationIssues={validationIssues}
+          onChange={onChange}
+        />
+      ) : field.kind === "boolean" ? (
         <label
           className="flex min-h-11 items-center gap-3 border px-3 text-sm"
           htmlFor={id}
@@ -1190,6 +1498,8 @@ function FieldInput({
             type="checkbox"
             checked={value === true}
             required={field.required}
+            aria-invalid={invalid || undefined}
+            aria-describedby={invalid ? errorId : undefined}
             onChange={(event) => onChange(event.target.checked)}
           />
           {value === true ? "True" : "False"}
@@ -1210,9 +1520,14 @@ function FieldInput({
               : ""
           }
           required={field.required}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? errorId : undefined}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
+      {field.kind !== "image" && invalid ? (
+        <FieldErrors id={errorId} errors={errors} />
+      ) : null}
     </div>
   )
 }
@@ -1220,14 +1535,193 @@ function FieldInput({
 type FieldChangeHandler = (
   field: TemplateField,
   path: string,
-  value: string | boolean
+  value: unknown
 ) => void
+
+function ImageFieldInput({
+  id,
+  value,
+  errors,
+  concreteDataPath,
+  validationIssues,
+  onChange,
+}: Readonly<{
+  id: string
+  value: unknown
+  errors: readonly string[]
+  concreteDataPath: string
+  validationIssues: readonly TemplateDataIssue[]
+  onChange: (value: unknown) => void
+}>) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState<string>()
+  const image = isPlaygroundImageValue(value) ? value : undefined
+  const validationErrorId = `${id}-validation-error`
+  const invalid = errors.length > 0
+  const widthInvalid =
+    fieldValidationMessages(validationIssues, `${concreteDataPath}.width`)
+      .length > 0
+  const heightInvalid =
+    fieldValidationMessages(validationIssues, `${concreteDataPath}.height`)
+      .length > 0
+  const altTextInvalid =
+    fieldValidationMessages(validationIssues, `${concreteDataPath}.altText`)
+      .length > 0
+
+  const chooseFile = async (file: File): Promise<void> => {
+    setError(undefined)
+    try {
+      onChange(await readPlaygroundImage(file))
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "The image could not be read."
+      )
+    }
+  }
+
+  const update = (key: keyof PlaygroundImageValue, next: unknown): void => {
+    if (!image) return
+    onChange({ ...image, [key]: next })
+  }
+
+  const updateNumber = (key: "width" | "height", next: string): void => {
+    const parsed = parseFiniteNumberInput(next)
+    if (parsed !== undefined) update(key, parsed)
+  }
+
+  return (
+    <div className="border bg-muted/10 p-3">
+      <Input
+        ref={inputRef}
+        id={id}
+        className="sr-only"
+        type="file"
+        accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+        aria-invalid={invalid || Boolean(error) || undefined}
+        aria-describedby={
+          error ? `${id}-error` : invalid ? validationErrorId : `${id}-hint`
+        }
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (file) void chooseFile(file)
+          event.target.value = ""
+        }}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={() => inputRef.current?.click()}
+        >
+          <HugeiconsIcon icon={Upload02Icon} data-icon="inline-start" />
+          {image ? "Replace image" : "Choose image"}
+        </Button>
+        {image ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => onChange(null)}
+          >
+            <HugeiconsIcon icon={Delete02Icon} data-icon="inline-start" />
+            Clear image
+          </Button>
+        ) : null}
+      </div>
+      {image ? (
+        <div className="mt-3 space-y-3">
+          <p className="font-mono text-[10px] text-muted-foreground">
+            {image.mimeType} · {image.pixelWidth} × {image.pixelHeight} px ·{" "}
+            {formatBytes(image.bytes.length)}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor={`${id}-width`} className="text-xs">
+                Width (twips)
+              </Label>
+              <Input
+                id={`${id}-width`}
+                type="number"
+                min={1}
+                step={1}
+                value={image.width}
+                aria-invalid={widthInvalid || undefined}
+                aria-describedby={widthInvalid ? validationErrorId : undefined}
+                onChange={(event) => updateNumber("width", event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor={`${id}-height`} className="text-xs">
+                Height (twips)
+              </Label>
+              <Input
+                id={`${id}-height`}
+                type="number"
+                min={1}
+                step={1}
+                value={image.height}
+                aria-invalid={heightInvalid || undefined}
+                aria-describedby={heightInvalid ? validationErrorId : undefined}
+                onChange={(event) => updateNumber("height", event.target.value)}
+              />
+            </div>
+          </div>
+          <label
+            className="flex min-h-11 items-center gap-3 border px-3 text-xs"
+            htmlFor={`${id}-aspect`}
+          >
+            <input
+              id={`${id}-aspect`}
+              type="checkbox"
+              checked={image.preserveAspectRatio}
+              onChange={(event) =>
+                update("preserveAspectRatio", event.target.checked)
+              }
+            />
+            Preserve aspect ratio
+          </label>
+          <div>
+            <Label htmlFor={`${id}-alt`} className="text-xs">
+              Alternative text
+            </Label>
+            <Input
+              id={`${id}-alt`}
+              value={image.altText}
+              aria-invalid={altTextInvalid || undefined}
+              aria-describedby={altTextInvalid ? validationErrorId : undefined}
+              onChange={(event) => update("altText", event.target.value)}
+            />
+          </div>
+        </div>
+      ) : (
+        <p id={`${id}-hint`} className="mt-2 text-xs text-muted-foreground">
+          Local PNG or JPEG only. The browser reads explicit bytes; URLs are
+          never fetched.
+        </p>
+      )}
+      {error ? (
+        <p
+          id={`${id}-error`}
+          className="mt-2 text-xs text-destructive"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
+      {invalid ? <FieldErrors id={validationErrorId} errors={errors} /> : null}
+    </div>
+  )
+}
 
 function ArrayFieldEditor({
   field,
   fields,
   indexes,
   data,
+  validationIssues,
   onFieldChange,
   onDataChange,
 }: Readonly<{
@@ -1235,6 +1729,7 @@ function ArrayFieldEditor({
   fields: readonly TemplateField[]
   indexes: readonly number[]
   data: Readonly<Record<string, unknown>>
+  validationIssues: readonly TemplateDataIssue[]
   onFieldChange: FieldChangeHandler
   onDataChange: (value: Readonly<Record<string, unknown>>) => void
 }>) {
@@ -1259,6 +1754,10 @@ function ArrayFieldEditor({
     /[^a-zA-Z0-9_-]/gu,
     "-"
   )}`
+  const errors = path
+    ? fieldValidationMessages(validationIssues, path)
+    : ([] as const)
+  const errorId = `${headingId}-validation-error`
   const rowKeysRef = useRef<string[]>([])
   const rowSequenceRef = useRef(0)
   while (rowKeysRef.current.length < rows.length) {
@@ -1275,7 +1774,12 @@ function ArrayFieldEditor({
   }))
 
   return (
-    <fieldset className="min-w-0 border p-4" aria-labelledby={headingId}>
+    <fieldset
+      className="min-w-0 border p-4"
+      aria-labelledby={headingId}
+      aria-invalid={errors.length > 0 || undefined}
+      aria-describedby={errors.length > 0 ? errorId : undefined}
+    >
       <legend className="sr-only">{field.path}</legend>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
@@ -1315,6 +1819,8 @@ function ArrayFieldEditor({
           Add row
         </Button>
       </div>
+
+      {errors.length > 0 ? <FieldErrors id={errorId} errors={errors} /> : null}
 
       {rows.length === 0 ? (
         <div className="mt-4 border border-dashed bg-muted/20 px-4 py-6 text-center">
@@ -1359,6 +1865,7 @@ function ArrayFieldEditor({
                         field={candidate}
                         concreteDataPath={candidatePath}
                         value={getPath(data, candidatePath)}
+                        validationIssues={validationIssues}
                         onChange={(next) =>
                           onFieldChange(candidate, candidatePath, next)
                         }
@@ -1372,6 +1879,7 @@ function ArrayFieldEditor({
                       fields={fields}
                       indexes={rowIndexes}
                       data={data}
+                      validationIssues={validationIssues}
                       onFieldChange={onFieldChange}
                       onDataChange={onDataChange}
                     />
@@ -1383,6 +1891,23 @@ function ArrayFieldEditor({
         </div>
       )}
     </fieldset>
+  )
+}
+
+function FieldErrors({
+  id,
+  errors,
+}: Readonly<{ id: string; errors: readonly string[] }>) {
+  return (
+    <div
+      id={id}
+      className="mt-2 space-y-1 text-xs text-destructive"
+      role="alert"
+    >
+      {errors.map((error) => (
+        <p key={error}>{error}</p>
+      ))}
+    </div>
   )
 }
 
@@ -1425,9 +1950,10 @@ function createArrayItem(
   return item
 }
 
-function starterValue(field: TemplateField): string | number | boolean {
+function starterValue(field: TemplateField): unknown {
   if (field.kind === "number") return 0
   if (field.kind === "boolean") return false
+  if (field.kind === "image") return null
   return ""
 }
 
@@ -1524,4 +2050,43 @@ function formatBytes(bytes: number): string {
   if (bytes < 1_000) return `${bytes} B`
   if (bytes < 1_000_000) return `${(bytes / 1_000).toFixed(1)} KB`
   return `${(bytes / 1_000_000).toFixed(1)} MB`
+}
+
+function schemaError(
+  compiled: BrowserCompileResult,
+  value: Readonly<Record<string, unknown>>
+): string | undefined {
+  const validation = validateTemplateData(compiled.jsonSchema, value)
+  return validation.ok ? undefined : formatTemplateDataErrors(validation.errors)
+}
+
+function panelForKey(
+  key: string,
+  current: WorkspacePanel
+): WorkspacePanel | undefined {
+  const index = workspacePanels.findIndex((panel) => panel.id === current)
+  if (key === "Home") return workspacePanels[0].id
+  if (key === "End") return workspacePanels.at(-1)?.id
+  if (key !== "ArrowLeft" && key !== "ArrowRight") return undefined
+  const direction = key === "ArrowRight" ? 1 : -1
+  const nextIndex =
+    (index + direction + workspacePanels.length) % workspacePanels.length
+  return workspacePanels[nextIndex]?.id
+}
+
+function isPlaygroundImageValue(value: unknown): value is PlaygroundImageValue {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false
+  const candidate = value as Partial<PlaygroundImageValue>
+  return (
+    (candidate.mimeType === "image/png" ||
+      candidate.mimeType === "image/jpeg") &&
+    Array.isArray(candidate.bytes) &&
+    typeof candidate.pixelWidth === "number" &&
+    typeof candidate.pixelHeight === "number" &&
+    typeof candidate.width === "number" &&
+    typeof candidate.height === "number" &&
+    typeof candidate.preserveAspectRatio === "boolean" &&
+    typeof candidate.altText === "string"
+  )
 }

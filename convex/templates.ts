@@ -6,6 +6,7 @@ import {
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { internalMutation, mutation, query } from "./_generated/server"
+import { consumeRegisteredUpload } from "./storage"
 import { deleteStoredFile, getBearerUrl } from "./storageAccess"
 import {
   assertDiagnosticsSummary,
@@ -100,34 +101,24 @@ export const create = mutation({
   args: {
     ...SessionIdArg,
     ...mutableTemplateMetadataArgs,
-    originalFileStorageId: v.optional(v.id("_storage")),
+    originalFileUploadIntentId: v.optional(v.id("uploadIntents")),
   },
   returns: v.id("templates"),
   handler: async (ctx, args) => {
     assertSessionId(args.sessionId)
     validateMetadata(args)
-    if (args.originalFileStorageId) {
-      const storedFile = await ctx.db.system.get(
-        "_storage",
-        args.originalFileStorageId
-      )
-      if (
-        !storedFile ||
-        storedFile.size > 20_000_000 ||
-        (storedFile.contentType !== undefined &&
-          storedFile.contentType !==
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-      ) {
-        throw new Error("Stored template file is missing or invalid")
-      }
-    }
+    const originalFileStorageId = args.originalFileUploadIntentId
+      ? await consumeRegisteredUpload(ctx, {
+          sessionId: args.sessionId,
+          uploadIntentId: args.originalFileUploadIntentId,
+          kind: "docx",
+        })
+      : undefined
     const now = Date.now()
     return await ctx.db.insert("templates", {
       sessionId: args.sessionId,
       name: args.name,
-      ...(args.originalFileStorageId
-        ? { originalFileStorageId: args.originalFileStorageId }
-        : {}),
+      ...(originalFileStorageId ? { originalFileStorageId } : {}),
       sourceHash: args.sourceHash,
       engineVersion: args.engineVersion,
       manifestJson: args.manifestJson,

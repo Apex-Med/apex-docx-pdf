@@ -14,6 +14,10 @@ import type {
   RendererWorkerResponse,
   WorkerProgressStage,
 } from "./protocol"
+import {
+  clonePreviewAssetsForResponse,
+  previewAssetTransferList,
+} from "./preview-assets"
 
 type RendererWorkerScope = Readonly<{
   addEventListener: (
@@ -60,13 +64,17 @@ export function installRendererWorker(
             4,
             "Validating DOCX package"
           )
-          const compiled = await engine.compile(
-            new Uint8Array(request.templateBytes),
-            {
-              unsupportedFeatures: "strict",
-              signal: controller.signal,
-            }
-          )
+          const templateBytes = new Uint8Array(request.templateBytes)
+          const inspection = await engine.inspect(templateBytes, {
+            signal: controller.signal,
+          })
+          const compiled = await engine.compile(templateBytes, {
+            unsupportedFeatures: "strict",
+            signal: controller.signal,
+          })
+          const preview = await engine.preview(compiled, {
+            signal: controller.signal,
+          })
           progress(
             scope,
             request.requestId,
@@ -84,6 +92,9 @@ export function installRendererWorker(
               []
             )
           }
+          const previewAssets = clonePreviewAssetsForResponse(
+            compiled.source.assets
+          )
           const result: BrowserCompileResult = {
             engineVersion: engine.version,
             fontRegistryHash: engine.fontRegistryHash,
@@ -91,15 +102,28 @@ export function installRendererWorker(
             manifest: compiled.manifest,
             jsonSchema: compiled.jsonSchema,
             starterData: compiled.starterData,
-            diagnostics: compiled.diagnostics,
+            templatePreview: {
+              displayList: preview.displayList,
+              placeholderNodes: preview.placeholderNodes,
+              assets: previewAssets,
+            },
+            inspection,
+            diagnostics: Object.freeze([
+              ...compiled.diagnostics,
+              ...preview.diagnostics,
+            ]),
           }
           progress(scope, request.requestId, "complete", 4, 4, "Template ready")
-          respond(scope, {
-            type: "success",
-            requestId: request.requestId,
-            operation: "compile",
-            result,
-          })
+          respond(
+            scope,
+            {
+              type: "success",
+              requestId: request.requestId,
+              operation: "compile",
+              result,
+            },
+            previewAssetTransferList(previewAssets)
+          )
           return
         }
 

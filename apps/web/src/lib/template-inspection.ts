@@ -4,6 +4,8 @@ import type {
 } from "@apex-docx-pdf/browser"
 import type { TemplateFieldKind } from "@apex-docx-pdf/core"
 
+import { REFERENCE_FONT_POLICY } from "./font-policy"
+
 const FIELD_KIND_ORDER = [
   "string",
   "number",
@@ -18,15 +20,16 @@ const FIELD_KIND_ORDER = [
 export const BROWSER_PROFILE_LABEL = "Phase 7 browser profile"
 
 export const BUNDLED_FONT_PROFILE = Object.freeze({
-  family: "Noto Sans",
-  fallbackFamily: "Noto Sans",
-  faces: Object.freeze([
-    "Regular · 400 normal",
-    "Bold · 700 normal",
-    "Italic · 400 italic",
-    "Bold Italic · 700 italic",
-  ]),
-  aliases: Object.freeze(["Calibri", "Arial", "Helvetica", "Times New Roman"]),
+  families: REFERENCE_FONT_POLICY.families,
+  fallbackFamily: REFERENCE_FONT_POLICY.fallbackFamily,
+  catalogVersion: REFERENCE_FONT_POLICY.catalogVersion,
+  uploadedEmbeddedFonts: REFERENCE_FONT_POLICY.allowUploadedEmbeddedFonts,
+  aliases: Object.freeze(
+    REFERENCE_FONT_POLICY.systemAliases.map((alias) => {
+      const weight = "weight" in alias ? alias.weight : undefined
+      return `${alias.from} → ${alias.to}${weight === undefined ? "" : ` (${weight})`}`
+    })
+  ),
 })
 
 export const PROFILE_CAPABILITIES = Object.freeze([
@@ -66,6 +69,9 @@ export type TemplateInspection = Readonly<{
     warning: number
     info: number
   }>
+  documentModelAvailable: boolean
+  requiredFonts: BrowserCompileResult["inspection"]["requiredFonts"]
+  features: BrowserCompileResult["inspection"]["features"]
 }>
 
 export function inspectTemplate(
@@ -106,6 +112,9 @@ export function inspectTemplate(
       info: compiled.diagnostics.filter(({ severity }) => severity === "info")
         .length,
     },
+    documentModelAvailable: compiled.inspection.documentModelAvailable,
+    requiredFonts: compiled.inspection.requiredFonts,
+    features: compiled.inspection.features,
   }
 }
 

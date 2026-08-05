@@ -10,6 +10,16 @@ export type TextStyle = Readonly<{
   fontStyle: FontStyle
   underline: boolean
   color: string
+  /** Solid RGB highlight behind the run, or null for no highlight. */
+  highlightColor?: string | null
+  /** Word run baseline positioning; layout applies the deterministic script presentation rule. */
+  verticalAlignment?: "baseline" | "superscript" | "subscript"
+}>
+
+export type ParagraphTabStop = Readonly<{
+  /** Position from the writable area's leading margin. */
+  position: Twip
+  alignment: "left"
 }>
 
 export type LineSpacing =
@@ -65,6 +75,8 @@ export type ParagraphProperties = Readonly<{
   widowControl: boolean
   pageBreakBefore: boolean
   numbering: ParagraphNumbering | null
+  /** Ordered explicit left tab stops; tabs without a following stop are invalid. */
+  tabStops?: readonly ParagraphTabStop[]
 }>
 
 export type SemanticText = Readonly<{
@@ -105,6 +117,8 @@ export type SemanticImage = Readonly<{
     /** True only when DrawingML explicitly locks aspect ratio and the extent agrees. */
     preserve: boolean
   }>
+  /** Author-provided alternative text for dynamic images, when available. */
+  altText?: string
 }>
 
 export type PageFieldKind = "PAGE" | "NUMPAGES"
@@ -120,7 +134,21 @@ export type SemanticPageField = Readonly<{
   style: TextStyle
 }>
 
-export type SemanticInline = SemanticText | SemanticImage | SemanticPageField
+export type SemanticBreak = Readonly<{
+  type: "break"
+  id: NodeId
+  source: SourceLocation
+  kind: "line" | "page"
+}>
+
+export type SemanticTab = Readonly<{
+  type: "tab"
+  id: NodeId
+  source: SourceLocation
+}>
+
+export type SemanticInline =
+  SemanticText | SemanticImage | SemanticPageField | SemanticBreak | SemanticTab
 
 export type SemanticParagraph = Readonly<{
   type: "paragraph"
@@ -153,6 +181,14 @@ export type TableBorders = Readonly<{
   insideVertical: TableBorder | null
 }>
 
+/** Direct cell borders. Null means the side is not directly specified. */
+export type TableCellBorders = Readonly<{
+  top: TableBorder | null
+  right: TableBorder | null
+  bottom: TableBorder | null
+  left: TableBorder | null
+}>
+
 export type SemanticTableCell = Readonly<{
   type: "tableCell"
   id: NodeId
@@ -168,6 +204,8 @@ export type SemanticTableCell = Readonly<{
   verticalAlignment: "top" | "center" | "bottom"
   /** Solid RGB fill, or null for no cell shading. */
   fillColor: string | null
+  /** Direct borders override the corresponding table or shared-grid edge. */
+  borders: TableCellBorders
   blocks: readonly SemanticParagraph[]
 }>
 
@@ -200,7 +238,19 @@ export type SemanticTable = Readonly<{
   rows: readonly SemanticTableRow[]
 }>
 
-export type SemanticBlock = SemanticParagraph | SemanticTable
+export type SemanticHorizontalRule = Readonly<{
+  type: "horizontalRule"
+  id: NodeId
+  /** Links the emitted line directly to the accepted w:pict/v:rect source. */
+  source: SourceLocation
+  properties: ParagraphProperties
+  /** The exact K3 VML profile is a 1.5-point-high rule block. */
+  height: Twip
+  color: string
+}>
+
+export type SemanticBlock =
+  SemanticParagraph | SemanticTable | SemanticHorizontalRule
 
 export type SectionProperties = Readonly<{
   pageWidth: Twip
@@ -257,7 +307,9 @@ export type ResolvedTableRow = Omit<SemanticTableRow, "cells"> & {
 export type ResolvedTable = Omit<SemanticTable, "rows"> & {
   readonly rows: readonly ResolvedTableRow[]
 }
-export type ResolvedBlock = ResolvedParagraph | ResolvedTable
+export type ResolvedHorizontalRule = SemanticHorizontalRule
+export type ResolvedBlock =
+  ResolvedParagraph | ResolvedTable | ResolvedHorizontalRule
 export type ResolvedSection = Omit<SemanticSection, "blocks"> & {
   readonly blocks: readonly ResolvedBlock[]
 }

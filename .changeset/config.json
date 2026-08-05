@@ -4,8 +4,10 @@
   "commit": false,
   "fixed": [
     [
+      "apex-docx-pdf",
       "@apex-docx-pdf/browser",
       "@apex-docx-pdf/core",
+      "@apex-docx-pdf/devtools",
       "@apex-docx-pdf/docx",
       "@apex-docx-pdf/engine",
       "@apex-docx-pdf/fonts",

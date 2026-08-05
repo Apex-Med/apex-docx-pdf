@@ -23,92 +23,99 @@ const siteUrl =
 const socialImage = siteUrl ? `${siteUrl}/og-image.png` : "/og-image.png"
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  head: () => ({
-    meta: [
-      {
-        charSet: "utf-8",
-      },
-      {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
-      },
-      {
-        title,
-      },
-      {
-        name: "description",
-        content: description,
-      },
-      {
-        name: "color-scheme",
-        content: "light dark",
-      },
-      {
-        name: "theme-color",
-        content: "#f7f7f5",
-      },
-      {
-        property: "og:title",
-        content: title,
-      },
-      {
-        property: "og:description",
-        content: description,
-      },
-      {
-        property: "og:type",
-        content: "website",
-      },
-      {
-        property: "og:url",
-        content: siteUrl ?? "/",
-      },
-      {
-        property: "og:image",
-        content: socialImage,
-      },
-      {
-        property: "og:image:width",
-        content: "1200",
-      },
-      {
-        property: "og:image:height",
-        content: "630",
-      },
-      {
-        name: "twitter:card",
-        content: "summary_large_image",
-      },
-      {
-        name: "twitter:title",
-        content: title,
-      },
-      {
-        name: "twitter:description",
-        content: description,
-      },
-      {
-        name: "twitter:image",
-        content: socialImage,
-      },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      {
-        rel: "icon",
-        href: "/icon.svg",
-        type: "image/svg+xml",
-      },
-      {
-        rel: "manifest",
-        href: "/manifest.json",
-      },
-      ...(siteUrl ? [{ rel: "canonical", href: siteUrl }] : []),
-    ],
-  }),
+  head: ({ matches }) => {
+    const pathname = matches.at(-1)?.pathname ?? "/"
+    const canonicalUrl = siteUrl
+      ? new URL(pathname, `${siteUrl}/`).toString()
+      : undefined
+
+    return {
+      meta: [
+        {
+          charSet: "utf-8",
+        },
+        {
+          name: "viewport",
+          content: "width=device-width, initial-scale=1",
+        },
+        {
+          title,
+        },
+        {
+          name: "description",
+          content: description,
+        },
+        {
+          name: "color-scheme",
+          content: "light dark",
+        },
+        {
+          name: "theme-color",
+          content: "#f7f7f5",
+        },
+        {
+          property: "og:title",
+          content: title,
+        },
+        {
+          property: "og:description",
+          content: description,
+        },
+        {
+          property: "og:type",
+          content: "website",
+        },
+        {
+          property: "og:url",
+          content: canonicalUrl ?? pathname,
+        },
+        {
+          property: "og:image",
+          content: socialImage,
+        },
+        {
+          property: "og:image:width",
+          content: "1200",
+        },
+        {
+          property: "og:image:height",
+          content: "630",
+        },
+        {
+          name: "twitter:card",
+          content: "summary_large_image",
+        },
+        {
+          name: "twitter:title",
+          content: title,
+        },
+        {
+          name: "twitter:description",
+          content: description,
+        },
+        {
+          name: "twitter:image",
+          content: socialImage,
+        },
+      ],
+      links: [
+        {
+          rel: "stylesheet",
+          href: appCss,
+        },
+        {
+          rel: "icon",
+          href: "/icon.svg",
+          type: "image/svg+xml",
+        },
+        {
+          rel: "manifest",
+          href: "/manifest.json",
+        },
+        ...(canonicalUrl ? [{ rel: "canonical", href: canonicalUrl }] : []),
+      ],
+    }
+  },
   notFoundComponent: () => (
     <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center px-4 py-16">
       <h1 className="text-2xl font-semibold tracking-tight">Page not found</h1>

@@ -9,9 +9,7 @@
     {
       "name": "cold-engine-create",
       "iterations": 1,
-      "samplesMs": [
-        0.555
-      ],
+      "samplesMs": [0.555],
       "medianMs": 0.555,
       "minMs": 0.555,
       "maxMs": 0.555
@@ -19,9 +17,7 @@
     {
       "name": "cold-font-engine-create",
       "iterations": 1,
-      "samplesMs": [
-        44.592
-      ],
+      "samplesMs": [44.592],
       "medianMs": 44.592,
       "minMs": 44.592,
       "maxMs": 44.592
@@ -29,9 +25,7 @@
     {
       "name": "compile-one-page",
       "iterations": 1,
-      "samplesMs": [
-        7.714
-      ],
+      "samplesMs": [7.714],
       "medianMs": 7.714,
       "minMs": 7.714,
       "maxMs": 7.714,
@@ -40,10 +34,7 @@
     {
       "name": "repeated-render-one-page",
       "iterations": 2,
-      "samplesMs": [
-        7.73,
-        0.623
-      ],
+      "samplesMs": [7.73, 0.623],
       "medianMs": 7.73,
       "minMs": 0.623,
       "maxMs": 7.73,
@@ -53,9 +44,7 @@
     {
       "name": "compile-render-1-page",
       "iterations": 1,
-      "samplesMs": [
-        4.246
-      ],
+      "samplesMs": [4.246],
       "medianMs": 4.246,
       "minMs": 4.246,
       "maxMs": 4.246,
@@ -65,9 +54,7 @@
     {
       "name": "compile-render-5-page",
       "iterations": 1,
-      "samplesMs": [
-        6.682
-      ],
+      "samplesMs": [6.682],
       "medianMs": 6.682,
       "minMs": 6.682,
       "maxMs": 6.682,
@@ -77,9 +64,7 @@
     {
       "name": "render-invoice-50-rows",
       "iterations": 1,
-      "samplesMs": [
-        33.003
-      ],
+      "samplesMs": [33.003],
       "medianMs": 33.003,
       "minMs": 33.003,
       "maxMs": 33.003,

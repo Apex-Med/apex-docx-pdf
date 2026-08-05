@@ -8,6 +8,7 @@ dist-ssr
 .tanstack
 .wrangler
 .output
+.tmp
 .vinxi
 __unconfig*
 todos.json

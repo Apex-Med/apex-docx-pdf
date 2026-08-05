@@ -4,20 +4,22 @@ Apex DOCX PDF remains prerelease software. The npm packages use a shared `0.x` v
 
 ## Package set
 
-The public, fixed-version package set is `core`, `docx`, `fonts`, `images`, `layout`, `pdf`, `template`, `engine`, and `browser` under the `@apex-docx-pdf` scope. The reference web app, docs, UI workspace, and `testkit` stay private. Fixed Changesets versions keep internal dependencies coherent while the public API is still evolving.
+The public, fixed-version package set is `core`, `docx`, `fonts`, `images`, `layout`, `pdf`, `template`, `engine`, `browser`, and `devtools` under the `@apex-docx-pdf` scope, plus the unscoped `apex-docx-pdf` umbrella. The reference web app, docs, UI workspace, and `testkit` stay private. Fixed Changesets versions keep internal dependencies coherent while the public API is still evolving.
 
-An unscoped `apex-docx-pdf` umbrella package is intentionally deferred. A useful umbrella must expose one deliberate top-level API without pulling browser-worker code or optional heavy adapters into every consumer. Add it only after an API review determines the exact exports, dependency cost, and tree-shaking evidence; do not make the private monorepo root publishable.
+The unscoped umbrella deliberately exports the engine factory, operation error, compatibility version, and public core contracts. It depends on `core` and `engine` only: browser-worker and React devtools code remain opt-in subpackages. The private monorepo root is not publishable.
+
+`@apex-docx-pdf/devtools` exposes the React display-list preview used by the reference playground. React remains a peer dependency, and the engine/core/layout package graph does not depend on devtools.
 
 ## Build and package contract
 
 Workspace manifests continue to export TypeScript source so Bun tests, Vite, and editor typechecking retain the current local-resolution behavior. `bun run build` uses the shared `tsup.config.ts` to create ESM bundles, declarations, declaration maps where supported by the toolchain, JavaScript source maps, and tree-shaken output. The preparation script writes a publication-only manifest into each `dist` directory, replaces `workspace:*` ranges with the exact lockstep prerelease version, and copies the repository license and README. Only `dist` is packed or published.
 
-Run `bun run packages:check` to build and then validate every publication directory with Publint, Are the Types Wrong, and `npm pack --dry-run`. `npm pack` is used only to inspect the artifact; dependency installation remains Bun-only.
+Run `bun run packages:check` to build and then validate every publication directory with Publint, Are the Types Wrong, and `npm pack --dry-run`. Validation also enforces packed/unpacked size budgets and required license, README, declaration, manifest, and font provenance/OFL assets. `npm pack` is used only to inspect the artifact; dependency installation remains Bun-only. Run `bun run packages:size:review` after a build to regenerate the checked-in measurement report.
 
 ## Version workflow
 
 1. Add one focused Changeset for every consumer-visible change. Use `patch` by default during `0.x`; use `minor` for a deliberate new public capability or breaking prerelease API change.
-2. Keep `.changeset/pre.json` in `pre` mode with the `next` tag. If prerelease mode is ever exited deliberately, run `bunx changeset pre enter next` before producing another prerelease version. Never run a normal Changesets version pass for this package set while prerelease policy is active.
+2. Keep `.changeset/pre.json` in `pre` mode with the `next` tag. If prerelease mode is ever exited deliberately, run `bunx changeset pre enter next` before producing another prerelease version. Never run a normal Changesets version pass for this package set while prerelease policy is active. `bun run release:validate` checks this mode, the complete fixed group, lockstep versions, and the initial prerelease Changeset in ordinary CI as well as the publish workflow.
 3. Merge the generated version PR only after CI and the package checklist pass.
 4. Review the packed file lists, exact internal dependency versions, licenses, package sizes, declarations, source maps, and changelogs.
 5. Verify npm scope ownership and configure each package's GitHub Actions trusted publisher for this repository, the `publish-next.yml` workflow, and the protected `npm` environment.

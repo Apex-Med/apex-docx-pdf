@@ -3,9 +3,7 @@ title: "Convex integration"
 description: "The optional Phase 7 persistence, ownership, upload, cache, and cleanup boundary."
 ---
 
-# Convex integration
-
-Phase 7 defines dormant application groundwork around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; the Convex adapter covers demo isolation, metadata, file storage, status, and lifecycle operations for possible future product work. The current playground does not mount this adapter: it is local-only and never uploads the template, data, or generated PDF. This page describes the tested reference contract, not an enabled product feature, deployed service, or general-purpose document authorization system.
+Phase 7 adds optional application persistence around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; the Convex adapter covers demo isolation, metadata, file storage, status, and lifecycle operations. The current playground mounts that adapter only when a public Convex URL is configured, keeps its persistence drawer collapsed and disabled by default, and uploads nothing until the user explicitly enables persistence and chooses Save. This page describes the tested reference contract, not a production identity system, deployed service, or general-purpose document authorization system.
 
 <Warning>
   The anonymous session used by the reference application isolates one browser
@@ -21,20 +19,21 @@ Clearing browser state, changing browsers, or changing devices can make anonymou
 
 The ownership check is deliberately kept behind one principal-resolution seam. A production host can replace anonymous session establishment with Clerk or WorkOS verification and map the verified principal into the same session-owned query and mutation contract. That migration should strengthen how the principal is established without requiring a second document ownership model or moving authorization into the renderer.
 
-## Current local-only playground
+## Current opt-in playground
 
-The current playground has no cloud persistence controls and does not invoke any storage mutation. DOCX bytes, JSON data, and rendered PDF bytes remain in the browser workflow. A configured Convex URL does not change that document-flow boundary because the playground does not import or mount the persistence component.
+The playground always renders DOCX bytes, JSON data, and generated PDF bytes in its browser worker. Without `VITE_CONVEX_URL` (or the server-side `CONVEX_URL` fallback), the persistence panel is absent and the document workflow is local-only. With a configured Convex URL, the playground mounts a collapsed persistence panel, but persistence remains disabled until the user turns it on. Only an explicit Save then performs direct DOCX/PDF uploads and writes bounded metadata.
 
-If a future SaaS host enables this adapter, that product must make persistence an explicit, informed action and define authentication, authorization, tenancy, retention, deletion, audit, and rate policies. It must not silently turn cloud storage on for an existing local workflow.
+A production host must keep persistence an explicit, informed action and define authentication, authorization, tenancy, retention, deletion, audit, and rate policies. It must not silently turn cloud storage on for an existing local workflow.
 
 ## Direct uploads
 
 Large DOCX and PDF artifacts belong in Convex file storage, not database documents. A browser upload follows this shape:
 
-1. An owned mutation returns a short-lived Convex generated upload URL.
-2. The browser posts the DOCX bytes directly to that URL.
-3. The browser submits the returned storage ID to an owned finalization mutation.
-4. The mutation records bounded metadata and schedules or records render state.
+1. An owned mutation creates a 65-minute session-owned upload intent and returns its ID, an intent-specific MIME marker, and a short-lived Convex generated upload URL.
+2. The browser posts the DOCX bytes directly to that URL using the exact returned MIME marker.
+3. The browser immediately registers the returned storage ID against that intent; kind, ownership, expiry, exact marker, and byte size are checked.
+4. The template or render mutation consumes the registered intent exactly once and records the storage ID with bounded metadata.
+5. A scheduled cleanup searches the bounded storage creation-time window for the marker and deletes unclaimed artifacts in bounded batches after expiry.
 
 The DOCX does not pass through a Vercel server function. This avoids buffering a large document in the web server runtime and avoids treating that runtime as a file proxy. Generated upload URLs must be requested just in time and are not durable application credentials.
 
@@ -74,7 +73,7 @@ Realtime delivery is a view of persisted state, not proof that work is still run
 
 Deleting a template removes its template blob and the PDF blobs for its saved renders as well as their metadata. Cleanup is bounded: one mutation or action processes a limited page of related records and storage IDs, then continues from a cursor until the deletion is complete. While cleanup is in progress, the parent record should be marked as deleting and excluded from ordinary reads so a partially deleted document is not presented as intact.
 
-Direct uploads have an unavoidable abandonment window. If a tab closes after uploading bytes but before finalization, Convex file storage can contain a blob with no application record to own or enumerate through the normal document indexes. Request expiry does not itself delete an already uploaded blob. The host needs a bounded orphan strategy—such as a short-lived upload-intent record plus scheduled cleanup—and must document what its platform APIs can actually discover and delete. Phase 7 does not promise immediate or perfect reclamation of every abandoned upload.
+The reference adapter keeps each session-owned upload intent alive for 65 minutes, slightly longer than Convex's documented one-hour generated upload URL. The exact MIME marker embeds the intent ID, so cleanup can find app-issued storage in the intent's indexed creation-time window even when the browser never completes registration. Registered storage IDs that are not consumed by a template/render mutation are deleted; intent consumption is transactional and one-time, while consumed files are protected for their owning record. Clients that bypass the returned marker are outside the automatic-reclamation contract, so deployment-level storage audits and retention policy remain appropriate defense in depth.
 
 ## Logging and audit data
 
