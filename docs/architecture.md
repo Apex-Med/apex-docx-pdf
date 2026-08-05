@@ -41,7 +41,7 @@ Each arrow is an explicit typed boundary. OOXML vocabulary ends at `@apex-docx-p
 @apex-docx-pdf/browser  -> core + engine
 @apex-docx-pdf/testkit  -> core + fflate
 @workspace/ui           -> no workspace packages
-web                     -> browser + core + engine + ui
+web                     -> browser + core + engine + ui + Convex/TanStack adapters
 @apex-docx-pdf/docs     -> no workspace packages
 ```
 
@@ -56,6 +56,14 @@ These arrows list the important internal workspace and renderer-runtime dependen
 - Resource limits are explicit, conservative, and enforced before allocation where practical.
 - Diagnostics have stable codes, severity, source, and deterministic ordering.
 - No engine stage reads operating-system fonts, current locale, current timezone, current time, randomness, filesystem resources, or network resources implicitly.
+
+## Phase 7 application adapter
+
+Engine version `0.0.0-phase.7` exposes its version and the explicit font registry hash to the browser protocol so the application can construct a cache identity from `engineVersion + templateHash + fontRegistryHash + dataHash + renderOptionsHash`. Hashing and cache lookup remain outside compilation, layout, and PDF serialization.
+
+The optional root `convex/` backend belongs to the reference application, not the renderer package graph. It stores bounded session-owned metadata and Convex storage IDs, issues generated direct-upload URLs, exposes indexed/paginated/realtime reads, and schedules bounded deletion. The web router uses Convex React Query with TanStack Query and the TanStack Router SSR integration when a public Convex URL is available. Without that URL, the same worker renderer remains available and persistence is absent.
+
+Anonymous `convex-helpers` session IDs are a demonstration ownership seam, not identity proof. Every public backend read/write compares that session with the stored owner, but production hosts must replace principal establishment with verified identity and define tenant, sharing, audit, retention, rate, and malware policies. Generated storage URLs are bearer URLs and are created only after an owned record read.
 
 ## Phase 6 supported slice
 

@@ -787,12 +787,12 @@ function PDFViewerSearchControl({
         pageNumber: result.pageIndex + 1,
         ...(firstRect
           ? {
-              pageCoordinates: {
-                x: firstRect.origin.x,
-                y: firstRect.origin.y,
-              },
-              alignY: 30,
-            }
+            pageCoordinates: {
+              x: firstRect.origin.x,
+              y: firstRect.origin.y,
+            },
+            alignY: 30,
+          }
           : {}),
         behavior: "auto",
       })
@@ -841,12 +841,12 @@ function PDFViewerSearchControl({
             pageNumber: firstResult.pageIndex + 1,
             ...(firstRect
               ? {
-                  pageCoordinates: {
-                    x: firstRect.origin.x,
-                    y: firstRect.origin.y,
-                  },
-                  alignY: 30,
-                }
+                pageCoordinates: {
+                  x: firstRect.origin.x,
+                  y: firstRect.origin.y,
+                },
+                alignY: 30,
+              }
               : {}),
             behavior: "auto",
           })
@@ -1037,8 +1037,8 @@ function PDFViewerToolbar({
   onZoomChange: (zoomLevel: number) => void
 }) {
   return (
-    <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b bg-background px-2 py-2 sm:px-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
         <TooltipProvider>
           <ToolbarTooltip label="Toggle thumbnails">
             <Button
@@ -1064,7 +1064,7 @@ function PDFViewerToolbar({
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
           {showRotateControls ? (
             <>
-              <div className="flex flex-none items-center gap-1">
+              <div className="hidden flex-none items-center gap-1 sm:flex">
                 <ToolbarTooltip label="Rotate counterclockwise">
                   <Button
                     type="button"
@@ -1098,7 +1098,7 @@ function PDFViewerToolbar({
               </div>
               <Separator
                 orientation="vertical"
-                className="mx-1 h-4 self-center"
+                className="mx-1 hidden h-4 self-center sm:block"
               />
             </>
           ) : null}
@@ -1349,18 +1349,18 @@ function PDFViewerThumbnails({
         const thumbnailImageStyle: React.CSSProperties =
           pageRotationDelta % 2 === 1
             ? {
-                height: meta.width,
-                transform: `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
-                width: meta.height,
-              }
+              height: meta.width,
+              transform: `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
+              width: meta.height,
+            }
             : {
-                height: meta.height,
-                transform:
-                  pageRotationDelta === 0
-                    ? undefined
-                    : `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
-                width: meta.width,
-              }
+              height: meta.height,
+              transform:
+                pageRotationDelta === 0
+                  ? undefined
+                  : `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
+              width: meta.width,
+            }
 
         return (
           <div
@@ -1955,15 +1955,15 @@ function applyPageRotationDeltasToScrollerLayout({
       layout.strategy === ScrollStrategy.Horizontal
         ? maxHeight
         : layout.startSpacing +
-          startSpacingAdjustment +
-          offset +
-          layout.endSpacing,
+        startSpacingAdjustment +
+        offset +
+        layout.endSpacing,
     totalWidth:
       layout.strategy === ScrollStrategy.Horizontal
         ? layout.startSpacing +
-          startSpacingAdjustment +
-          offset +
-          layout.endSpacing
+        startSpacingAdjustment +
+        offset +
+        layout.endSpacing
         : maxWidth,
   }
 }
@@ -2049,14 +2049,14 @@ function PDFViewerScroller({
         style={
           scrollerLayout.strategy === ScrollStrategy.Horizontal
             ? {
-                width: scrollerLayout.startSpacing,
-                height: "100%",
-                flexShrink: 0,
-              }
+              width: scrollerLayout.startSpacing,
+              height: "100%",
+              flexShrink: 0,
+            }
             : {
-                height: scrollerLayout.startSpacing,
-                width: "100%",
-              }
+              height: scrollerLayout.startSpacing,
+              width: "100%",
+            }
         }
       />
       <div
@@ -2068,13 +2068,13 @@ function PDFViewerScroller({
           boxSizing: "border-box",
           ...(scrollerLayout.strategy === ScrollStrategy.Horizontal
             ? {
-                flexDirection: "row",
-                minHeight: "100%",
-              }
+              flexDirection: "row",
+              minHeight: "100%",
+            }
             : {
-                flexDirection: "column",
-                minWidth: "fit-content",
-              }),
+              flexDirection: "column",
+              minWidth: "fit-content",
+            }),
         }}
       >
         {scrollerLayout.items.map((item) => (
@@ -2106,14 +2106,14 @@ function PDFViewerScroller({
         style={
           scrollerLayout.strategy === ScrollStrategy.Horizontal
             ? {
-                width: scrollerLayout.endSpacing,
-                height: "100%",
-                flexShrink: 0,
-              }
+              width: scrollerLayout.endSpacing,
+              height: "100%",
+              flexShrink: 0,
+            }
             : {
-                height: scrollerLayout.endSpacing,
-                width: "100%",
-              }
+              height: scrollerLayout.endSpacing,
+              width: "100%",
+            }
         }
       />
     </div>
@@ -2348,12 +2348,12 @@ function PDFViewerInner({
           pageNumber,
           ...(pageSize
             ? {
-                pageCoordinates: {
-                  x: ((area.left ?? 0) / 100) * pageSize.width,
-                  y: (area.top / 100) * pageSize.height,
-                },
-                alignY: 25,
-              }
+              pageCoordinates: {
+                x: ((area.left ?? 0) / 100) * pageSize.width,
+                y: (area.top / 100) * pageSize.height,
+              },
+              alignY: 25,
+            }
             : {}),
           behavior: options?.behavior === "smooth" ? "smooth" : "auto",
         })
@@ -2461,7 +2461,7 @@ function PDFViewerInner({
       if (viewport && scrollDelta !== 0) {
         viewport.scrollTop += scrollDelta
       }
-      ;(
+      ; (
         thumbnailPlugin as {
           calculateWindowState?: (documentId: string) => void
         } | null

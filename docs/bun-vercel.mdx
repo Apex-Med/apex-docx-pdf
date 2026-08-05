@@ -13,8 +13,10 @@ This repository is a Bun workspace monorepo. Its current scripts live at the rep
 bun test
 bun run typecheck
 bun run build
-bun --cwd apps/web dev
+bun run dev
 ```
+
+`bun run dev` starts the local-only web application. The dormant Convex adapter can be exercised separately with `CONVEX_AGENT_MODE=anonymous bun run convex:dev`, but the current playground does not mount it and never uploads document data.
 
 The web app uses the browser package and a module worker. The engine packages, including the explicit fontkit adapter and Phase 6 template/numbering/table/image/section path, are designed for Bun, supported Node.js, and modern browsers within the documented compatibility profile. This is a portability design boundary, not a claim of complete cross-runtime fixture proof. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application font assets remains outside the renderer. DOCX images are package-owned bytes and require no runtime fetch.
 

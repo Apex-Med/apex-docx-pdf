@@ -21,9 +21,7 @@ export function canonicalJson(value: unknown): string {
 }
 
 /** Computes a lowercase SHA-256 digest using the browser Web Crypto API. */
-export async function sha256Hex(
-  value: string | BufferSource
-): Promise<string> {
+export async function sha256Hex(value: string | BufferSource): Promise<string> {
   const bytes = typeof value === "string" ? textEncoder.encode(value) : value
   const digest = await crypto.subtle.digest("SHA-256", bytes)
   return Array.from(new Uint8Array(digest), (byte) =>
@@ -56,7 +54,10 @@ export async function computeRenderCacheIdentity(
   return { dataHash, renderOptionsHash, cacheKey }
 }
 
-function serializeCanonical(value: unknown, ancestors: WeakSet<object>): string {
+function serializeCanonical(
+  value: unknown,
+  ancestors: WeakSet<object>
+): string {
   if (value === null) return "null"
 
   switch (typeof value) {
@@ -65,7 +66,9 @@ function serializeCanonical(value: unknown, ancestors: WeakSet<object>): string 
       return JSON.stringify(value)
     case "number":
       if (!Number.isFinite(value)) {
-        throw new TypeError("Canonical JSON does not support non-finite numbers")
+        throw new TypeError(
+          "Canonical JSON does not support non-finite numbers"
+        )
       }
       return JSON.stringify(value)
     case "undefined":
@@ -96,7 +99,9 @@ function serializeObject(value: object, ancestors: WeakSet<object>): string {
 
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError("Canonical JSON only supports plain objects and arrays")
+      throw new TypeError(
+        "Canonical JSON only supports plain objects and arrays"
+      )
     }
     if (Object.getOwnPropertySymbols(value).length > 0) {
       throw new TypeError("Canonical JSON does not support symbol keys")
@@ -115,7 +120,9 @@ function serializeObject(value: object, ancestors: WeakSet<object>): string {
   }
 }
 
-function frameCacheKeyFields(fields: readonly string[]): Uint8Array<ArrayBuffer> {
+function frameCacheKeyFields(
+  fields: readonly string[]
+): Uint8Array<ArrayBuffer> {
   const encoded = fields.map((field) => textEncoder.encode(field))
   const length = encoded.reduce((total, field) => total + 4 + field.length, 0)
   const framed = new Uint8Array(length)

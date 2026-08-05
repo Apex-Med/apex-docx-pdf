@@ -9,6 +9,7 @@
     "includes": [
       "**",
       "!apps/web/src/routeTree.gen.ts",
+      "!convex/_generated",
       "!**/dist",
       "!**/.output"
     ]

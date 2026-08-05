@@ -1,0 +1,265 @@
+---
+title: "Representative examples"
+description: "Interactive authoring patterns for supported letters, invoices, reports, legal lists, tables, page furniture, images, loops, and conditions."
+---
+
+# Representative examples
+
+Use these patterns to plan a Word template, then build the actual layout in a DOCX editor. The tabs and accordions make the examples easier to compare; they are documentation controls, not an embedded renderer. Compile the real DOCX in the local playground and inspect its contract and diagnostics before production use.
+
+<Note>
+  All names, identifiers, amounts, and medical-style content below are synthetic
+  and nonclinical. Do not put personal, clinical, financial, or other sensitive
+  production data in public fixtures, screenshots, issue reports, diagnostics,
+  or layout traces.
+</Note>
+
+## Choose a document pattern
+
+<Tabs>
+  <Tab title="Letter">
+    Author the sender block, recipient block, subject, body, and closing as Word
+    paragraphs. Use paragraph styles and spacing for hierarchy instead of tabs
+    or repeated spaces.
+
+    ```text
+    {{letter.sentAt:date | date:"d MMMM yyyy"}}
+    {{recipient.name:string}}
+    {{recipient.address:string}}
+
+    RE: {{letter.subject:string | upper}}
+
+    Dear {{recipient.name:string}},
+
+    {{letter.body:string}}
+
+    Kind regards
+    {{sender.name:string}}
+    ```
+
+    ```json
+    {
+      "letter": {
+        "sentAt": "2026-08-05T09:30:00+02:00",
+        "subject": "Service confirmation",
+        "body": "This confirms the requested service arrangement."
+      },
+      "recipient": {
+        "name": "Jordan Example",
+        "address": "10 Sample Road, Cape Town"
+      },
+      "sender": { "name": "Alex Example" }
+    }
+    ```
+
+  </Tab>
+
+  <Tab title="Invoice">
+    Use a fixed-grid table for line items. Put the loop markers in dedicated
+    rows, repeat only contiguous leading header rows, and keep totals outside
+    the loop.
+
+    ```text
+    Invoice {{invoice.number:string | upper}}
+    Issued {{invoice.issuedAt:date | date:"d MMMM yyyy"}}
+
+    row: Description | Amount
+    row: {{#each invoice.items}}
+    row: {{description:string}} | {{amount:number | currency:"ZAR"}}
+    row: {{/each}}
+    row: Total | {{invoice.total:number | currency:"ZAR"}}
+    ```
+
+    ```json
+    {
+      "invoice": {
+        "number": "inv-1042",
+        "issuedAt": "2026-08-05T09:30:00+02:00",
+        "items": [
+          { "description": "Design review", "amount": 750 },
+          { "description": "Document setup", "amount": 500 }
+        ],
+        "total": 1250
+      }
+    }
+    ```
+
+  </Tab>
+
+  <Tab title="Multi-page report">
+    Combine styled headings, body paragraphs, `keepWithNext`, widow/orphan
+    control, fixed-grid tables, and `nextPage` sections. Use a landscape section
+    for a wide table only when its explicit page geometry and orientation agree.
+
+    ```text
+    {{report.title:string}}
+    Prepared {{report.preparedAt:date | date:"d MMMM yyyy"}}
+
+    {{#each report.sections}}
+    {{heading:string}}
+    {{summary:string}}
+    {{/each}}
+    ```
+
+    ```json
+    {
+      "report": {
+        "title": "Synthetic quarterly report",
+        "preparedAt": "2026-08-05T09:30:00+02:00",
+        "sections": [
+          { "heading": "Overview", "summary": "Synthetic overview text." },
+          { "heading": "Findings", "summary": "Synthetic findings text." }
+        ]
+      }
+    }
+    ```
+
+    For a genuine multi-page proof, render enough representative rows and text
+    to cross page boundaries. Check repeated table headers, row fragmentation,
+    section transitions, page count, and the source-linked layout trace.
+
+  </Tab>
+
+  <Tab title="Legal numbering">
+    Configure the list in Word through its numbering definition; do not type
+    labels such as `1.1` into data. Supported legal numbering can combine levels
+    from the DOCX numbering part.
+
+    ```text
+    [Word level 1] Definitions
+    [Word level 2] Agreement means this synthetic example.
+    [Word level 1] Obligations
+    [Word level 2] The supplier will provide the described service.
+    ```
+
+    Numbering definitions, start values, overrides, indentation, and restart
+    behavior stay in the DOCX. Template loops can repeat numbered paragraphs;
+    labels remain generated layout content linked to the source paragraph.
+
+  </Tab>
+
+  <Tab title="Signature table">
+    Use a fixed-grid table to align signature fields without relying on tabs.
+    Keep each cell width consistent with its spanned `tblGrid` columns.
+
+    ```text
+    row: Signed by | {{signer.name:string}}
+    row: Capacity | {{signer.capacity:string}}
+    row: Date | {{signer.signedAt:date | date:"d MMMM yyyy"}}
+    row: Signature | ______________________________
+    ```
+
+    This pattern renders a signature line and supplied metadata. It does not
+    create a cryptographic or digital signature.
+
+  </Tab>
+
+  <Tab title="Medical-style table">
+    Use synthetic, nonclinical content for a structured table with explicit
+    widths and a repeating header. This is a layout example, not medical advice,
+    a prescription, or a clinical record.
+
+    ```text
+    row: Item | Instruction | Schedule
+    row: {{#each plan.items}}
+    row: {{name:string}} | {{instruction:string}} | {{schedule:string}}
+    row: {{/each}}
+    ```
+
+    ```json
+    {
+      "plan": {
+        "items": [
+          {
+            "name": "Sample item A",
+            "instruction": "Synthetic instruction only",
+            "schedule": "Example schedule"
+          }
+        ]
+      }
+    }
+    ```
+
+  </Tab>
+</Tabs>
+
+## Page furniture and media
+
+<AccordionGroup>
+  <Accordion title="Headers and footers">
+    Create default header and footer parts in Word. Later `nextPage` sections
+    inherit them until a replacement is declared. Supported header/footer
+    paragraphs may contain inline template values and whole-paragraph blocks,
+    but not automatic paragraph numbering or first/even-page variants. Ensure
+    the configured distance plus content height stays within the body margin.
+  </Accordion>
+
+<Accordion title="Page numbers">
+  Insert Word `PAGE` and `NUMPAGES` fields, for example `Page PAGE of NUMPAGES`,
+  as simple or complete complex fields. Only decimal/no-op switches are
+  supported. These are document fields resolved after pagination, not template
+  tags and not values in the render JSON.
+</Accordion>
+
+  <Accordion title="Static images">
+    Insert a PNG or JPEG into the DOCX as an inline image with an explicit
+    positive size. The image must be stored through an internal package
+    relationship. Keep proof that you own or are licensed to use and
+    redistribute the asset; record its source and license with the template.
+
+    Dynamic image tags remain unsupported. Render data cannot fetch, select,
+    replace, resize, or conditionally source an image. External images,
+    floating/anchored placement, crop, rotation, and SVG are also outside the
+    current profile.
+
+  </Accordion>
+</AccordionGroup>
+
+## Loops and conditions
+
+<Tabs>
+  <Tab title="Paragraph blocks">
+    Put every structural marker in its own Word paragraph. Inside `each`, paths
+    resolve relative to the current object.
+
+    ```text
+    {{#if summary.showDetails}}
+    {{#each summary.details}}
+    {{label:string}}: {{value:string}}
+    {{/each}}
+    {{else}}
+    No details supplied
+    {{/if}}
+    ```
+
+  </Tab>
+
+  <Tab title="Table-row blocks">
+    Put every marker in a dedicated row where it is the only visible content
+    across all cells.
+
+    ```text
+    row: {{#if invoice.showItems}}
+    row: {{#each invoice.items}}
+    row: {{description:string}} | {{amount:number | currency:"ZAR"}}
+    row: {{/each}}
+    row: {{else}}
+    row: No item details
+    row: {{/if}}
+    ```
+
+    Row blocks cannot contain repeating header rows or enclose vertical merges.
+
+  </Tab>
+</Tabs>
+
+## Production review checklist
+
+1. Accept or reject all tracked changes and remove unresolved comments.
+2. Compile the exact DOCX and review inspector manifest paths, types, schema, starter data, and source locations.
+3. Resolve compilation errors and review every warning; do the same for rendering diagnostics.
+4. Render representative, empty, long, and boundary data with explicit fonts, locale, and time zone.
+5. Compare the searchable PDF with the intended layout, including page breaks, numbering, tables, images, headers, footers, and page fields.
+6. Retain the template hash, engine version, font and image license/provenance records, render options, redacted diagnostics, and optional layout trace.
+
+See the [authoring guide](/authoring), [template language](/template-language), [security boundary](/security), and [support matrix](/supported-features) for the exact current limits.

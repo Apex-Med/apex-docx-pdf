@@ -1,12 +1,12 @@
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
 
 const diagnosticsSummary = v.object({
   errorCount: v.number(),
   warningCount: v.number(),
   infoCount: v.number(),
   codes: v.array(v.string()),
-});
+})
 
 export default defineSchema({
   templates: defineTable({
@@ -21,7 +21,7 @@ export default defineSchema({
     status: v.union(
       v.literal("ready"),
       v.literal("invalid"),
-      v.literal("deleting"),
+      v.literal("deleting")
     ),
     diagnosticsSummary,
     createdAt: v.number(),
@@ -46,7 +46,7 @@ export default defineSchema({
       v.literal("complete"),
       v.literal("failed"),
       v.literal("cancelled"),
-      v.literal("deleting"),
+      v.literal("deleting")
     ),
     diagnosticsSummary,
     createdAt: v.number(),
@@ -64,4 +64,4 @@ export default defineSchema({
       "status",
     ])
     .index("by_sessionId_and_createdAt", ["sessionId", "createdAt"]),
-});
+})

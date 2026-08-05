@@ -574,9 +574,9 @@ function DocxToolbar({
   const canZoomOut = zoomScale > ZOOM_OPTIONS[0]
 
   return (
-    <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
+    <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b bg-background px-2 py-2 sm:px-3">
       <TooltipProvider>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
           <ToolbarTooltip label="Toggle thumbnails">
             <Button
               type="button"
@@ -911,9 +911,8 @@ function DocxThumbnailSidebarList({
                   thumbnail.pageNumber === activePage && "z-10"
                 )}
                 style={{
-                  transform: `translateY(${
-                    virtualRow.start + DOCX_THUMBNAIL_LIST_PADDING
-                  }px)`,
+                  transform: `translateY(${virtualRow.start + DOCX_THUMBNAIL_LIST_PADDING
+                    }px)`,
                 }}
               >
                 <div
@@ -931,11 +930,11 @@ function DocxThumbnailSidebarList({
                   className={cn(
                     "flex h-auto w-full cursor-default flex-col items-center gap-2 rounded-md p-2 text-xs transition-shadow outline-none select-none hover:bg-sidebar-accent",
                     thumbnail.pageNumber === activePage &&
-                      "bg-sidebar-accent text-foreground",
+                    "bg-sidebar-accent text-foreground",
                     thumbnail.pageNumber !== activePage &&
-                      "text-muted-foreground",
+                    "text-muted-foreground",
                     thumbnail.pageNumber === activePage &&
-                      DOCX_THUMBNAIL_FOCUS_RING_CLASS
+                    DOCX_THUMBNAIL_FOCUS_RING_CLASS
                   )}
                   onClick={() => onSelectPage(thumbnail.pageNumber)}
                   onKeyDown={(event) => {

@@ -20,19 +20,20 @@ import type {
   BrowserRenderResult,
   WorkerProgress,
 } from "@apex-docx-pdf/browser"
-import type { TemplateField } from "@apex-docx-pdf/core"
+import type { RenderOptions, TemplateField } from "@apex-docx-pdf/core"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs"
+import { cn } from "@workspace/ui/lib/utils"
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { DragEvent } from "react"
 
 import { DocxViewerPreview } from "@/components/extend/docx-viewer"
 import { PDFViewer } from "@/components/extend/pdf-viewer"
@@ -47,14 +48,42 @@ import {
   setPath,
 } from "@/lib/form-data"
 import { SAMPLE_DATA, createSampleDocx } from "@/lib/sample-docx"
+import {
+  BROWSER_PROFILE_LABEL,
+  BUNDLED_FONT_PROFILE,
+  PROFILE_CAPABILITIES,
+  describeWorkerProgress,
+  inspectTemplate,
+} from "@/lib/template-inspection"
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+const PLAYGROUND_RENDER_OPTIONS = Object.freeze({
+  locale: "en-ZA",
+  timeZone: "Africa/Johannesburg",
+  metadata: Object.freeze({
+    title: "Apex DOCX PDF playground document",
+  }),
+  includeLayoutTrace: true,
+}) satisfies Omit<RenderOptions, "signal">
 
 type Activity = Readonly<{
   state: "idle" | "working" | "complete" | "error"
   label: string
   progress?: WorkerProgress
+}>
+
+type WorkspacePanel = "template" | "data" | "result"
+
+const workspacePanels = [
+  { id: "template", label: "Template", index: "01" },
+  { id: "data", label: "Data", index: "02" },
+  { id: "result", label: "Result", index: "03" },
+] as const satisfies ReadonlyArray<{
+  id: WorkspacePanel
+  label: string
+  index: string
 }>
 
 const idleActivity: Activity = {
@@ -82,6 +111,7 @@ export function PlaygroundWorkspace() {
   const [pdfUrl, setPdfUrl] = useState<string>()
   const [docxUrl, setDocxUrl] = useState<string>()
   const [activity, setActivity] = useState<Activity>(idleActivity)
+  const [mobilePanel, setMobilePanel] = useState<WorkspacePanel>("template")
   const [diagnostics, setDiagnostics] = useState<
     BrowserCompileResult["diagnostics"]
   >([])
@@ -130,18 +160,13 @@ export function PlaygroundWorkspace() {
         const result = await client.render(
           templateHash,
           renderData,
-          {
-            locale: "en-ZA",
-            timeZone: "Africa/Johannesburg",
-            metadata: { title: "Apex DOCX PDF playground document" },
-            includeLayoutTrace: true,
-          },
+          PLAYGROUND_RENDER_OPTIONS,
           {
             signal: controller.signal,
             onProgress: (progress) =>
               setActivity({
                 state: "working",
-                label: progress.message,
+                label: describeWorkerProgress(progress),
                 progress,
               }),
           }
@@ -153,6 +178,7 @@ export function PlaygroundWorkspace() {
         setRendered(result)
         setPdfUrl(url)
         setDiagnostics(result.diagnostics)
+        setMobilePanel("result")
         setActivity({
           state: "complete",
           label: `Rendered ${result.pageCount} page${result.pageCount === 1 ? "" : "s"}`,
@@ -187,7 +213,7 @@ export function PlaygroundWorkspace() {
           onProgress: (progress) =>
             setActivity({
               state: "working",
-              label: progress.message,
+              label: describeWorkerProgress(progress),
               progress,
             }),
         })
@@ -276,80 +302,146 @@ export function PlaygroundWorkspace() {
   }
 
   return (
-    <div className="min-h-svh bg-muted/20">
+    <div className="flex h-svh max-h-svh flex-col overflow-hidden bg-muted/20">
       <SiteHeader compact />
-      <main>
-        <div className="flex flex-col gap-5 border-b bg-background px-5 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight">
+      <main className="flex max-h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex shrink-0 flex-col gap-4 border-b bg-background px-4 py-4 sm:gap-5 sm:px-5 sm:py-5 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
                 Document playground
               </h1>
-              <Badge variant="secondary">Phase 6 profile</Badge>
+              <Badge variant="secondary">Local-only</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Compile tables, images, sections, headers, and page fields locally
-              in a Web Worker. Your document is not uploaded.
+              Compile tables, images, sections, headers, and page fields in a
+              Web Worker. Your document and data are never uploaded.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Status activity={activity} />
-            {activity.state === "working" ? (
-              <Button variant="outline" size="sm" onClick={cancel}>
-                <HugeiconsIcon icon={Cancel02Icon} data-icon="inline-start" />
-                Cancel
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Status activity={activity} className="w-full sm:w-auto" />
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {activity.state === "working" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11 flex-1 sm:min-h-8 sm:flex-none"
+                  onClick={cancel}
+                >
+                  <HugeiconsIcon icon={Cancel02Icon} data-icon="inline-start" />
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                className="min-h-11 flex-1 sm:min-h-8 sm:flex-none"
+                disabled={
+                  !compiled ||
+                  Boolean(jsonError) ||
+                  activity.state === "working"
+                }
+                onClick={() =>
+                  compiled && void runRender(compiled.templateHash, data)
+                }
+              >
+                <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
+                Render PDF
               </Button>
-            ) : null}
-            <Button
-              size="sm"
-              disabled={
-                !compiled || Boolean(jsonError) || activity.state === "working"
-              }
-              onClick={() =>
-                compiled && void runRender(compiled.templateHash, data)
-              }
-            >
-              <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
-              Render PDF
-            </Button>
+            </div>
           </div>
         </div>
 
-        <div className="grid min-h-[calc(100svh-8.75rem)] xl:grid-cols-[minmax(280px,0.82fr)_minmax(340px,1fr)_minmax(440px,1.28fr)]">
-          <TemplatePanel
-            ready={ready}
-            fileName={fileName}
-            fileSize={fileSize}
-            compiled={compiled}
-            docxUrl={docxUrl}
-            diagnostics={diagnostics}
-            onFile={onFile}
-            onSample={() => {
-              selectionSequenceRef.current += 1
-              operationRef.current?.abort()
-              void compileBytes(createSampleDocx(), "apex-sample.docx")
-            }}
-          />
-          <DataPanel
-            compiled={compiled}
-            data={data}
-            jsonText={jsonText}
-            jsonError={jsonError}
-            onJsonChange={onJsonChange}
-            onFieldChange={updateField}
-            onDataChange={commitData}
-            onReset={() => {
-              const next = compiled?.starterData ?? SAMPLE_DATA
-              setData(next)
-              setJsonText(JSON.stringify(next, null, 2))
-              setJsonError(undefined)
-            }}
-          />
-          <ResultPanel
-            rendered={rendered}
-            pdfUrl={pdfUrl}
-            activity={activity}
-          />
+        <div
+          className="z-30 shrink-0 border-b bg-background xl:hidden"
+          role="tablist"
+          aria-label="Playground panels"
+        >
+          <div className="grid grid-cols-3">
+            {workspacePanels.map((panel) => {
+              const selected = mobilePanel === panel.id
+              return (
+                <button
+                  key={panel.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={cn(
+                    "relative min-h-12 px-2 py-3 text-center text-xs font-semibold tracking-wider uppercase transition-colors",
+                    selected
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => setMobilePanel(panel.id)}
+                >
+                  <span className="mr-1.5 font-mono text-[10px] text-brand">
+                    {panel.index}
+                  </span>
+                  {panel.label}
+                  {selected ? (
+                    <span className="absolute inset-x-3 bottom-0 h-0.5 bg-foreground" />
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="grid max-h-full min-h-0 flex-1 xl:grid-cols-[minmax(280px,0.82fr)_minmax(340px,1fr)_minmax(440px,1.28fr)]">
+          <div
+            className={cn(
+              "max-h-full min-h-0 min-w-0",
+              mobilePanel === "template" ? "flex" : "hidden xl:flex"
+            )}
+          >
+            <TemplatePanel
+              ready={ready}
+              fileName={fileName}
+              fileSize={fileSize}
+              compiled={compiled}
+              docxUrl={docxUrl}
+              diagnostics={diagnostics}
+              onFile={onFile}
+              onSample={() => {
+                selectionSequenceRef.current += 1
+                operationRef.current?.abort()
+                void compileBytes(createSampleDocx(), "apex-sample.docx")
+              }}
+            />
+          </div>
+          <div
+            className={cn(
+              "max-h-full min-h-0 min-w-0",
+              mobilePanel === "data" ? "flex" : "hidden xl:flex"
+            )}
+          >
+            <DataPanel
+              compiled={compiled}
+              data={data}
+              jsonText={jsonText}
+              jsonError={jsonError}
+              onJsonChange={onJsonChange}
+              onFieldChange={updateField}
+              onDataChange={commitData}
+              onReset={() => {
+                const next = compiled?.starterData ?? SAMPLE_DATA
+                setData(next)
+                setJsonText(JSON.stringify(next, null, 2))
+                setJsonError(undefined)
+              }}
+            />
+          </div>
+          <div
+            className={cn(
+              "max-h-full min-h-0 min-w-0",
+              mobilePanel === "result" ? "flex" : "hidden xl:flex"
+            )}
+          >
+            <ResultPanel
+              rendered={rendered}
+              pdfUrl={pdfUrl}
+              activity={activity}
+            />
+          </div>
         </div>
       </main>
     </div>
@@ -377,39 +469,22 @@ function TemplatePanel({
   onFile,
   onSample,
 }: TemplatePanelProps) {
-  const handleDrop = (event: DragEvent<HTMLLabelElement>): void => {
-    event.preventDefault()
-    const file = event.dataTransfer.files.item(0)
-    if (file !== null) void onFile(file)
-  }
+  const inputRef = useRef<HTMLInputElement>(null)
 
   return (
     <section
-      className="min-w-0 border-b bg-background xl:border-r xl:border-b-0"
+      className="flex h-full max-h-full min-h-0 w-full min-w-0 flex-col border-b bg-background xl:border-r xl:border-b-0"
       aria-labelledby="template-panel-title"
     >
       <PanelHeader
         index="01"
         title="Template"
-        description="Inspect the Phase 6 DOCX profile, including tables, images, and sections."
+        description="Inspect the bounded DOCX profile, including tables, images, and sections."
       />
-      <div className="p-5">
-        <label
-          htmlFor="template-upload"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={handleDrop}
-          className="group flex min-h-36 cursor-pointer flex-col items-center justify-center border border-dashed border-border bg-muted/20 px-5 text-center transition-colors focus-within:border-ring hover:border-foreground/40 hover:bg-muted/40"
-        >
-          <span className="grid size-10 place-items-center bg-foreground text-background">
-            <HugeiconsIcon icon={Upload02Icon} strokeWidth={1.8} />
-          </span>
-          <span className="mt-4 text-sm font-medium">
-            Drop a .docx or choose a file
-          </span>
-          <span className="mt-1 text-xs text-muted-foreground">
-            Validated locally · 20 MB limit
-          </span>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-4 sm:p-5">
           <Input
+            ref={inputRef}
             id="template-upload"
             className="sr-only"
             type="file"
@@ -421,64 +496,281 @@ function TemplatePanel({
               event.target.value = ""
             }}
           />
-        </label>
-        <Button
-          className="mt-3 w-full"
-          variant="outline"
-          disabled={!ready}
-          onClick={onSample}
-        >
-          <HugeiconsIcon icon={File02Icon} data-icon="inline-start" />
-          Use sample template
-        </Button>
-
-        {fileName ? (
-          <div className="mt-5 border p-4">
-            <p className="truncate text-sm font-medium" title={fileName}>
-              {fileName}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-              <span>{formatBytes(fileSize ?? 0)}</span>
-              <span>
-                {compiled
-                  ? `${compiled.templateHash.slice(0, 12)}…`
-                  : "hashing…"}
-              </span>
-            </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button
+              variant="outline"
+              disabled={!ready}
+              onClick={() => inputRef.current?.click()}
+            >
+              <HugeiconsIcon icon={Upload02Icon} data-icon="inline-start" />
+              {fileName ? "Replace template" : "Choose template"}
+            </Button>
+            <Button variant="outline" disabled={!ready} onClick={onSample}>
+              <HugeiconsIcon icon={File02Icon} data-icon="inline-start" />
+              Use sample template
+            </Button>
           </div>
-        ) : null}
+          <p className="mt-2 text-xs text-muted-foreground">
+            .docx · validated locally · 20 MB limit
+          </p>
 
-        <Tabs defaultValue="preview" className="mt-6">
-          <TabsList
-            variant="line"
-            className="w-full justify-start overflow-x-auto"
-          >
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-            <TabsTrigger value="fields">Fields</TabsTrigger>
-            <TabsTrigger value="schema">Schema</TabsTrigger>
-            <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
-          </TabsList>
-          <TabsContent value="preview" className="pt-5">
-            <TemplatePreview docxUrl={docxUrl} fileName={fileName} />
-          </TabsContent>
-          <TabsContent value="fields" className="pt-5">
-            <FieldList fields={compiled?.manifest.fields ?? []} />
-          </TabsContent>
-          <TabsContent value="schema" className="pt-5">
-            <CodeBlock
-              value={
-                compiled
-                  ? JSON.stringify(compiled.jsonSchema, null, 2)
-                  : "Compile a template to generate JSON Schema."
-              }
-            />
-          </TabsContent>
-          <TabsContent value="diagnostics" className="pt-5">
-            <DiagnosticList diagnostics={diagnostics} />
-          </TabsContent>
-        </Tabs>
-      </div>
+          {fileName ? (
+            <div className="mt-4 border p-4">
+              <p className="truncate text-sm font-medium" title={fileName}>
+                {fileName}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                <span>{formatBytes(fileSize ?? 0)}</span>
+                <span>
+                  {compiled
+                    ? `${compiled.templateHash.slice(0, 12)}…`
+                    : "hashing…"}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          <Tabs defaultValue="preview" className="mt-6">
+            <TabsList
+              variant="line"
+              className="w-full justify-start overflow-x-auto"
+            >
+              <TabsTrigger value="preview">Preview</TabsTrigger>
+              <TabsTrigger value="features">Document features</TabsTrigger>
+              <TabsTrigger value="fields">Fields</TabsTrigger>
+              <TabsTrigger value="schema">Schema</TabsTrigger>
+              <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+            </TabsList>
+            <TabsContent value="preview" className="pt-5">
+              <TemplatePreview docxUrl={docxUrl} fileName={fileName} />
+              <p className="mt-3 border-l-2 border-brand pl-3 text-xs leading-5 text-muted-foreground">
+                Placeholder highlighting is not available in this preview. The
+                preview viewer is not connected to the engine’s placeholder node
+                map, so use Fields to inspect detected paths.
+              </p>
+            </TabsContent>
+            <TabsContent value="features" className="pt-5">
+              <TemplateInspectionPanel
+                compiled={compiled}
+                isSample={fileName === "apex-sample.docx"}
+              />
+            </TabsContent>
+            <TabsContent value="fields" className="pt-5">
+              <FieldList fields={compiled?.manifest.fields ?? []} />
+            </TabsContent>
+            <TabsContent value="schema" className="pt-5">
+              <CodeBlock
+                value={
+                  compiled
+                    ? JSON.stringify(compiled.jsonSchema, null, 2)
+                    : "Compile a template to generate JSON Schema."
+                }
+              />
+            </TabsContent>
+            <TabsContent value="diagnostics" className="pt-5">
+              <DiagnosticList diagnostics={diagnostics} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </ScrollArea>
     </section>
+  )
+}
+
+function TemplateInspectionPanel({
+  compiled,
+  isSample,
+}: Readonly<{ compiled?: BrowserCompileResult; isSample: boolean }>) {
+  if (!compiled) {
+    return (
+      <EmptyState
+        title="No document features yet"
+        description="Compile a template to inspect its manifest and the active browser profile."
+      />
+    )
+  }
+
+  const inspection = inspectTemplate(compiled)
+  const diagnosticTotal =
+    inspection.diagnosticCounts.error +
+    inspection.diagnosticCounts.warning +
+    inspection.diagnosticCounts.info
+
+  return (
+    <div className="space-y-6">
+      <section aria-labelledby="detected-template-facts-title">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-semibold tracking-widest text-brand uppercase">
+              Detected template facts
+            </p>
+            <h3
+              id="detected-template-facts-title"
+              className="mt-1 text-sm font-semibold"
+            >
+              Public compile manifest
+            </h3>
+          </div>
+          <Badge variant="secondary">
+            {isSample ? "Bundled sample" : "Uploaded template"}
+          </Badge>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-2 border sm:grid-cols-3">
+          <InspectionMetric label="Fields" value={inspection.fieldCount} />
+          <InspectionMetric
+            label="Required"
+            value={inspection.requiredFields.length}
+          />
+          <InspectionMetric
+            label="Array roots"
+            value={inspection.arrayRoots.length}
+          />
+          <InspectionMetric
+            label="Conditions"
+            value={inspection.conditionalFields.length}
+          />
+          <InspectionMetric label="Diagnostics" value={diagnosticTotal} />
+          <InspectionMetric
+            label="Engine"
+            value={compiled.engineVersion.replace("0.0.0-", "")}
+          />
+        </dl>
+
+        <InspectionPathGroup
+          title="Fields by kind"
+          empty="No fields detected."
+          values={inspection.fieldCountsByKind.map(
+            ({ kind, count }) => `${kind} · ${count}`
+          )}
+        />
+        <InspectionPathGroup
+          title="Required fields"
+          empty="No required fields detected."
+          values={inspection.requiredFields}
+        />
+        <InspectionPathGroup
+          title="Loops and array roots"
+          empty="No manifest-backed loops or array roots detected."
+          values={inspection.arrayRoots}
+        />
+        <InspectionPathGroup
+          title="Conditional marker evidence"
+          empty="No #if markers are represented in the public manifest."
+          values={inspection.conditionalFields}
+        />
+      </section>
+
+      <section
+        className="border-t pt-5"
+        aria-labelledby="profile-capabilities-title"
+      >
+        <p className="text-[10px] font-semibold tracking-widest text-brand uppercase">
+          Profile capabilities
+        </p>
+        <h3
+          id="profile-capabilities-title"
+          className="mt-1 text-sm font-semibold"
+        >
+          {BROWSER_PROFILE_LABEL}
+        </h3>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          These describe renderer support, not features detected in this
+          document. BrowserCompileResult does not expose per-template instances
+          for these structures.
+        </p>
+        <div className="mt-4 divide-y border">
+          {PROFILE_CAPABILITIES.map((capability) => (
+            <div key={capability.label} className="p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium">{capability.label}</p>
+                <Badge variant="secondary">{capability.support}</Badge>
+              </div>
+              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                {capability.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-t pt-5" aria-labelledby="font-profile-title">
+        <p className="text-[10px] font-semibold tracking-widest text-brand uppercase">
+          Required font registry
+        </p>
+        <h3 id="font-profile-title" className="mt-1 text-sm font-semibold">
+          {BUNDLED_FONT_PROFILE.family}
+        </h3>
+        <dl className="mt-4 space-y-3 border p-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">Bundled faces</dt>
+            <dd className="mt-1 leading-5">
+              {BUNDLED_FONT_PROFILE.faces.join(" · ")}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Mapped aliases</dt>
+            <dd className="mt-1 leading-5">
+              {BUNDLED_FONT_PROFILE.aliases.join(", ")} →{" "}
+              {BUNDLED_FONT_PROFILE.fallbackFamily}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Registry hash</dt>
+            <dd className="mt-1 font-mono text-[10px] break-all">
+              {compiled.fontRegistryHash}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Font bytes stay bundled inside the worker and are not shown here.
+        </p>
+      </section>
+    </div>
+  )
+}
+
+function InspectionMetric({
+  label,
+  value,
+}: Readonly<{ label: string; value: string | number }>) {
+  return (
+    <div className="min-w-0 border-r border-b p-3 last:border-r-0">
+      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd className="mt-1 truncate font-mono text-sm" title={String(value)}>
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+function InspectionPathGroup({
+  title,
+  values,
+  empty,
+}: Readonly<{ title: string; values: readonly string[]; empty: string }>) {
+  return (
+    <div className="mt-4">
+      <h4 className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+        {title}
+      </h4>
+      {values.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {values.map((value) => (
+            <code
+              key={value}
+              className="max-w-full border bg-muted/20 px-2 py-1 font-mono text-[10px] break-all"
+            >
+              {value}
+            </code>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">{empty}</p>
+      )}
+    </div>
   )
 }
 
@@ -507,9 +799,54 @@ function DataPanel({
   onDataChange,
   onReset,
 }: DataPanelProps) {
+  const [clipboardStatus, setClipboardStatus] = useState<string>()
+
+  const formatJson = (): void => {
+    const parsed = parseTemplateJson(jsonText)
+    if (!parsed.ok) {
+      setClipboardStatus("Fix the JSON error before formatting.")
+      return
+    }
+    onJsonChange(JSON.stringify(parsed.data, null, 2))
+    setClipboardStatus("JSON formatted.")
+  }
+
+  const pasteJson = async (): Promise<void> => {
+    if (
+      typeof navigator === "undefined" ||
+      typeof navigator.clipboard?.readText !== "function"
+    ) {
+      setClipboardStatus("Clipboard access is unavailable in this browser.")
+      return
+    }
+    try {
+      const pasted = await navigator.clipboard.readText()
+      onJsonChange(pasted)
+      setClipboardStatus("Clipboard contents pasted into the JSON editor.")
+    } catch {
+      setClipboardStatus("Clipboard permission was not granted.")
+    }
+  }
+
+  const copyJson = async (): Promise<void> => {
+    if (
+      typeof navigator === "undefined" ||
+      typeof navigator.clipboard?.writeText !== "function"
+    ) {
+      setClipboardStatus("Clipboard access is unavailable in this browser.")
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(jsonText)
+      setClipboardStatus("JSON copied to the clipboard.")
+    } catch {
+      setClipboardStatus("Clipboard permission was not granted.")
+    }
+  }
+
   return (
     <section
-      className="min-w-0 border-b bg-background xl:border-r xl:border-b-0"
+      className="flex h-full max-h-full min-h-0 w-full min-w-0 flex-col border-b bg-background xl:border-r xl:border-b-0"
       aria-labelledby="data-panel-title"
     >
       <PanelHeader
@@ -517,91 +854,115 @@ function DataPanel({
         title="Data"
         description="Edit generated fields or work directly in JSON."
       />
-      <div className="p-5">
-        <Tabs defaultValue="form">
-          <div className="flex items-center justify-between gap-3">
-            <TabsList variant="line">
-              <TabsTrigger value="form">Form</TabsTrigger>
-              <TabsTrigger value="json">JSON</TabsTrigger>
-            </TabsList>
-            <Button variant="ghost" size="xs" onClick={onReset}>
-              <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />
-              Reset
-            </Button>
-          </div>
-          <TabsContent value="form" className="pt-6">
-            {compiled?.manifest.fields.length ? (
-              <div className="space-y-5">
-                {compiled.manifest.fields
-                  .filter(isRootScalarField)
-                  .map((field) => (
-                    <FieldInput
-                      key={field.path}
-                      field={field}
-                      value={getPath(data, field.path)}
-                      concreteDataPath={field.path}
-                      onChange={(value) =>
-                        onFieldChange(field, field.path, value)
-                      }
-                    />
-                  ))}
-                {compiled.manifest.fields
-                  .filter(isRootArrayField)
-                  .map((field) => (
-                    <ArrayFieldEditor
-                      key={field.path}
-                      field={field}
-                      fields={compiled.manifest.fields}
-                      indexes={[]}
-                      data={data}
-                      onFieldChange={onFieldChange}
-                      onDataChange={onDataChange}
-                    />
-                  ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No generated fields yet"
-                description="Compile a DOCX template and its placeholders will appear here."
-              />
-            )}
-          </TabsContent>
-          <TabsContent value="json" className="pt-6">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-4 sm:p-5">
+          <Tabs defaultValue="form">
             <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="template-json">Template data</Label>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Copy JSON"
-                onClick={() => void navigator.clipboard.writeText(jsonText)}
+              <TabsList
+                variant="line"
+                className="min-w-0 flex-1 overflow-x-auto"
               >
-                <HugeiconsIcon icon={CopyIcon} />
+                <TabsTrigger value="form">Form</TabsTrigger>
+                <TabsTrigger value="json">JSON</TabsTrigger>
+              </TabsList>
+              <Button variant="ghost" size="xs" onClick={onReset}>
+                <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />
+                Sample data
               </Button>
             </div>
-            <JsonEditor
-              id="template-json"
-              className="mt-3"
-              value={jsonText}
-              invalid={Boolean(jsonError)}
-              aria-describedby={jsonError ? "json-error" : "json-hint"}
-              onChange={onJsonChange}
-            />
-            {jsonError ? (
-              <p
-                id="json-error"
-                className="mt-2 text-xs text-destructive"
-                role="alert"
-              >
-                {jsonError}
+            <TabsContent value="form" className="pt-6">
+              {compiled?.manifest.fields.length ? (
+                <div className="space-y-5">
+                  {compiled.manifest.fields
+                    .filter(isRootScalarField)
+                    .map((field) => (
+                      <FieldInput
+                        key={field.path}
+                        field={field}
+                        value={getPath(data, field.path)}
+                        concreteDataPath={field.path}
+                        onChange={(value) =>
+                          onFieldChange(field, field.path, value)
+                        }
+                      />
+                    ))}
+                  {compiled.manifest.fields
+                    .filter(isRootArrayField)
+                    .map((field) => (
+                      <ArrayFieldEditor
+                        key={field.path}
+                        field={field}
+                        fields={compiled.manifest.fields}
+                        indexes={[]}
+                        data={data}
+                        onFieldChange={onFieldChange}
+                        onDataChange={onDataChange}
+                      />
+                    ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No generated fields yet"
+                  description="Compile a DOCX template and its placeholders will appear here."
+                />
+              )}
+            </TabsContent>
+            <TabsContent value="json" className="pt-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Label htmlFor="template-json">Template data</Label>
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button variant="ghost" size="xs" onClick={formatJson}>
+                    Format
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => void pasteJson()}
+                  >
+                    Paste
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Copy JSON"
+                    onClick={() => void copyJson()}
+                  >
+                    <HugeiconsIcon icon={CopyIcon} />
+                  </Button>
+                </div>
+              </div>
+              <JsonEditor
+                id="template-json"
+                className="mt-3"
+                value={jsonText}
+                invalid={Boolean(jsonError)}
+                minHeight={320}
+                aria-describedby={jsonError ? "json-error" : "json-hint"}
+                onChange={onJsonChange}
+              />
+              {jsonError ? (
+                <p
+                  id="json-error"
+                  className="mt-2 text-xs text-destructive"
+                  role="alert"
+                >
+                  {jsonError}
+                </p>
+              ) : (
+                <p
+                  id="json-hint"
+                  className="mt-2 text-xs text-muted-foreground"
+                >
+                  Valid JSON object · fields are resolved strictly
+                </p>
+              )}
+              <p className="sr-only" role="status" aria-live="polite">
+                {clipboardStatus}
               </p>
-            ) : (
-              <p id="json-hint" className="mt-2 text-xs text-muted-foreground">
-                Valid JSON object · fields are resolved strictly
-              </p>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </ScrollArea>
     </section>
   )
 }
@@ -617,7 +978,7 @@ function ResultPanel({
 }>) {
   return (
     <section
-      className="min-w-0 bg-muted/20"
+      className="flex h-full max-h-full min-h-0 w-full min-w-0 flex-col bg-muted/20"
       aria-labelledby="result-panel-title"
     >
       <PanelHeader
@@ -625,10 +986,10 @@ function ResultPanel({
         title="Result"
         description="The PDF uses the engine’s measured display list."
       />
-      <div className="p-5">
+      <div className="flex max-h-full min-h-0 flex-1 flex-col p-4 sm:p-5">
         {rendered && pdfUrl ? (
           <>
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="mb-4 flex shrink-0 flex-wrap gap-2">
               <Badge>
                 {rendered.pageCount} page{rendered.pageCount === 1 ? "" : "s"}
               </Badge>
@@ -643,14 +1004,14 @@ function ResultPanel({
               key={pdfUrl}
               src={pdfUrl}
               fileName="apex-render.pdf"
-              className="h-[720px] overflow-hidden border bg-background shadow-xl ring-1 ring-foreground/10"
+              className="min-h-0 flex-1 overflow-hidden border bg-background shadow-xl ring-1 ring-foreground/10"
               showUpload={false}
               showDownload
             />
           </>
         ) : activity.state === "working" ? (
-          <div className="grid min-h-[620px] place-items-center border bg-background">
-            <div className="max-w-xs text-center">
+          <div className="grid min-h-0 flex-1 place-items-center border bg-background">
+            <div className="max-w-xs px-4 text-center">
               <span className="mx-auto block size-3 animate-pulse bg-brand motion-reduce:animate-none" />
               <p className="mt-5 text-sm font-medium">{activity.label}</p>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -659,7 +1020,7 @@ function ResultPanel({
             </div>
           </div>
         ) : (
-          <div className="grid min-h-[620px] place-items-center border border-dashed bg-background/60">
+          <div className="grid min-h-0 flex-1 place-items-center border border-dashed bg-background/60">
             <EmptyState
               title="Your PDF will appear here"
               description="Use the sample template or upload a supported DOCX to render the first page."
@@ -677,46 +1038,54 @@ function PanelHeader({
   description,
 }: Readonly<{ index: string; title: string; description: string }>) {
   return (
-    <div className="border-b bg-background px-5 py-4">
+    <div className="shrink-0 bg-background xl:border-b xl:px-5 xl:py-4">
       <div className="flex items-baseline gap-3">
-        <span className="font-mono text-[10px] tracking-widest text-brand">
+        <span className="hidden font-mono text-[10px] tracking-widest text-brand xl:inline">
           {index}
         </span>
         <h2
           id={`${title.toLowerCase()}-panel-title`}
-          className="text-sm font-semibold"
+          className="sr-only text-sm font-semibold xl:not-sr-only"
         >
           {title}
         </h2>
       </div>
-      <p className="mt-1 pl-8 text-xs leading-5 text-muted-foreground">
+      <p className="mt-1 hidden pl-8 text-xs leading-5 text-muted-foreground xl:block">
         {description}
       </p>
     </div>
   )
 }
 
-function Status({ activity }: Readonly<{ activity: Activity }>) {
+function Status({
+  activity,
+  className,
+}: Readonly<{ activity: Activity; className?: string }>) {
   return (
     <div
-      className="flex min-h-9 items-center gap-2 border px-3 text-xs"
+      className={cn(
+        "flex min-h-11 items-center gap-2 border px-3 text-xs sm:min-h-9",
+        className
+      )}
       role="status"
       aria-live="polite"
     >
       <span
         className={
           activity.state === "working"
-            ? "size-2 animate-pulse bg-brand motion-reduce:animate-none"
+            ? "size-2 shrink-0 animate-pulse bg-brand motion-reduce:animate-none"
             : activity.state === "error"
-              ? "size-2 bg-destructive"
+              ? "size-2 shrink-0 bg-destructive"
               : activity.state === "complete"
-                ? "size-2 bg-emerald-500"
-                : "size-2 bg-muted-foreground/40"
+                ? "size-2 shrink-0 bg-emerald-500"
+                : "size-2 shrink-0 bg-muted-foreground/40"
         }
       />
-      <span className="max-w-64 truncate">{activity.label}</span>
+      <span className="min-w-0 flex-1 truncate sm:max-w-64 sm:flex-none">
+        {activity.label}
+      </span>
       {activity.progress ? (
-        <span className="text-muted-foreground">
+        <span className="shrink-0 text-muted-foreground">
           {activity.progress.completed}/{activity.progress.total}
         </span>
       ) : null}
@@ -747,7 +1116,7 @@ function TemplatePreview({
       isDark={isDark}
       onIsDarkChange={setIsDark}
       showUpload={false}
-      className="h-[520px] overflow-hidden border bg-background"
+      className="h-[min(48svh,420px)] overflow-hidden border bg-background"
     />
   )
 }
@@ -793,9 +1162,12 @@ function FieldInput({
 }>) {
   const id = `field-${concreteDataPath.replaceAll(/[^a-zA-Z0-9_-]/gu, "-")}`
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <Label htmlFor={id}>
+        <Label
+          htmlFor={id}
+          className="min-w-0 truncate font-mono text-xs tracking-normal normal-case"
+        >
           {field.path}
           {field.required ? (
             <span className="text-destructive" aria-hidden="true">
@@ -804,7 +1176,7 @@ function FieldInput({
           ) : null}
           {field.required ? <span className="sr-only">(required)</span> : null}
         </Label>
-        <span className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase">
+        <span className="shrink-0 font-mono text-[9px] tracking-widest text-muted-foreground uppercase">
           {field.kind}
         </span>
       </div>
@@ -1112,7 +1484,7 @@ function DiagnosticList({
 
 function CodeBlock({ value }: Readonly<{ value: string }>) {
   return (
-    <pre className="max-h-[470px] overflow-auto border bg-muted/30 p-4 font-mono text-[10px] leading-5">
+    <pre className="overflow-x-auto border bg-muted/30 p-4 font-mono text-[10px] leading-5 whitespace-pre">
       <code>{value}</code>
     </pre>
   )

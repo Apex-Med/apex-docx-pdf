@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Multiple deterministic `nextPage` sections with exact portrait/landscape page geometry and per-page PDF `MediaBox` values, inherited default headers/footers, and exact edge-relative header/footer distances (720 twips when absent).
 - Template values, safe formatters, and bounded paragraph blocks in reusable headers and footers, plus global decimal `PAGE` and `NUMPAGES` fields materialized after pagination from a fixed maximum-page digit reservation.
 - Binary-safe testkit validation that follows classic xref offsets and declared stream lengths, checks image resources and upright transforms without scanning binary payloads as PDF syntax, and extracts searchable per-page text from workspace PDFs.
+- Phase 7 engine version `0.0.0-phase.7` with browser-visible engine and font-registry hashes for deterministic cache partitioning.
+- Optional Convex persistence with anonymous session ownership, generated browser upload URLs, bounded template/render metadata, indexed and paginated reads, realtime recent-render status, owned bearer-URL reads, completed-PDF cache reuse, and scheduled cascading storage deletion.
+- Dormant TanStack Start integration through Convex React Query, TanStack Query, and router SSR query hydration, retained for possible future SaaS work without exposing cloud persistence in the current playground.
+- The playground is intentionally local-only: it hides the dormant persistence component and never uploads document bytes, render data, or generated PDFs.
+- Deterministic canonical-JSON/data/options hashing, direct upload response validation, a privacy notice, storage-security documentation, and focused Convex ownership/lifecycle/cache/deletion tests.
 - Initial architecture, authoring, security, determinism, support-matrix, and troubleshooting documentation.
 
 ### Fixed
@@ -32,15 +37,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### In progress
 
-- Hardening the Phase 1–6 vertical slices with broader licensed fixtures, browser coverage, diagnostics, resource-boundary tests, and reproducibility evidence.
+- Hardening the Phase 1–7 vertical slices with broader licensed fixtures, browser coverage, diagnostics, resource-boundary tests, and reproducibility evidence.
 
 ### Not yet complete
 
-- Phases 7 through 10.
+- Phases 8 through 10.
 - Dynamic image tags; anchored/floating, cropped, rotated, or SVG images; broad image-profile/color conversion; percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex-script shaping, true default font subsetting, and CFF PDF embedding.
 - Continuous, odd-page, or even-page section breaks; first/even header variants; automatic numbering in headers/footers; and general Word field evaluation.
 - Broad Microsoft Word fixture coverage and complete Bun/Node/browser equivalence.
-- A Convex adapter or integration.
 - Deployment configuration or a supported hosted service.
 
 No stable release has been cut.

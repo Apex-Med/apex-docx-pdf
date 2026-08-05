@@ -1,11 +1,11 @@
 ---
 title: "Roadmap"
-description: "Phase 6 status and the original future-phase ordering."
+description: "Phase 7 status and the original future-phase ordering."
 ---
 
 # Roadmap
 
-Phases 1–6 form the current implemented renderer slice. Engine version `0.0.0-phase.6` adds bounded package-owned inline PNG/JPEG images, mixed portrait/landscape `nextPage` sections, inherited default headers/footers, header/footer template values, and global decimal page fields to the earlier table, paragraph, style, browser, template, numbering, and explicit-font capabilities. Phase 6 is implemented and hardening; it is not a claim of broad Word compatibility, complete cross-runtime proof, or production readiness.
+Phases 1–7 form the current implemented renderer and optional persistence slice. Engine version `0.0.0-phase.7` carries the bounded image/section/header/footer/page-field profile forward and partitions render caches by exact compatibility inputs. The reference app adds anonymous-session Convex metadata and direct storage uploads while keeping persistence off by default. Phase 7 is implemented and hardening; it is not a claim of broad Word compatibility, complete cross-runtime proof, production authentication, or production readiness.
 
 ## Phase 4 — Implemented; hardening ongoing
 
@@ -31,24 +31,27 @@ Phases 1–6 form the current implemented renderer slice. Engine version `0.0.0-
 - Binary-safe workspace-PDF validation that follows classic xref offsets and stream lengths, validates upright text/image resources, and extracts searchable per-page text.
 - Explicitly excluded: dynamic image tags/fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields.
 
+## Phase 7 — Implemented; hardening ongoing
+
+- Anonymous browser sessions through `convex-helpers`, with every template, render, cache read, and delete scoped to the session.
+- Direct generated upload URLs for browser-to-Convex DOCX/PDF storage; storage IDs, bounded metadata, diagnostics summaries, and deterministic hashes remain in database documents.
+- Cursor-paginated history, bounded realtime recent status, completed-PDF cache reuse, owned bearer-URL reads, and scheduled cascading deletion of rows plus storage objects.
+- Explicitly excluded: production authentication/tenant policy, perfect abandoned-upload reclamation, rate limiting, retention compliance, live deployment proof, and treating storage URLs as fine-grained authorization.
+
 ## Future phases
 
 The ordering below preserves the original project brief.
 
-### Phase 7 — Convex
+### Phase 8 — Landing page and documentation
 
-Define an optional Convex integration while preserving application-owned authorization, storage, auditing, retention, and deployment policy.
+Complete the polished landing page, Mintlify documentation routes, interactive examples, architecture explanation, support matrix, GitHub/community links, and SEO metadata, with representative redistributable authoring fixtures and browser proof.
 
-### Phase 8 — Broader text and fonts
+### Phase 9 — Hardening
 
-Extend beyond LTR Latin, broaden licensed fixtures, evaluate deterministic true TrueType subsetting, and address CFF embedding without system-font discovery.
+Add security fixtures, fuzz/property testing, cross-runtime and real-browser determinism, performance benchmarks, Vercel verification, accessibility evidence, package-size review, and a formal public API review.
 
-### Phase 9 — Compatibility and runtime hardening
+### Phase 10 — Release preparation
 
-Expand redistributable Word fixtures, golden PDFs, layout-trace comparisons, browser/supported-runtime verification, and resource-boundary evidence.
+Add Changesets, publishable package builds, prerelease versioning, provenance configuration, release documentation, contribution materials, a reconciled roadmap, and an initial prerelease. Publication and live deployment remain approval-gated.
 
-### Phase 10 — Release and operational readiness
-
-Complete packaging, release policy, deployment documentation, production validation boundaries, and a canonical hosted product/playground decision.
-
-Each feature must enter through the staged architecture. Current focused tests do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, Convex behavior, deployment proof, or production readiness.
+Each feature must enter through the staged architecture. Current focused tests establish the local Phase 7 Convex boundary but do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, production authentication, deployment proof, or production readiness.

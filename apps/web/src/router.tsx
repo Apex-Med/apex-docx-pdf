@@ -10,7 +10,8 @@ import type { RouterContext } from "@/lib/router-context"
 import { routeTree } from "./routeTree.gen"
 
 export function getRouter() {
-  const convexUrl = import.meta.env.VITE_CONVEX_URL
+  const convexUrl =
+    import.meta.env.VITE_CONVEX_URL || import.meta.env.CONVEX_URL
   const convexQueryClient = convexUrl
     ? new ConvexQueryClient(convexUrl)
     : undefined

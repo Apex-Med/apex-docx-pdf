@@ -19,3 +19,4 @@ jobs:
       - run: bun test
       - run: bun run docs:check
       - run: bun run build
+      - run: bun run packages:validate

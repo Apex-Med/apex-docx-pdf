@@ -1,13 +1,40 @@
 {
   "name": "@apex-docx-pdf/images",
-  "version": "0.0.0",
+  "version": "0.1.0-next.0",
+  "description": "Bounded PNG and JPEG preparation for Apex DOCX PDF.",
   "type": "module",
-  "private": true,
   "sideEffects": false,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/craig-bredenkamp/apex-docx-pdf.git",
+    "directory": "packages/images"
+  },
+  "homepage": "https://github.com/craig-bredenkamp/apex-docx-pdf#readme",
+  "bugs": {
+    "url": "https://github.com/craig-bredenkamp/apex-docx-pdf/issues"
+  },
+  "keywords": [
+    "png",
+    "jpeg",
+    "pdf",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "tsup --config ../../tsup.config.ts && bun ../../scripts/prepare-package.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

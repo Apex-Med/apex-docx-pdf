@@ -20,6 +20,16 @@ Invoice {{invoice.number:string | upper}}
 
 Save it as `letter.docx`. The compiler recognizes the logical text of a paragraph, so a value tag may span DOCX runs; authoring it in one run is still easier to inspect.
 
+If you author in Google Docs, choose **File → Download → Microsoft Word (.docx)**. Use the downloaded DOCX as the renderer input; a Google Docs link or native Google document is not a template package. Open the export in Word or another DOCX-aware editor and check the page size, margins, tables, numbering, headers, footers, and image placement before compiling it.
+
+Before using any template, accept or reject every tracked change and remove every unresolved comment. Revisions and comments are collaboration metadata, not supported template logic, and can leave ambiguous or unexpected package content. Keep a reviewed source copy if your workflow needs that history, then produce a clean, revision-free DOCX for rendering.
+
+<Tip>
+  Start with the [representative examples](/examples) to choose a supported
+  structure for a letter, invoice, report, legal list, signature table, or
+  synthetic medical-style table.
+</Tip>
+
 ## 2. Compile and render
 
 The engine requires an explicit `locale` and `timeZone` for every render.
@@ -55,7 +65,7 @@ const result = await engine.render(
 await Bun.write("invoice.pdf", result.pdf)
 ```
 
-`compiled.version` is `0.0.0-phase.6`. The compiled result exposes canonical manifest paths such as `invoice.items[].description`, a deterministic nested JSON Schema, one-item starter arrays, immutable package-owned image assets, and diagnostics. `result` contains searchable PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a source-linked layout trace. Tables can cross pages and repeat contiguous leading header rows; sections produce their declared portrait/landscape pages; default headers and footers repeat with current decimal page values.
+`compiled.version` is `0.0.0-phase.7`. The compiled result exposes canonical manifest paths such as `invoice.items[].description`, a deterministic nested JSON Schema, one-item starter arrays, immutable package-owned image assets, and diagnostics. `result` contains searchable PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a source-linked layout trace. Tables can cross pages and repeat contiguous leading header rows; sections produce their declared portrait/landscape pages; default headers and footers repeat with current decimal page values.
 
 For a table, author positive integer-twip columns in `tblGrid`. The renderer uses their sum as the fixed width; any explicit `tblW` must equal that sum, and any explicit cell `tcW` must equal the sum of its `gridSpan` columns. This rule also applies when the DOCX declares `autofit`: the renderer does not implement Word's content-driven autofit algorithm.
 
@@ -69,8 +79,16 @@ For an image, embed a PNG or JPEG as an internal DOCX relationship and use inlin
 
 The zero-argument engine uses the historical built-in Helvetica fallback. For document fonts, create the engine with an explicit `fonts` configuration containing the exact TrueType `Uint8Array` programs. Formatting receives the render's explicit `locale` and `timeZone`; it never reads ambient defaults. See [font handling](/font-handling) and [template language](/template-language).
 
-## 3. Treat diagnostics as output
+## 3. Inspect before rendering
+
+Load the DOCX in the local playground and compile it before treating it as a production template. Use its inspector—the Preview, Fields, Schema, generated data, and Diagnostics surfaces—to review the detected field manifest, generated JSON Schema, starter data, and source locations. Confirm that every path and type matches the JSON your application will send, especially item-relative fields inside loops.
+
+The playground is a local reference tool, not an embedded Mintlify runtime or production-readiness claim. If your integration does not use the playground, expose the same compiled manifest, schema, starter data, and diagnostics in an internal review step.
+
+## 4. Treat diagnostics as output
 
 Compilation and rendering preserve diagnostics rather than hiding lossy behavior. A diagnostic has a stable code, severity, message, and, where available, DOCX source location and node ID. Do not treat a warning as proof that visual fidelity has been preserved; check [supported features](/supported-features).
+
+Before production use, compile and render with representative and boundary data, resolve every error, review every warning, compare the searchable PDF with the intended Word layout, and retain the diagnostics and optional layout trace as review evidence. A produced PDF alone is not proof of Word fidelity or production readiness.
 
 Next: [author a supported template](/authoring).

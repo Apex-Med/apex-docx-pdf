@@ -1,0 +1,50 @@
+---
+title: "Community"
+description: "Report bugs, contribute bounded fixtures, and discuss Apex DOCX PDF in public."
+---
+
+# Community
+
+Apex DOCX PDF is Apache-2.0 prerelease software developed in public. The most useful contributions are narrow, reproducible, and explicit about the supported-profile boundary.
+
+<CardGroup cols={2}>
+  <Card
+    title="Browse the source"
+    icon="github"
+    href="https://github.com/craig-bredenkamp/apex-docx-pdf"
+  >
+    Inspect the engine packages, focused tests, architecture decisions, and
+    roadmap.
+  </Card>
+  <Card
+    title="Report an issue"
+    icon="circle-dot"
+    href="https://github.com/craig-bredenkamp/apex-docx-pdf/issues/new/choose"
+  >
+    Share a minimal reproduction, the engine version, diagnostics, and expected
+    behavior.
+  </Card>
+</CardGroup>
+
+## A useful renderer report
+
+Include:
+
+- engine version and runtime;
+- a minimal redistributable DOCX, preferably synthetic and free of confidential data;
+- the smallest JSON payload that reproduces the behavior;
+- explicit locale, time zone, fonts, limits, and render options;
+- diagnostics and the relevant source location;
+- whether the concern is semantic output, layout, searchable text, or byte determinism.
+
+Do not attach real patient, client, employee, or financial documents. Rebuild the structure with synthetic text and assets first.
+
+## Feature requests
+
+Check the [support matrix](/supported-features) before opening a request. Unsupported Word features are intentional compatibility boundaries until parser, semantic model, layout, PDF output, fixtures, and documentation can move together. A request is stronger when it includes a small authoring example and explains the required output rather than assuming complete Microsoft Word fidelity.
+
+<Warning>
+  Public issue trackers are not a security-reporting channel. Do not publish an
+  exploitable document or sensitive details. Review the [security
+  boundary](/security) before sharing adversarial input.
+</Warning>

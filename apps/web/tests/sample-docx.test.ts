@@ -91,7 +91,7 @@ describe("playground sample DOCX", () => {
       (block) => block.type === "table"
     )
 
-    expect(compiled.version).toBe("0.0.0-phase.6")
+    expect(compiled.version).toBe("0.0.0-phase.7")
     expect(compiled.diagnostics).toEqual([])
     expect(
       compiled.source.assets.map((asset) => [

@@ -1,0 +1,16 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@apex-docx-pdf/browser": "0.1.0-next.0",
+    "@apex-docx-pdf/core": "0.1.0-next.0",
+    "@apex-docx-pdf/docx": "0.1.0-next.0",
+    "@apex-docx-pdf/engine": "0.1.0-next.0",
+    "@apex-docx-pdf/fonts": "0.1.0-next.0",
+    "@apex-docx-pdf/images": "0.1.0-next.0",
+    "@apex-docx-pdf/layout": "0.1.0-next.0",
+    "@apex-docx-pdf/pdf": "0.1.0-next.0",
+    "@apex-docx-pdf/template": "0.1.0-next.0"
+  },
+  "changesets": []
+}

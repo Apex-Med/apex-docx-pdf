@@ -1,12 +1,12 @@
-import type { PaginationOptions } from "convex/server";
-import { v } from "convex/values";
+import type { PaginationOptions } from "convex/server"
+import { v } from "convex/values"
 
 export const diagnosticsSummaryValidator = v.object({
   errorCount: v.number(),
   warningCount: v.number(),
   infoCount: v.number(),
   codes: v.array(v.string()),
-});
+})
 
 export const templateValidator = v.object({
   _id: v.id("templates"),
@@ -22,12 +22,12 @@ export const templateValidator = v.object({
   status: v.union(
     v.literal("ready"),
     v.literal("invalid"),
-    v.literal("deleting"),
+    v.literal("deleting")
   ),
   diagnosticsSummary: diagnosticsSummaryValidator,
   createdAt: v.number(),
   updatedAt: v.number(),
-});
+})
 
 export const renderValidator = v.object({
   _id: v.id("renders"),
@@ -47,23 +47,23 @@ export const renderValidator = v.object({
     v.literal("complete"),
     v.literal("failed"),
     v.literal("cancelled"),
-    v.literal("deleting"),
+    v.literal("deleting")
   ),
   diagnosticsSummary: diagnosticsSummaryValidator,
   createdAt: v.number(),
   completedAt: v.optional(v.number()),
-});
+})
 
 export type DiagnosticsSummary = {
-  errorCount: number;
-  warningCount: number;
-  infoCount: number;
-  codes: string[];
-};
+  errorCount: number
+  warningCount: number
+  infoCount: number
+  codes: string[]
+}
 
-const textEncoder = new TextEncoder();
-const HASH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._-]*$/;
-const DIAGNOSTIC_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,79}$/;
+const textEncoder = new TextEncoder()
+const SHA256_PATTERN = /^[0-9a-f]{64}$/
+const DIAGNOSTIC_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_./-]{0,127}$/
 
 export function assertSessionId(sessionId: string): void {
   if (
@@ -71,19 +71,19 @@ export function assertSessionId(sessionId: string): void {
     sessionId.length > 128 ||
     sessionId.trim() !== sessionId
   ) {
-    throw new Error("Invalid session ID");
+    throw new Error("Invalid session ID")
   }
 }
 
 export function assertName(name: string): void {
   if (name.length === 0 || name.length > 160 || name.trim() !== name) {
-    throw new Error("Template name must be 1 to 160 trimmed characters");
+    throw new Error("Template name must be 1 to 160 trimmed characters")
   }
 }
 
 export function assertHash(label: string, hash: string): void {
-  if (hash.length < 16 || hash.length > 256 || !HASH_PATTERN.test(hash)) {
-    throw new Error(`${label} must be a bounded opaque hash`);
+  if (!SHA256_PATTERN.test(hash)) {
+    throw new Error(`${label} must be a lowercase SHA-256 hash`)
   }
 }
 
@@ -93,7 +93,7 @@ export function assertEngineVersion(engineVersion: string): void {
     engineVersion.length > 80 ||
     engineVersion.trim() !== engineVersion
   ) {
-    throw new Error("Invalid engine version");
+    throw new Error("Invalid engine version")
   }
 }
 
@@ -104,64 +104,64 @@ export function assertDiagnosticsSummary(summary: DiagnosticsSummary): void {
     summary.infoCount,
   ]) {
     if (!Number.isSafeInteger(count) || count < 0 || count > 100_000) {
-      throw new Error("Invalid diagnostic count");
+      throw new Error("Invalid diagnostic count")
     }
   }
   if (summary.codes.length > 64) {
-    throw new Error("Too many diagnostic codes");
+    throw new Error("Too many diagnostic codes")
   }
-  const uniqueCodes = new Set(summary.codes);
+  const uniqueCodes = new Set(summary.codes)
   if (
     uniqueCodes.size !== summary.codes.length ||
     summary.codes.some((code) => !DIAGNOSTIC_CODE_PATTERN.test(code))
   ) {
-    throw new Error("Diagnostic summaries may contain only unique stable codes");
+    throw new Error("Diagnostic summaries may contain only unique stable codes")
   }
 }
 
 export function assertJsonMetadata(
   label: string,
   json: string,
-  maximumBytes: number,
+  maximumBytes: number
 ): void {
   if (textEncoder.encode(json).byteLength > maximumBytes) {
-    throw new Error(`${label} exceeds its byte limit`);
+    throw new Error(`${label} exceeds its byte limit`)
   }
-  let root: unknown;
+  let root: unknown
   try {
-    root = JSON.parse(json);
+    root = JSON.parse(json)
   } catch {
-    throw new Error(`${label} must be valid JSON`);
+    throw new Error(`${label} must be valid JSON`)
   }
 
   const stack: Array<{ value: unknown; depth: number }> = [
     { value: root, depth: 0 },
-  ];
-  let nodes = 0;
+  ]
+  let nodes = 0
   while (stack.length > 0) {
-    const item = stack.pop();
-    if (!item) break;
-    nodes += 1;
+    const item = stack.pop()
+    if (!item) break
+    nodes += 1
     if (nodes > 20_000 || item.depth > 64) {
-      throw new Error(`${label} exceeds its structural limits`);
+      throw new Error(`${label} exceeds its structural limits`)
     }
     if (Array.isArray(item.value)) {
       if (item.value.length > 5_000) {
-        throw new Error(`${label} contains an oversized array`);
+        throw new Error(`${label} contains an oversized array`)
       }
       for (const value of item.value) {
-        stack.push({ value, depth: item.depth + 1 });
+        stack.push({ value, depth: item.depth + 1 })
       }
     } else if (item.value !== null && typeof item.value === "object") {
-      const entries = Object.entries(item.value);
+      const entries = Object.entries(item.value)
       if (entries.length > 5_000) {
-        throw new Error(`${label} contains an oversized object`);
+        throw new Error(`${label} contains an oversized object`)
       }
       for (const [key, value] of entries) {
         if (key.length > 256) {
-          throw new Error(`${label} contains an oversized key`);
+          throw new Error(`${label} contains an oversized key`)
         }
-        stack.push({ value, depth: item.depth + 1 });
+        stack.push({ value, depth: item.depth + 1 })
       }
     }
   }
@@ -173,21 +173,25 @@ export function assertPaginationOptions(options: PaginationOptions): void {
     options.numItems < 1 ||
     options.numItems > 100
   ) {
-    throw new Error("Pagination size must be between 1 and 100");
+    throw new Error("Pagination size must be between 1 and 100")
   }
   if (options.cursor !== null && options.cursor.length > 2_048) {
-    throw new Error("Pagination cursor is too long");
+    throw new Error("Pagination cursor is too long")
   }
 }
 
 export function assertBoundedLimit(limit: number, maximum = 100): void {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > maximum) {
-    throw new Error(`Limit must be between 1 and ${maximum}`);
+    throw new Error(`Limit must be between 1 and ${maximum}`)
   }
 }
 
 export function assertPageCount(pageCount: number): void {
-  if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 100_000) {
-    throw new Error("Invalid page count");
+  if (
+    !Number.isSafeInteger(pageCount) ||
+    pageCount < 1 ||
+    pageCount > 100_000
+  ) {
+    throw new Error("Invalid page count")
   }
 }

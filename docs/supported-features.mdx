@@ -1,11 +1,11 @@
 ---
 title: "Supported features"
-description: "An honest compatibility matrix for the implemented Phase 6 renderer."
+description: "An honest compatibility matrix for the implemented Phase 7 renderer and demo adapter."
 ---
 
 # Supported features
 
-Engine version `0.0.0-phase.6` supports a bounded DOCX profile. A feature being common in Word does not make it supported here.
+Engine version `0.0.0-phase.7` supports a bounded DOCX profile and partitions the optional app cache by exact engine/template/font/data/options hashes. A feature being common in Word does not make it supported here.
 
 | Area                                | Status                       | Behavior                                                                                                                                                                                                                                                  |
 | ----------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,11 +34,12 @@ Engine version `0.0.0-phase.6` supports a bounded DOCX profile. A feature being 
 | Other section/header variants       | Unsupported                  | Continuous, odd-page, and even-page breaks; first/even headers/footers; automatic header/footer numbering; and arbitrary Word fields are unavailable.                                                                                                     |
 | Other table features                | Unsupported                  | Percentage widths, nested tables, styles/themes/conditional regions, complex shading, and complete Word autofit are unavailable.                                                                                                                          |
 | Other text/font features            | Unsupported                  | General tab stops, complex scripts/bidi, CFF PDF embedding, and true default font subsetting are unavailable.                                                                                                                                             |
-| Convex integration and deployment   | Planned from Phase 7         | No supported Convex adapter, hosted service, production deployment proof, or canonical public playground is claimed.                                                                                                                                      |
+| Dormant Convex groundwork           | Supported with limits        | Tested anonymous-session storage, metadata, cache, realtime, and deletion adapters exist for future product work, but the current playground does not mount them and remains local-only.                                                                  |
+| Hosted deployment                   | Planned                      | No production Vercel deployment, production Convex authorization, canonical hosted playground, or operational readiness claim has been verified.                                                                                                          |
 
 ## Evidence boundary
 
-Phase 6 implementation and focused tests establish this supported slice. They do not establish broad Microsoft Word fixture compatibility, complete Bun/Node/browser equivalence, production readiness, or full font/image-profile coverage. Synchronous PNG inflate is bounded but cannot observe cancellation until the call returns.
+Phase 7 implementation and focused tests establish this supported slice. They do not establish broad Microsoft Word fixture compatibility, complete Bun/Node/browser equivalence, production readiness, or full font/image-profile coverage. Synchronous PNG inflate is bounded but cannot observe cancellation until the call returns.
 
 <Warning>
   Treat diagnostics as part of the rendering contract. A successful PDF is not

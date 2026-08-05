@@ -30,7 +30,7 @@ The renderer is designed around reproducible inputs rather than ambient process 
 
 ## What to persist for a reproducible render
 
-Persist the exact template bytes or template hash, bounded data JSON, complete font configuration and exact font bytes, engine version (`0.0.0-phase.6` for this slice), `locale`, `timeZone`, limits, metadata, render options, diagnostics, and optional layout trace. Package-owned image bytes and section/header/footer parts are included in the template bytes/hash. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
+Persist the exact template bytes or template hash, bounded data JSON, complete font configuration and exact font bytes, engine version (`0.0.0-phase.7` for this slice), `locale`, `timeZone`, limits, metadata, render options, diagnostics, and optional layout trace. Package-owned image bytes and section/header/footer parts are included in the template bytes/hash. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
 
 <Note>
   The current serializer does not compress PDF streams, and repeat-identical

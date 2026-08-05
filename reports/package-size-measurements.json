@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T17:39:15.780Z",
+  "basis": "raw and per-file gzip bytes from current local source/build artifacts",
+  "caveat": "Per-file gzip totals are an inventory aid, not a bundled transfer-size prediction.",
+  "roots": {
+    "packages": {
+      "files": 55,
+      "bytes": 560441,
+      "gzipBytes": 135830
+    },
+    "apps/web/dist": {
+      "files": 46,
+      "bytes": 8432585,
+      "gzipBytes": 3060150
+    }
+  },
+  "packages": {
+    "packages/browser": {
+      "files": 4,
+      "bytes": 14874,
+      "gzipBytes": 4304
+    },
+    "packages/core": {
+      "files": 10,
+      "bytes": 20111,
+      "gzipBytes": 6909
+    },
+    "packages/docx": {
+      "files": 6,
+      "bytes": 174631,
+      "gzipBytes": 36016
+    },
+    "packages/engine": {
+      "files": 1,
+      "bytes": 15293,
+      "gzipBytes": 3872
+    },
+    "packages/fonts": {
+      "files": 6,
+      "bytes": 24119,
+      "gzipBytes": 7205
+    },
+    "packages/images": {
+      "files": 1,
+      "bytes": 36696,
+      "gzipBytes": 9467
+    },
+    "packages/layout": {
+      "files": 1,
+      "bytes": 97687,
+      "gzipBytes": 21563
+    },
+    "packages/pdf": {
+      "files": 1,
+      "bytes": 39773,
+      "gzipBytes": 9756
+    },
+    "packages/template": {
+      "files": 4,
+      "bytes": 62979,
+      "gzipBytes": 14721
+    },
+    "packages/testkit": {
+      "files": 5,
+      "bytes": 32460,
+      "gzipBytes": 9287
+    },
+    "packages/ui": {
+      "files": 16,
+      "bytes": 41818,
+      "gzipBytes": 12730
+    }
+  },
+  "largestFiles": [
+    {
+      "path": "apps/web/dist/client/assets/playground-D1Q_zlaN.js",
+      "bytes": 1673942,
+      "gzipBytes": 499704
+    },
+    {
+      "path": "apps/web/dist/client/assets/docx_wasm_bg-HWnIvdMf.wasm",
+      "bytes": 1119333,
+      "gzipBytes": 443199
+    },
+    {
+      "path": "apps/web/dist/client/assets/worker-engine-DzMznpxj.js",
+      "bytes": 708746,
+      "gzipBytes": 123612
+    },
+    {
+      "path": "apps/web/dist/client/assets/render.worker-Dh7rlujQ.js",
+      "bytes": 619360,
+      "gzipBytes": 233988
+    },
+    {
+      "path": "apps/web/dist/client/assets/NotoSans-BoldItalic-CP7mkXEB.ttf",
+      "bytes": 534108,
+      "gzipBytes": 269416
+    },
+    {
+      "path": "apps/web/dist/client/assets/NotoSans-Italic-B7xQy_Jx.ttf",
+      "bytes": 530044,
+      "gzipBytes": 269670
+    },
+    {
+      "path": "apps/web/dist/client/assets/NotoSans-Bold-CJgel98A.ttf",
+      "bytes": 515668,
+      "gzipBytes": 261905
+    },
+    {
+      "path": "apps/web/dist/client/assets/NotoSans-Regular-D6NVAeFw.ttf",
+      "bytes": 512588,
+      "gzipBytes": 262418
+    },
+    {
+      "path": "apps/web/dist/server/assets/site-header-C4p0ENQg.js",
+      "bytes": 477803,
+      "gzipBytes": 104188
+    },
+    {
+      "path": "apps/web/dist/client/assets/es-DRpwHNZu.js",
+      "bytes": 382499,
+      "gzipBytes": 163794
+    },
+    {
+      "path": "apps/web/dist/server/assets/playground-C6mXTWzA.js",
+      "bytes": 380307,
+      "gzipBytes": 85377
+    },
+    {
+      "path": "apps/web/dist/client/assets/site-header-MqoEs4cZ.js",
+      "bytes": 189000,
+      "gzipBytes": 62673
+    },
+    {
+      "path": "apps/web/dist/client/assets/client-Brn0H5ZB.js",
+      "bytes": 178863,
+      "gzipBytes": 56460
+    },
+    {
+      "path": "apps/web/dist/server/server.js",
+      "bytes": 178047,
+      "gzipBytes": 44241
+    },
+    {
+      "path": "packages/docx/src/parse.ts",
+      "bytes": 145317,
+      "gzipBytes": 28003
+    },
+    {
+      "path": "apps/web/dist/client/assets/index-yfykdP7D.js",
+      "bytes": 124642,
+      "gzipBytes": 41899
+    },
+    {
+      "path": "packages/layout/src/index.ts",
+      "bytes": 97687,
+      "gzipBytes": 21563
+    },
+    {
+      "path": "apps/web/dist/client/assets/globals-DqDJsl6t.css",
+      "bytes": 87036,
+      "gzipBytes": 14526
+    },
+    {
+      "path": "apps/web/dist/client/assets/pako-CZ_VnyBX.js",
+      "bytes": 45143,
+      "gzipBytes": 14381
+    },
+    {
+      "path": "packages/pdf/src/index.ts",
+      "bytes": 39773,
+      "gzipBytes": 9756
+    }
+  ]
+}

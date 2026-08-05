@@ -1,11 +1,17 @@
 ---
 title: "Authoring guide"
-description: "Create Phase 6 templates with bounded tables, static images, sections, headers, footers, and page fields."
+description: "Create bounded templates with tables, static images, sections, headers, footers, and page fields."
 ---
 
 # Authoring guide
 
 The renderer accepts one ordinary DOCX package and normalizes supported paragraphs, tables, static images, multiple sections, default headers/footers, styles, runs, numbering, fields, and pagination properties before templating and layout.
+
+## Why author layout in Word
+
+The DOCX is the layout artifact. Word gives template authors direct control over page geometry, paragraph styles, numbering, fixed table grids, static images, section boundaries, and headers/footers without requiring the application to encode every document design as source code. The renderer then applies bounded data to that authored structure deterministically. This supports arbitrary arrangements made from the documented primitives; it does not mean arbitrary Word features are supported or reproduced like Word itself.
+
+If you start in Google Docs, download the document with **File → Download → Microsoft Word (.docx)** and inspect that export. Before compilation, accept or reject all tracked changes and delete unresolved comments. Keep collaboration history in a separate reviewed source document rather than relying on revisions or comments in the renderable template.
 
 ## Author within the supported shape
 
@@ -93,6 +99,12 @@ row: {{/each}}
 
 Use semantic paths and fixed safe formatters; avoid dynamic expressions or arbitrary helpers. Save redistributable representative fixtures with known data and keep layout traces/PDFs as regression artifacts. Compilation and rendering diagnostics are part of the result contract.
 
+Run every candidate template through the inspector before production use. Review the field manifest, generated schema, starter data, source locations, and compile diagnostics; then render representative and boundary data, review all render diagnostics, and compare the searchable PDF against the intended layout. Record the exact template bytes or hash, engine version, fonts, locale, time zone, render options, diagnostics, and optional layout trace used for approval.
+
+### Privacy, security, and provenance
+
+Do not put personal, clinical, financial, or other sensitive real-world data in example fixtures, issue reports, screenshots, diagnostics, or layout traces. Use synthetic data and follow the host application's authorization, retention, redaction, and logging policy. Verify that every font and image is owned, licensed, or otherwise authorized for template use and redistribution; retain provenance and license records alongside the template.
+
 ## Images, sections, and page furniture
 
 Static images are source content, not template data. The compiler preserves internal package bytes and explicit extent; it performs no fetch. Reusing identical source bytes is deterministic and produces one reusable PDF image XObject. Supported PNG alpha is emitted through a grayscale `/SMask`; JPEG stays in its accepted DCT form. Do not rely on anchors/floating placement, crop, rotation, SVG, EXIF orientation other than 1, ICC conversion, CMYK/YCCK, or unlisted PNG/JPEG profiles.
@@ -103,4 +115,6 @@ Header/footer template values, formatters, and whole-paragraph blocks resolve fr
 
 ## Do not rely on these yet
 
-Dynamic image tags, external/fetched images, anchors/floating placement, crop, rotation, SVG, unsupported image profiles/colors, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, arbitrary fields, percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex scripts, CFF embedding, true default subsetting, Convex integration, and deployment are outside the current profile. See [template language](/template-language), [font handling](/font-handling), and the [support matrix](/supported-features).
+Dynamic image tags, external/fetched images, anchors/floating placement, crop, rotation, SVG, unsupported image profiles/colors, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, arbitrary fields, percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex scripts, CFF embedding, true default subsetting, and production deployment are outside the current profile. See [template language](/template-language), [font handling](/font-handling), and the [support matrix](/supported-features).
+
+Continue with the [representative examples](/examples) for concrete, inspectable authoring patterns.

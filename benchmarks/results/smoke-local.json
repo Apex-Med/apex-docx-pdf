@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T17:39:03.383Z",
+  "runtime": "Bun 1.3.14",
+  "platform": "darwin-arm64",
+  "mode": "smoke",
+  "note": "Observational baseline only; no regression budget is asserted.",
+  "samples": [
+    {
+      "name": "cold-engine-create",
+      "iterations": 1,
+      "samplesMs": [
+        0.555
+      ],
+      "medianMs": 0.555,
+      "minMs": 0.555,
+      "maxMs": 0.555
+    },
+    {
+      "name": "cold-font-engine-create",
+      "iterations": 1,
+      "samplesMs": [
+        44.592
+      ],
+      "medianMs": 44.592,
+      "minMs": 44.592,
+      "maxMs": 44.592
+    },
+    {
+      "name": "compile-one-page",
+      "iterations": 1,
+      "samplesMs": [
+        7.714
+      ],
+      "medianMs": 7.714,
+      "minMs": 7.714,
+      "maxMs": 7.714,
+      "outputBytes": 220
+    },
+    {
+      "name": "repeated-render-one-page",
+      "iterations": 2,
+      "samplesMs": [
+        7.73,
+        0.623
+      ],
+      "medianMs": 7.73,
+      "minMs": 0.623,
+      "maxMs": 7.73,
+      "outputBytes": 822,
+      "pages": 1
+    },
+    {
+      "name": "compile-render-1-page",
+      "iterations": 1,
+      "samplesMs": [
+        4.246
+      ],
+      "medianMs": 4.246,
+      "minMs": 4.246,
+      "maxMs": 4.246,
+      "outputBytes": 817,
+      "pages": 1
+    },
+    {
+      "name": "compile-render-5-page",
+      "iterations": 1,
+      "samplesMs": [
+        6.682
+      ],
+      "medianMs": 6.682,
+      "minMs": 6.682,
+      "maxMs": 6.682,
+      "outputBytes": 2362,
+      "pages": 5
+    },
+    {
+      "name": "render-invoice-50-rows",
+      "iterations": 1,
+      "samplesMs": [
+        33.003
+      ],
+      "medianMs": 33.003,
+      "minMs": 33.003,
+      "maxMs": 33.003,
+      "outputBytes": 48442,
+      "pages": 13
+    }
+  ]
+}

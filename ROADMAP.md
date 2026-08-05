@@ -10,7 +10,8 @@ Apex DOCX PDF is prerelease software built in narrow, testable slices. This road
 - **Phase 4 — Numbering, templates, and pagination controls: implemented; hardening ongoing.** Engine version `0.0.0-phase.4` adds relationship-owned DOCX numbering, bounded whole-paragraph template blocks, safe explicit-context formatters, list layout, and keep/widow controls.
 - **Phase 5 — Tables: implemented; hardening ongoing.** Engine version `0.0.0-phase.5` adds deterministic fixed-grid table geometry, supported cell and row formatting, row templates, repeated headers, fragmentation, multi-page tables, and source-linked searchable PDF output.
 - **Phase 6 — Static images, sections, headers, footers, and page fields: implemented; hardening ongoing.** Engine version `0.0.0-phase.6` adds bounded inline PNG/JPEG resources, multiple `nextPage` sections, portrait/landscape pages, inherited default headers/footers, header/footer templates, and global decimal page fields.
-- **Phases 7–10: not complete.** The future phase ordering below follows the original project brief; status may be refined as architecture and fixture evidence develop.
+- **Phase 7 — Convex integration: implemented; hardening ongoing.** Engine version `0.0.0-phase.7` partitions render caches by engine/template/font/data/options hashes, while the optional app adapter adds anonymous session isolation, direct DOCX/PDF uploads, metadata, realtime render history, and bounded storage cleanup.
+- **Phases 8–10: not complete.** The future phase ordering below follows the original project brief; status may be refined as architecture and fixture evidence develop.
 
 ## Phase status and planned phases
 
@@ -38,19 +39,19 @@ This does not implement dynamic image tags, fetches, external images, anchors/fl
 
 ### Phase 7 — Convex integration boundary
 
-Define an optional Convex adapter while leaving authorization, storage, auditing, retention, and deployment policy with the host application. No Convex integration exists today.
+Implemented; hardening ongoing. The optional adapter uses `convex-helpers` anonymous browser sessions, direct generated upload URLs, session-owned template/render metadata, deterministic cache keys, cursor-paginated history, realtime status, bearer-URL-on-owned-read access, and scheduled bounded deletion of database rows plus stored DOCX/PDF objects. Persistence is off by default. Anonymous isolation is explicitly a demo boundary, not production authentication; Clerk/WorkOS identity, retention, auditing, rate limits, and deployment policy remain host responsibilities.
 
-### Phase 8 — Broader text and font hardening
+### Phase 8 — Landing page and documentation
 
-Extend beyond the implemented LTR Latin boundary, add broader licensed compatibility fixtures, and evaluate a deterministic true subsetter behind the existing source-to-subset glyph mapping seam. System-font discovery remains out of scope.
+Complete the polished landing page, Mintlify documentation routes, interactive examples, architecture explanation, support matrix, community links, and SEO metadata. Representative redistributable authoring fixtures and complete browser/accessibility proof remain required before this phase can close.
 
-### Phase 9 — Compatibility and runtime hardening
+### Phase 9 — Hardening
 
-Expand redistributable Word fixtures, golden artifacts, layout-trace comparison, browser and supported-runtime verification, and resource-boundary evidence.
+Add security fixtures, fuzz/property tests, cross-runtime and real-browser determinism, performance benchmarks, Vercel deployment verification, accessibility evidence, package-size budgets, and a formal public API review.
 
-### Phase 10 — Release and operational readiness
+### Phase 10 — Release preparation
 
-Expand compatibility fixtures, golden artifacts, cross-runtime verification, packaging, release policy, and deployment documentation. No deployment configuration or supported hosted service exists today.
+Add Changesets, publishable package builds, prerelease versioning, trusted-publishing provenance configuration, release documentation, contribution materials, a reconciled roadmap, and a verified initial prerelease. Actual publication and live deployment stay credential- and approval-gated.
 
 ## Principles across every phase
 

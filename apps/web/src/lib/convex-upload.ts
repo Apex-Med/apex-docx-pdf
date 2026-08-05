@@ -20,7 +20,9 @@ export async function uploadToConvexStorage(
   })
 
   if (!response.ok) {
-    throw new Error(`Convex storage upload failed with status ${response.status}`)
+    throw new Error(
+      `Convex storage upload failed with status ${response.status}`
+    )
   }
 
   const payload: unknown = await response.json()

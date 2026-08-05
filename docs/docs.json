@@ -35,12 +35,12 @@
       {
         "group": "Introduction",
         "icon": "book-open",
-        "pages": ["index", "getting-started", "supported-features"]
+        "pages": ["index", "getting-started", "supported-features", "community"]
       },
       {
         "group": "Authoring",
         "icon": "file-pen-line",
-        "pages": ["authoring", "template-language", "font-handling"]
+        "pages": ["authoring", "examples", "template-language", "font-handling"]
       },
       {
         "group": "Operating the renderer",

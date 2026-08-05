@@ -1,3 +1,5 @@
-# https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Allow: /
+
+# Relative until VITE_SITE_URL is configured for a production build.
+Sitemap: /sitemap.xml

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@2.3.1/schema.json",
+  "changelog": false,
+  "commit": false,
+  "fixed": [
+    [
+      "@apex-docx-pdf/browser",
+      "@apex-docx-pdf/core",
+      "@apex-docx-pdf/docx",
+      "@apex-docx-pdf/engine",
+      "@apex-docx-pdf/fonts",
+      "@apex-docx-pdf/images",
+      "@apex-docx-pdf/layout",
+      "@apex-docx-pdf/pdf",
+      "@apex-docx-pdf/template"
+    ]
+  ],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "bumpVersionsWithWorkspaceProtocolOnly": true,
+  "ignore": [
+    "@apex-docx-pdf/docs",
+    "@apex-docx-pdf/testkit",
+    "@workspace/ui",
+    "web"
+  ]
+}

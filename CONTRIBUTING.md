@@ -1,6 +1,6 @@
 # Contributing to Apex DOCX PDF
 
-Thank you for helping improve Apex DOCX PDF. The project is an early prerelease: Phases 1–6 are implemented, but their hardening is ongoing and the broader DOCX profile is not complete.
+Thank you for helping improve Apex DOCX PDF. The project is an early prerelease: Phases 1–7 are implemented, but their hardening is ongoing and the broader DOCX profile is not complete.
 
 ## Before you start
 

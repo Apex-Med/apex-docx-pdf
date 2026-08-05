@@ -5,7 +5,7 @@ description: "The optional Phase 7 persistence, ownership, upload, cache, and cl
 
 # Convex integration
 
-Phase 7 defines an optional application adapter around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; Convex owns demo isolation, metadata, file storage, status, and lifecycle operations. This page describes the reference integration contract, not a deployed production service or a general-purpose document authorization system.
+Phase 7 defines dormant application groundwork around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; the Convex adapter covers demo isolation, metadata, file storage, status, and lifecycle operations for possible future product work. The current playground does not mount this adapter: it is local-only and never uploads the template, data, or generated PDF. This page describes the tested reference contract, not an enabled product feature, deployed service, or general-purpose document authorization system.
 
 <Warning>
   The anonymous session used by the reference application isolates one browser
@@ -21,11 +21,11 @@ Clearing browser state, changing browsers, or changing devices can make anonymou
 
 The ownership check is deliberately kept behind one principal-resolution seam. A production host can replace anonymous session establishment with Clerk or WorkOS verification and map the verified principal into the same session-owned query and mutation contract. That migration should strengthen how the principal is established without requiring a second document ownership model or moving authorization into the renderer.
 
-## Opt-in persistence
+## Current local-only playground
 
-Persistence is off by default. With persistence disabled, DOCX bytes, JSON data, and rendered PDF bytes remain in the browser workflow and no Phase 7 storage mutation should run. The user must explicitly enable persistence before an upload or saved render is created.
+The current playground has no cloud persistence controls and does not invoke any storage mutation. DOCX bytes, JSON data, and rendered PDF bytes remain in the browser workflow. A configured Convex URL does not change that document-flow boundary because the playground does not import or mount the persistence component.
 
-Enabling persistence changes the data boundary: templates and selected render artifacts can then be retained in Convex according to the host application's retention policy. The UI should explain that change before upload; a deployment should not silently turn it on for an existing browser session.
+If a future SaaS host enables this adapter, that product must make persistence an explicit, informed action and define authentication, authorization, tenancy, retention, deletion, audit, and rate policies. It must not silently turn cloud storage on for an existing local workflow.
 
 ## Direct uploads
 
