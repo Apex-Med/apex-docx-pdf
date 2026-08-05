@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { strToU8, zipSync } from "fflate"
+import { strToU8, zipSync, zlibSync } from "fflate"
+import type {
+  SemanticBlock,
+  SemanticInline,
+  SemanticParagraph,
+  SemanticText,
+} from "@apex-docx-pdf/core"
 
 import { inspectDocx, normaliseDocxBytes, parseDocx } from "../src"
 import { buildOneParagraphDocx } from "./helpers/docx-fixture"
@@ -8,6 +14,28 @@ function errorCodes(result: {
   readonly diagnostics: readonly { readonly code: string }[]
 }): string[] {
   return result.diagnostics.map((entry) => entry.code)
+}
+
+function paragraphBlock(
+  block: SemanticBlock | undefined
+): SemanticParagraph | undefined {
+  return block?.type === "paragraph" ? block : undefined
+}
+
+function paragraphBlocks(
+  blocks: readonly SemanticBlock[] | undefined
+): readonly SemanticParagraph[] {
+  return (
+    blocks?.filter(
+      (block): block is SemanticParagraph => block.type === "paragraph"
+    ) ?? []
+  )
+}
+
+function textInline(
+  inline: SemanticInline | undefined
+): SemanticText | undefined {
+  return inline?.type === "text" ? inline : undefined
 }
 
 describe("DOCX Phase 1 vertical slice", () => {
@@ -37,20 +65,21 @@ describe("DOCX Phase 1 vertical slice", () => {
     const normalised = normaliseDocxBytes(bytes)
     expect(normalised.ok).toBe(true)
     if (!normalised.ok) return
-    const paragraph = normalised.value.sections[0]?.blocks[0]
+    const paragraph = paragraphBlock(normalised.value.sections[0]?.blocks[0])
     expect(String(paragraph?.id)).toBe("docx:paragraph:1")
     expect(paragraph?.properties.alignment).toBe("center")
     expect(paragraph?.children.map((child) => String(child.id))).toEqual([
       "docx:text:1:1",
       "docx:text:1:2",
     ])
-    expect(paragraph?.children.map((child) => child.text)).toEqual([
-      " Hello ",
-      "world",
-    ])
-    expect(paragraph?.children[0]?.preserveSpace).toBe(true)
-    expect(paragraph?.children[1]?.preserveSpace).toBe(false)
-    expect(paragraph?.children[0]?.style).toMatchObject({
+    expect(
+      paragraph?.children
+        .filter((child) => child.type === "text")
+        .map((child) => child.text)
+    ).toEqual([" Hello ", "world"])
+    expect(textInline(paragraph?.children[0])?.preserveSpace).toBe(true)
+    expect(textInline(paragraph?.children[1])?.preserveSpace).toBe(false)
+    expect(textInline(paragraph?.children[0])?.style).toMatchObject({
       fontWeight: 700,
       fontSize: 240,
     })
@@ -177,7 +206,7 @@ describe("DOCX Phase 1 vertical slice", () => {
     const table = buildOneParagraphDocx({
       documentXml: `<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tr/></w:tbl></w:body></w:document>`,
     })
-    expect(errorCodes(parseDocx(table))).toContain("DOCX_UNSUPPORTED_BLOCK")
+    expect(errorCodes(parseDocx(table))).toContain("DOCX_INVALID_TABLE")
 
     const inspectTable = inspectDocx(table, {
       unsupportedFeatures: "lenient",
@@ -220,7 +249,12 @@ describe("DOCX Phase 3 style resolution", () => {
     const result = normaliseDocxBytes(buildOneParagraphDocx())
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const style = result.value.sections[0]?.blocks[0]?.children[0]?.style
+    const style =
+      paragraphBlock(result.value.sections[0]?.blocks[0]) === undefined
+        ? undefined
+        : textInline(
+            paragraphBlock(result.value.sections[0]?.blocks[0])?.children[0]
+          )?.style
     expect(style).toMatchObject({
       fontFamily: "Calibri",
       fontWeight: 400,
@@ -242,9 +276,9 @@ describe("DOCX Phase 3 style resolution", () => {
     )
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const paragraph = result.value.sections[0]?.blocks[0]
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
     expect(Number(paragraph?.properties.spacingAfter)).toBe(60)
-    expect(paragraph?.children[0]?.style).toMatchObject({
+    expect(textInline(paragraph?.children[0])?.style).toMatchObject({
       fontWeight: 700,
       fontStyle: "italic",
       color: "#123456",
@@ -264,14 +298,14 @@ describe("DOCX Phase 3 style resolution", () => {
     const result = normaliseDocxBytes(bytes)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const paragraph = result.value.sections[0]?.blocks[0]
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
     expect(paragraph?.properties).toMatchObject({
       alignment: "center",
       spacingBefore: 0,
       spacingAfter: 80,
       keepWithNext: true,
     })
-    expect(paragraph?.children[0]?.style).toMatchObject({
+    expect(textInline(paragraph?.children[0])?.style).toMatchObject({
       fontFamily: "Aptos",
       fontSize: 200,
       fontWeight: 700,
@@ -291,7 +325,12 @@ describe("DOCX Phase 3 style resolution", () => {
     const result = normaliseDocxBytes(bytes)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const style = result.value.sections[0]?.blocks[0]?.children[0]?.style
+    const style =
+      paragraphBlock(result.value.sections[0]?.blocks[0]) === undefined
+        ? undefined
+        : textInline(
+            paragraphBlock(result.value.sections[0]?.blocks[0])?.children[0]
+          )?.style
     expect(style).toMatchObject({
       fontFamily: "Direct",
       fontWeight: 400,
@@ -339,7 +378,7 @@ describe("DOCX Phase 3 style resolution", () => {
     const result = normaliseDocxBytes(bytes)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const blocks = result.value.sections[0]?.blocks
+    const blocks = paragraphBlocks(result.value.sections[0]?.blocks)
     expect(blocks?.[0]?.properties).toMatchObject({
       indentStart: 720,
       indentEnd: 240,
@@ -401,7 +440,7 @@ describe("DOCX Phase 4 numbering and widow control", () => {
     ]
       .map(
         ([format, text], level) =>
-          `<w:lvl w:ilvl="${level}"><w:start w:val="${level + 1}"/><w:numFmt w:val="${format}"/><w:lvlText w:val="${text}"/><w:suff w:val="${level === 0 ? "space" : "tab"}"/><w:lvlJc w:val="${level === 2 ? "center" : "left"}"/><w:pPr><w:ind w:start="${720 + level * 120}" w:left="1" w:hanging="360"/></w:pPr>${level === 1 ? "<w:lvlRestart w:val=\"0\"/><w:isLgl/>" : ""}</w:lvl>`
+          `<w:lvl w:ilvl="${level}"><w:start w:val="${level + 1}"/><w:numFmt w:val="${format}"/><w:lvlText w:val="${text}"/><w:suff w:val="${level === 0 ? "space" : "tab"}"/><w:lvlJc w:val="${level === 2 ? "center" : "left"}"/><w:pPr><w:ind w:start="${720 + level * 120}" w:left="1" w:hanging="360"/></w:pPr>${level === 1 ? '<w:lvlRestart w:val="0"/><w:isLgl/>' : ""}</w:lvl>`
       )
       .join("")
     const bytes = buildOneParagraphDocx({
@@ -410,14 +449,18 @@ describe("DOCX Phase 4 numbering and widow control", () => {
         <w:p><w:pPr><w:numPr><w:numId w:val="12"/></w:numPr></w:pPr><w:r><w:t>b</w:t></w:r></w:p>
         <w:p><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="12"/></w:numPr></w:pPr><w:r><w:t>c</w:t></w:r></w:p>
       </w:body></w:document>`,
-      extraParts: withNumbering(`<w:numbering xmlns:w="urn:test"><w:abstractNum w:abstractNumId="4">${levels}</w:abstractNum><w:num w:numId="12"><w:abstractNumId w:val="4"/><w:lvlOverride w:ilvl="1"><w:startOverride w:val="9"/></w:lvlOverride></w:num></w:numbering>`),
+      extraParts: withNumbering(
+        `<w:numbering xmlns:w="urn:test"><w:abstractNum w:abstractNumId="4">${levels}</w:abstractNum><w:num w:numId="12"><w:abstractNumId w:val="4"/><w:lvlOverride w:ilvl="1"><w:startOverride w:val="9"/></w:lvlOverride></w:num></w:numbering>`
+      ),
     })
     const result = normaliseDocxBytes(bytes)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.value.numberingDefinitions).toHaveLength(1)
     expect(result.value.numberingDefinitions[0]?.id).toBe("docx-num-12")
-    expect(result.value.numberingDefinitions[0]?.levels.map((level) => level.format)).toEqual([
+    expect(
+      result.value.numberingDefinitions[0]?.levels.map((level) => level.format)
+    ).toEqual([
       "bullet",
       "decimal",
       "lowerLetter",
@@ -430,9 +473,17 @@ describe("DOCX Phase 4 numbering and widow control", () => {
       legal: true,
       restartAfterLevel: null,
     })
-    expect(Number(result.value.numberingDefinitions[0]?.levels[0]?.indentStart)).toBe(720)
-    expect(Number(result.value.numberingDefinitions[0]?.levels[0]?.firstLineIndent)).toBe(-360)
-    expect(result.value.sections[0]?.blocks.map((block) => block.properties.numbering)).toEqual([
+    expect(
+      Number(result.value.numberingDefinitions[0]?.levels[0]?.indentStart)
+    ).toBe(720)
+    expect(
+      Number(result.value.numberingDefinitions[0]?.levels[0]?.firstLineIndent)
+    ).toBe(-360)
+    expect(
+      paragraphBlocks(result.value.sections[0]?.blocks).map(
+        (block) => block.properties.numbering
+      )
+    ).toEqual([
       { definitionId: "docx-num-12", level: 0 },
       { definitionId: "docx-num-12", level: 0 },
       { definitionId: "docx-num-12", level: 1 },
@@ -459,7 +510,7 @@ describe("DOCX Phase 4 numbering and widow control", () => {
     const result = normaliseDocxBytes(bytes)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const blocks = result.value.sections[0]?.blocks
+    const blocks = paragraphBlocks(result.value.sections[0]?.blocks)
     expect(blocks?.[0]?.properties).toMatchObject({
       numbering: { definitionId: "docx-num-7", level: 2 },
       widowControl: false,
@@ -468,7 +519,9 @@ describe("DOCX Phase 4 numbering and widow control", () => {
     expect(blocks?.[1]?.properties.numbering).toBeNull()
     expect(blocks?.[1]?.properties.widowControl).toBe(true)
     expect(blocks?.[2]?.properties.widowControl).toBe(false)
-    expect(Number(result.value.numberingDefinitions[0]?.levels[0]?.indentStart)).toBe(500)
+    expect(
+      Number(result.value.numberingDefinitions[0]?.levels[0]?.indentStart)
+    ).toBe(500)
   })
 
   test("reports missing relationships, references, levels, malformed values, and unsupported formats with source locations", () => {
@@ -477,16 +530,630 @@ describe("DOCX Phase 4 numbering and widow control", () => {
         documentXml: `<w:document xmlns:w="urn:test"><w:body><w:p><w:pPr><w:numPr><w:numId w:val="3"/></w:numPr></w:pPr></w:p></w:body></w:document>`,
       })
     )
-    expect(errorCodes(missingRelationship)).toContain("DOCX_MISSING_NUMBERING_REFERENCE")
+    expect(errorCodes(missingRelationship)).toContain(
+      "DOCX_MISSING_NUMBERING_RELATIONSHIP"
+    )
     const malformed = parseDocx(
       buildOneParagraphDocx({
-        extraParts: withNumbering(`<w:numbering xmlns:w="urn:test"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="9"><w:numFmt w:val="ordinal"/><w:lvlText w:val="%10"/></w:lvl><w:lvl w:ilvl="0"><w:numFmt w:val="ordinal"/><w:lvlText w:val="%10"/></w:lvl></w:abstractNum><w:num w:numId="2"><w:abstractNumId w:val="99"/></w:num></w:numbering>`),
+        extraParts: withNumbering(
+          `<w:numbering xmlns:w="urn:test"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="9"><w:numFmt w:val="ordinal"/><w:lvlText w:val="%10"/></w:lvl><w:lvl w:ilvl="0"><w:numFmt w:val="ordinal"/><w:lvlText w:val="%10"/></w:lvl></w:abstractNum><w:num w:numId="2"><w:abstractNumId w:val="99"/></w:num></w:numbering>`
+        ),
       })
     )
     expect(errorCodes(malformed)).toContain("DOCX_INVALID_NUMBERING_LEVEL")
     expect(errorCodes(malformed)).toContain("DOCX_UNSUPPORTED_NUMBERING_FORMAT")
     expect(errorCodes(malformed)).toContain("DOCX_MISSING_NUMBERING_REFERENCE")
     expect(errorCodes(malformed)).toContain("DOCX_CONTENT_LOSS")
-    expect(malformed.diagnostics.find((entry) => entry.code === "DOCX_UNSUPPORTED_NUMBERING_FORMAT")?.source?.part).toBe("word/config/lists.xml")
+    expect(
+      malformed.diagnostics.find(
+        (entry) => entry.code === "DOCX_UNSUPPORTED_NUMBERING_FORMAT"
+      )?.source?.part
+    ).toBe("word/config/lists.xml")
+
+    const zeroStart = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        extraParts: withNumbering(
+          `<w:numbering xmlns:w="urn:test"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="0"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="2"><w:abstractNumId w:val="1"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="0"/></w:lvlOverride></w:num></w:numbering>`
+        ),
+      })
+    )
+    expect(zeroStart.ok).toBe(true)
+    if (!zeroStart.ok) return
+    expect(zeroStart.value.numberingDefinitions[0]?.levels[0]?.startAt).toBe(0)
+  })
+})
+
+describe("DOCX Phase 5 semantic tables", () => {
+  test("normalises grid widths, borders, padding, merges, headers, and row pagination metadata", () => {
+    const result = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body>
+          <w:tbl>
+            <w:tblPr>
+              <w:tblW w:w="4500" w:type="dxa"/><w:tblLayout w:type="fixed"/>
+              <w:tblBorders>
+                <w:top w:val="single" w:sz="8" w:space="1" w:color="112233"/>
+                <w:right w:val="double" w:sz="12" w:color="445566"/>
+                <w:bottom w:val="dotted" w:sz="4"/><w:left w:val="dashed" w:sz="6"/>
+                <w:insideH w:val="none"/><w:insideV w:val="single" w:sz="2"/>
+              </w:tblBorders>
+              <w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:end w:w="120" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:start w:w="140" w:type="dxa"/></w:tblCellMar>
+            </w:tblPr>
+            <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="2000"/><w:gridCol w:w="1500"/></w:tblGrid>
+            <w:tr><w:trPr><w:tblHeader/><w:trHeight w:val="480" w:hRule="exact"/></w:trPr>
+              <w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/><w:gridSpan w:val="2"/><w:shd w:val="clear" w:color="auto" w:fill="ABCDEF"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:tc>
+              <w:tc><w:tcPr><w:tcW w:w="1500" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Value</w:t></w:r></w:p></w:tc>
+            </w:tr>
+            <w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="360" w:hRule="atLeast"/></w:trPr>
+              <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:vMerge w:val="restart"/></w:tcPr><w:p><w:r><w:t>Body start</w:t></w:r></w:p></w:tc>
+              <w:tc><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:tc>
+            </w:tr>
+            <w:tr>
+              <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:vMerge/></w:tcPr><w:p><w:r><w:t>continued</w:t></w:r></w:p></w:tc>
+              <w:tc><w:p><w:r><w:t>Tail</w:t></w:r></w:p></w:tc>
+            </w:tr>
+          </w:tbl>
+        </w:body></w:document>`,
+      })
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const table = result.value.sections[0]?.blocks[0]
+    expect(table?.type).toBe("table")
+    if (table?.type !== "table") return
+    expect(Number(table.width)).toBe(4500)
+    expect(table.layout).toBe("fixed")
+    expect(Number(table.preferredWidth)).toBe(4500)
+    expect(table.columnWidths.map(Number)).toEqual([1000, 2000, 1500])
+    expect({
+      top: Number(table.cellPadding.top),
+      right: Number(table.cellPadding.right),
+      bottom: Number(table.cellPadding.bottom),
+      left: Number(table.cellPadding.left),
+    }).toEqual({
+      top: 80,
+      right: 120,
+      bottom: 100,
+      left: 140,
+    })
+    expect({
+      ...table.borders.top,
+      width: Number(table.borders.top?.width),
+      space: Number(table.borders.top?.space),
+    }).toMatchObject({
+      style: "single",
+      color: "#112233",
+      width: 20,
+      space: 20,
+    })
+    expect(Number(table.borders.right?.width)).toBe(30)
+    expect(table.repeatHeaderRowCount).toBe(1)
+    expect(table.rows.map((row) => row.repeatAsHeader)).toEqual([
+      true,
+      false,
+      false,
+    ])
+    expect(table.rows.map((row) => row.allowBreakAcrossPages)).toEqual([
+      true,
+      false,
+      true,
+    ])
+    expect(table.rows.map((row) => row.height?.rule)).toEqual([
+      "exact",
+      "atLeast",
+      undefined,
+    ])
+    expect(
+      table.rows.map((row) =>
+        row.height === null ? null : Number(row.height.value)
+      )
+    ).toEqual([480, 360, null])
+    expect(table.rows[0]?.cells[0]).toMatchObject({
+      columnIndex: 0,
+      width: 3000,
+      columnSpan: 2,
+      verticalMerge: "none",
+      verticalAlignment: "center",
+      fillColor: "#ABCDEF",
+    })
+    expect(Number(table.rows[0]?.cells[0]?.preferredWidth)).toBe(3000)
+    expect(table.rows[1]?.cells[0]?.verticalMerge).toBe("restart")
+    expect(table.rows[2]?.cells[0]?.verticalMerge).toBe("continue")
+    expect(
+      textInline(table.rows[0]?.cells[0]?.blocks[0]?.children[0])?.text
+    ).toBe("Header")
+    expect(table.rows[0]?.source.xmlPath).toContain("/w:tbl[1]/w:tr[1]")
+  })
+
+  test("uses the grid sum for auto width and retains the parsed block order", () => {
+    const result = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body>
+          <w:p><w:r><w:t>Before</w:t></w:r></w:p>
+          <w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="900"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>
+          <w:p><w:r><w:t>After</w:t></w:r></w:p>
+        </w:body></w:document>`,
+      })
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.document.blocks.map((block) => block.type)).toEqual([
+      "docx-paragraph",
+      "docx-table",
+      "docx-paragraph",
+    ])
+    const table = result.value.document.blocks[1]
+    expect(table?.type).toBe("docx-table")
+    if (table?.type === "docx-table") {
+      expect(table.width).toBe(900)
+      expect(table.cellPadding).toEqual({
+        top: 0,
+        right: 115,
+        bottom: 0,
+        left: 115,
+      })
+    }
+    expect(result.value.document.paragraphs).toHaveLength(2)
+  })
+
+  test("rejects malformed, unsupported, and ambiguous table constructs without silent loss", () => {
+    const result = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body>
+          <w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblStyle w:val="Fancy"/></w:tblPr>
+            <w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid>
+            <w:tr><w:trPr><w:trHeight w:val="12" w:hRule="auto"/></w:trPr><w:tc><w:tcPr><w:gridSpan w:val="0"/><w:vMerge/><w:shd w:val="pct20" w:themeFill="accent1"/><w:vAlign w:val="both"/></w:tcPr><w:p/></w:tc></w:tr>
+            <w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p/></w:tc></w:tr>
+          </w:tbl>
+        </w:body></w:document>`,
+      })
+    )
+    expect(result.ok).toBe(false)
+    expect(errorCodes(result)).toContain("DOCX_UNSUPPORTED_TABLE_PROPERTY")
+    expect(errorCodes(result)).toContain("DOCX_INVALID_TABLE_VALUE")
+    expect(errorCodes(result)).toContain("DOCX_AMBIGUOUS_TABLE")
+    expect(errorCodes(result)).toContain("DOCX_CONTENT_LOSS")
+    expect(
+      result.diagnostics.find((entry) => entry.code === "DOCX_AMBIGUOUS_TABLE")
+        ?.source?.xmlPath
+    ).toContain("w:vMerge")
+
+    const missingGrid = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(missingGrid)).toContain("DOCX_INVALID_TABLE")
+    expect(errorCodes(missingGrid)).toContain("DOCX_CONTENT_LOSS")
+
+    const mismatchedWidth = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tblPr><w:tblW w:w="1200" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(mismatchedWidth)).toContain("DOCX_AMBIGUOUS_TABLE")
+    expect(errorCodes(mismatchedWidth)).toContain("DOCX_CONTENT_LOSS")
+
+    const headerBodyMerge = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr><w:p/></w:tc></w:tr><w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc></w:tr></w:tbl></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(headerBodyMerge)).toContain("DOCX_AMBIGUOUS_TABLE")
+    expect(
+      headerBodyMerge.diagnostics.find(
+        (entry) =>
+          entry.code === "DOCX_AMBIGUOUS_TABLE" &&
+          entry.message.includes("repeating-header")
+      )?.source?.xmlPath
+    ).toContain("w:vMerge")
+
+    const unsupportedSolidShading = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:shd w:val="solid" w:color="00FF00" w:fill="FF0000"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(unsupportedSolidShading)).toContain(
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY"
+    )
+
+    const malformedLegacyMargin = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:tbl><w:tblPr><w:tblCellMar><w:right w:w="bad" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl></w:body></w:document>`,
+      })
+    )
+    expect(
+      malformedLegacyMargin.diagnostics.find(
+        (entry) => entry.code === "DOCX_INVALID_TABLE_VALUE"
+      )?.source?.xmlPath
+    ).toContain("w:right")
+  })
+})
+
+function testCrc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1)
+      crc = (crc & 1) !== 0 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeBytes = strToU8(type)
+  const result = new Uint8Array(data.length + 12)
+  const view = new DataView(result.buffer)
+  view.setUint32(0, data.length)
+  result.set(typeBytes, 4)
+  result.set(data, 8)
+  const crcInput = new Uint8Array(typeBytes.length + data.length)
+  crcInput.set(typeBytes)
+  crcInput.set(data, typeBytes.length)
+  view.setUint32(result.length - 4, testCrc32(crcInput))
+  return result
+}
+
+function testPng3x2(): Uint8Array {
+  const header = new Uint8Array(13)
+  const view = new DataView(header.buffer)
+  view.setUint32(0, 3)
+  view.setUint32(4, 2)
+  header[8] = 8
+  header[9] = 0
+  const chunks = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", zlibSync(new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))),
+    pngChunk("IEND", new Uint8Array()),
+  ]
+  const result = new Uint8Array(
+    chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  )
+  let offset = 0
+  for (const chunk of chunks) {
+    result.set(chunk, offset)
+    offset += chunk.length
+  }
+  return result
+}
+
+const PNG_3X2 = testPng3x2()
+const JPEG_3X2 = new Uint8Array([
+  0xff, 0xd8, 0xff, 0xc0, 0, 11, 8, 0, 2, 0, 3, 1, 1, 0x11, 0, 0xff, 0xda, 0, 8,
+  1, 1, 0, 0, 0x3f, 0, 0, 0xff, 0xd9,
+])
+const PHASE6_CONTENT_TYPES = `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Default Extension="jpg" ContentType="image/jpeg"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+</Types>`
+
+describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () => {
+  test("normalises relationship-owned PNG and JPEG inline images with stable assets, dimensions, and aspect metadata", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p>
+        <w:r><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="imgPng"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>
+        <w:r><w:drawing><wp:inline><wp:extent cx="3810" cy="2540"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="imgJpeg"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>
+      </w:p><w:sectPr/></w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="imgPng" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/><Relationship Id="imgJpeg" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/image" Target="media/picture.jpg"/></Relationships>`,
+        "word/media/picture.png": PNG_3X2,
+        "word/media/picture.jpg": JPEG_3X2,
+      },
+    })
+    const result = normaliseDocxBytes(bytes)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(
+      result.value.assets.map((asset) => [
+        asset.packagePath,
+        asset.mimeType,
+        asset.pixelWidth,
+        asset.pixelHeight,
+      ])
+    ).toEqual([
+      ["word/media/picture.png", "image/png", 3, 2],
+      ["word/media/picture.jpg", "image/jpeg", 3, 2],
+    ])
+    expect(Object.isFrozen(result.value.assets[0]?.bytes)).toBe(true)
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
+    const images =
+      paragraph?.children.filter((inline) => inline.type === "image") ?? []
+    expect(
+      images.map((image) => [
+        Number(image.width),
+        Number(image.height),
+        image.aspect.intrinsicRatio,
+        image.aspect.preserve,
+      ])
+    ).toEqual([
+      [3, 2, 1.5, true],
+      [6, 4, 1.5, false],
+    ])
+    expect(images[0]?.source.part).toBe("word/document.xml")
+    expect(String(images[0]?.id)).toBe("docx:text:1:1")
+  })
+
+  test("preserves ordered blocks across portrait and landscape section boundaries with inherited default header and footer", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r"><w:body>
+        <w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="head"/><w:footerReference w:type="default" r:id="foot"/><w:pgSz w:w="11907" w:h="16839" w:orient="portrait"/><w:pgMar w:top="100" w:right="200" w:bottom="300" w:left="400" w:header="321" w:footer="654"/></w:sectPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Second</w:t></w:r></w:p>
+        <w:sectPr><w:pgSz w:w="16839" w:h="11907" w:orient="landscape"/><w:pgMar w:top="500" w:right="600" w:bottom="700" w:left="800"/></w:sectPr>
+      </w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="head" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="foot" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/footer" Target="footer1.xml"/></Relationships>`,
+        "word/header1.xml": `<w:hdr xmlns:w="urn:w"><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:hdr>`,
+        "word/footer1.xml": `<w:ftr xmlns:w="urn:w"><w:p><w:r><w:t>Page </w:t></w:r><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple><w:r><w:t> of </w:t></w:r><w:fldSimple w:instr=" NUMPAGES "><w:r><w:t>2</w:t></w:r></w:fldSimple></w:p></w:ftr>`,
+      },
+    })
+    const result = normaliseDocxBytes(bytes)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(
+      result.value.sections.map((section) => [
+        section.properties.orientation,
+        Number(section.properties.pageWidth),
+        section.blocks.length,
+      ])
+    ).toEqual([
+      ["portrait", 11907, 1],
+      ["landscape", 16839, 1],
+    ])
+    expect([
+      Number(result.value.sections[0]?.properties.headerDistance),
+      Number(result.value.sections[0]?.properties.footerDistance),
+      Number(result.value.sections[1]?.properties.headerDistance),
+      Number(result.value.sections[1]?.properties.footerDistance),
+    ]).toEqual([321, 654, 720, 720])
+    expect(
+      result.value.sections.map((section) => [
+        section.defaultHeaderId,
+        section.defaultFooterId,
+      ])
+    ).toEqual([
+      ["docx:header:word/header1.xml", "docx:footer:word/footer1.xml"],
+      ["docx:header:word/header1.xml", "docx:footer:word/footer1.xml"],
+    ])
+    expect(result.value.headers[0]?.source.part).toBe("word/header1.xml")
+    expect(
+      result.value.footers[0]?.blocks[0]?.children.map((inline) =>
+        inline.type === "pageField"
+          ? inline.field
+          : inline.type === "text"
+            ? inline.text
+            : "image"
+      )
+    ).toEqual(["Page ", "PAGE", " of ", "NUMPAGES"])
+  })
+
+  test("parses PAGE and NUMPAGES complex fields and rejects malformed, external, missing, and anchored drawings without silent loss", () => {
+    const complex = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>7</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t> / </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>NUMPAGES</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>9</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/></w:body></w:document>`,
+    })
+    const parsed = normaliseDocxBytes(complex)
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) {
+      const paragraph = paragraphBlock(parsed.value.sections[0]?.blocks[0])
+      expect(
+        paragraph?.children.map((inline) =>
+          inline.type === "pageField"
+            ? `${inline.field}:${inline.displayText}`
+            : inline.type === "text"
+              ? inline.text
+              : "image"
+        )
+      ).toEqual(["PAGE:", " / ", "NUMPAGES:"])
+    }
+
+    const anchored = inspectDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w" xmlns:wp="urn:wp"><w:body><w:p><w:r><w:drawing><wp:anchor/></w:drawing></w:r></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(anchored)).toEqual(
+      expect.arrayContaining([
+        "DOCX_UNSUPPORTED_FLOATING_IMAGE",
+        "DOCX_CONTENT_LOSS",
+      ])
+    )
+
+    const missing = inspectDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p><w:r><w:drawing><wp:inline><wp:extent cx="635" cy="635"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="missing"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(missing)).toEqual(
+      expect.arrayContaining([
+        "DOCX_MISSING_IMAGE_RELATIONSHIP",
+        "DOCX_CONTENT_LOSS",
+      ])
+    )
+
+    const malformed = inspectDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w" xmlns:wp="urn:wp"><w:body><w:p><w:r><w:drawing><wp:inline/></w:drawing></w:r></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(malformed)).toEqual(
+      expect.arrayContaining(["DOCX_MALFORMED_DRAWING", "DOCX_CONTENT_LOSS"])
+    )
+
+    const external = inspectDocx(
+      buildOneParagraphDocx({
+        extraParts: {
+          "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="externalImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.invalid/image.png" TargetMode="External"/></Relationships>`,
+        },
+      })
+    )
+    expect(errorCodes(external)).toContain("DOCX_EXTERNAL_RELATIONSHIP")
+  })
+
+  test("accepts strict officeDocument roots and requires one root document relationship across both dialects", () => {
+    const strict = parseDocx(
+      buildOneParagraphDocx({
+        rootRelationshipsXml: `<Relationships xmlns="urn:rels"><Relationship Id="strict" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+      })
+    )
+    expect(strict.ok).toBe(true)
+    const ambiguous = parseDocx(
+      buildOneParagraphDocx({
+        rootRelationshipsXml: `<Relationships xmlns="urn:rels"><Relationship Id="transitional" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="strict" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+      })
+    )
+    expect(errorCodes(ambiguous)).toContain(
+      "DOCX_MISSING_OFFICE_DOCUMENT_RELATIONSHIP"
+    )
+  })
+
+  test("enforces pixel area and the downstream image profile with source-linked content loss", () => {
+    const imageDocument = `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="image"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:sectPr/></w:body></w:document>`
+    const imageRelationships = `<Relationships xmlns="urn:rels"><Relationship Id="image" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`
+    const areaLimited = inspectDocx(
+      buildOneParagraphDocx({
+        documentXml: imageDocument,
+        extraParts: {
+          "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+          "word/_rels/document.xml.rels": imageRelationships,
+          "word/media/picture.png": PNG_3X2,
+        },
+      }),
+      { limits: { maxImagePixels: 5 } }
+    )
+    expect(errorCodes(areaLimited)).toEqual(
+      expect.arrayContaining([
+        "DOCX_IMAGE_DIMENSION_LIMIT",
+        "DOCX_CONTENT_LOSS",
+      ])
+    )
+
+    const corruptPng = PNG_3X2.slice()
+    corruptPng[corruptPng.length - 1] =
+      (corruptPng[corruptPng.length - 1] ?? 0) ^ 1
+    const profileRejected = inspectDocx(
+      buildOneParagraphDocx({
+        documentXml: imageDocument,
+        extraParts: {
+          "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+          "word/_rels/document.xml.rels": imageRelationships,
+          "word/media/picture.png": corruptPng,
+        },
+      })
+    )
+    expect(errorCodes(profileRejected)).toEqual(
+      expect.arrayContaining([
+        "DOCX_UNSUPPORTED_IMAGE_PROFILE",
+        "DOCX_CONTENT_LOSS",
+      ])
+    )
+    expect(
+      profileRejected.diagnostics.find(
+        (entry) => entry.code === "DOCX_UNSUPPORTED_IMAGE_PROFILE"
+      )?.source?.part
+    ).toBe("word/media/picture.png")
+  })
+
+  test("rejects unsupported section breaks and requires one final body sectPr", () => {
+    for (const sectionType of ["continuous", "oddPage", "evenPage"]) {
+      const result = parseDocx(
+        buildOneParagraphDocx({
+          documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p/><w:sectPr><w:type w:val="${sectionType}"/></w:sectPr></w:body></w:document>`,
+        })
+      )
+      expect(errorCodes(result)).toEqual(
+        expect.arrayContaining([
+          "DOCX_UNSUPPORTED_SECTION_BREAK",
+          "DOCX_CONTENT_LOSS",
+        ])
+      )
+    }
+    const duplicate = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p/><w:sectPr/><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(duplicate)).toContain("DOCX_INVALID_SECTION_STRUCTURE")
+    const nonFinal = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w"><w:body><w:sectPr/><w:p/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(nonFinal)).toContain("DOCX_INVALID_SECTION_STRUCTURE")
+  })
+
+  test("validates complete field sequences and only decimal or no-op switches", () => {
+    const supported = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p><w:fldSimple w:instr="PAGE \\* Arabic \\* MERGEFORMAT"><w:r><w:t>3</w:t></w:r></w:fldSimple></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(supported.ok).toBe(true)
+    const roman = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p><w:fldSimple w:instr="NUMPAGES \\* ROMAN"><w:r><w:t>III</w:t></w:r></w:fldSimple></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(roman)).toContain("DOCX_UNSUPPORTED_STYLE_PROPERTY")
+    const missingSeparator = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>PAGE</w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(missingSeparator)).toContain("DOCX_INVALID_STYLE_VALUE")
+    const duplicateSeparator = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>PAGE</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/></w:body></w:document>`,
+      })
+    )
+    expect(errorCodes(duplicateSeparator)).toContain("DOCX_INVALID_STYLE_VALUE")
+  })
+
+  test("rejects locked aspect mismatches and deeply freezes the semantic image graph", () => {
+    const mismatch = inspectDocx(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905" cy="1905"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="image"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:sectPr/></w:body></w:document>`,
+        extraParts: {
+          "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+          "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="image" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`,
+          "word/media/picture.png": PNG_3X2,
+        },
+      })
+    )
+    expect(errorCodes(mismatch)).toEqual(
+      expect.arrayContaining([
+        "DOCX_IMAGE_ASPECT_MISMATCH",
+        "DOCX_CONTENT_LOSS",
+      ])
+    )
+
+    const immutable = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="image"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:sectPr/></w:body></w:document>`,
+        extraParts: {
+          "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+          "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="image" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`,
+          "word/media/picture.png": PNG_3X2,
+        },
+      })
+    )
+    expect(immutable.ok).toBe(true)
+    if (!immutable.ok) return
+    const image = paragraphBlock(immutable.value.sections[0]?.blocks[0])
+      ?.children[0]
+    expect([
+      Object.isFrozen(immutable.value),
+      Object.isFrozen(immutable.value.assets),
+      Object.isFrozen(immutable.value.assets[0]),
+      Object.isFrozen(immutable.value.assets[0]?.bytes),
+      Object.isFrozen(immutable.value.sections),
+      image?.type === "image" && Object.isFrozen(image.aspect),
+    ]).toEqual([true, true, true, true, true, true])
   })
 })

@@ -1,52 +1,80 @@
 ---
 title: "Troubleshooting"
-description: "Interpret common diagnostics and rendering failures."
+description: "Interpret common Phase 6 diagnostics and rendering failures."
 ---
 
 # Troubleshooting
 
 ## The engine says locale or time zone is required
 
-Every render must include both fields:
+Every high-level render requires both fields:
 
 ```ts
 { locale: "en-ZA", timeZone: "Africa/Johannesburg" }
 ```
 
-The engine deliberately refuses to read ambient runtime defaults.
+Currency formatting requires locale. Date formatting requires locale and time zone, and its value must be an ISO 8601 date-time with `Z` or a numeric offset, for example `2026-08-05T09:30:00+02:00`. The engine refuses ambient runtime defaults.
 
 ## A value is missing or has the wrong type
 
-Check the compiled manifest and generated JSON Schema, then ensure every required dotted path exists. `number` requires a finite number, `boolean` requires a boolean, and `string`/`date` require strings. See [template language](/template-language).
+Check the compiled manifest and nested JSON Schema. Inside `each`, fields resolve relative to the current object, and every item must be an object. The canonical manifest path `invoice.items[].description` corresponds to input shaped like `{ invoice: { items: [{ description: "..." }] } }`.
 
-## A block tag or image tag is rejected
+## A block marker is rejected
 
-Conditions, loops, and images are planned features. Replace them with a supported inline value tag or redesign the template until the corresponding feature lands.
+Put `{{#if path}}`, `{{else}}`, `{{/if}}`, `{{#each path}}`, and `{{/each}}` in their own paragraphs. Check nesting and closing order. `else` is optional but may appear only once in an `if`. For a structural table-row block, each marker must occupy a dedicated row and be the only visible content across all cells. Row blocks cannot alter repeating headers, enclose vertical merges, or cross a table boundary.
+
+## A table width is rejected or differs from Word
+
+Confirm that `tblGrid` exists and contains positive integer-twip columns. An explicit `tblW` must equal their sum; an explicit `tcW` must equal the sum of its `gridSpan` columns. Percentage widths are unsupported. Although `tblLayout` may say `autofit`, Phase 5 uses the fixed grid and does not reproduce Word's content-driven autofit.
+
+## A table merge, header, or page break is rejected
+
+Every row must cover the full grid. `vMerge` continuations must match a restart's column/span, contain no visible content, and remain on the same side of the repeating-header/body boundary. Repeating headers must be contiguous leading rows. A fitting `cantSplit` row moves to a fresh page; if it is taller than the writable page (after repeated headers), the renderer fragments it deterministically and emits `layout/table-cant-split-too-tall`. Headers that leave no room for body rows are omitted on continuation pages with a warning.
+
+## A border or cell fill is rejected
+
+Use only `none`, `single`, `double`, `dotted`, or `dashed` borders with valid non-negative size/spacing and a six-digit RGB color (or `auto` black). Shading supports only `clear` with automatic foreground and an explicit six-digit RGB fill. Table styles, themes, patterned shading, and image fills are unsupported.
+
+## An image is rejected
+
+Confirm that the drawing is inline rather than anchored, has one internal owner-relative image relationship, declares PNG or JPEG content matching its signature, and has an explicit positive extent. Locked aspect ratio must agree with intrinsic dimensions. External images, fetches, crop, rotation, SVG, APNG, interlaced/invalid-profile PNG, ICC/CMYK/YCCK/ambiguous-color JPEG, and EXIF orientation other than 1 are unsupported. Static images may appear in supported table-cell/header/footer paragraphs; dynamic image tags do not.
+
+Default limits are 100 distinct image parts, 20,000,000 total bytes, 100,000 pixels on either side, 100,000,000 pixels per image, 10,000 chunks/markers, and 400,000,000 decoded working bytes. Raise them only after reviewing untrusted-input memory and CPU risk.
+
+## A section, header, or footer is rejected
+
+Use `nextPage` only, keep page width/height positive, and make explicit orientation agree with geometry. The body-level `sectPr` must be the final body child. Header/footer references must be internal `default` references; first/even variants are unsupported. Default references inherit across sections until replaced. Header content must fit between its edge distance and top body margin; footer content must fit between its edge distance and bottom body margin. Distances default to 720 twips.
+
+## Page numbers are missing or formatted differently
+
+Use simple or complete complex `PAGE`/`NUMPAGES` fields with decimal/Arabic or no-op switches. Roman and arbitrary fields are unsupported. The renderer ignores cached display text, reserves width for `String(maxPages).length` decimal digits, paginates the whole document, and then inserts current/total values. Header/footer paragraphs cannot use automatic list numbering.
+
+## Numbering is missing, duplicated, or restarted unexpectedly
+
+Confirm that the main document owns one valid internal numbering relationship and that paragraphs reference existing concrete `numId` and level definitions. Direct `numId` 0 intentionally removes inherited numbering. Starts, overrides, and higher-level restart rules control counters. General tabs are unsupported; only a numbering suffix tab is interpreted as list spacing.
+
+## A list wraps or paginates differently from Word
+
+Confirm the numbering level's indentation and hanging indent, plus `keepWithNext`, `keepLinesTogether`, widow/orphan control, and page-break-before settings. Phase 6 supports these bounded rules, but does not claim broad Word fixture equivalence.
 
 ## The PDF has a Helvetica warning
 
-The engine was created without `FontConfiguration`, so it is using the historical built-in Helvetica/WinAnsi fallback. Supply the exact required TrueType faces in the engine's `fonts` option. Do not expect system-font discovery. See [font handling](/font-handling).
+The engine was created without `FontConfiguration`, so it is using the historical built-in Helvetica/WinAnsi fallback. Supply exact TrueType faces; do not expect system-font discovery. See [font handling](/font-handling).
 
 ## Font shaping or embedding fails
 
-Confirm that the text is well-formed left-to-right Latin, the selected face contains every required glyph, and the fallback family includes a 400 normal face. OpenType/CFF can be parsed but is not supported for PDF embedding. The default provider embeds a complete TrueType program; it is not a true subsetter.
+Confirm that text is well-formed LTR Latin, the selected face contains required glyphs, and the fallback family includes a 400 normal face. CFF embedding and true default subsetting are unsupported.
 
-## Tabs or pagination controls are diagnosed
+## Compilation fails with diagnostics
 
-Tabs require tab-stop layout and are unsupported. Keep-with-next and widow/orphan controls are also outside the current profile; redesign the affected paragraphs rather than assuming Word-equivalent pagination.
-
-## Compilation returned diagnostics with errors
-
-`engine.compile()` throws `EngineOperationError` with code `engine/docx` when DOCX validation or normalization fails. Template-language errors do not currently make `compile()` throw: they are returned in `compiled.diagnostics`. Inspect them before rendering. Rendering a compiled template that already contains errors fails and returns no PDF.
-
-## Content is different from Word
-
-Confirm that the template uses only the supported profile. Tables, headers, footers, images, complex scripts, tabs, keep-with-next, and widow/orphan controls are not supported. Supported style cascades and direct formatting are described in the [feature matrix](/supported-features).
+`engine.compile()` throws `EngineOperationError` when DOCX normalization, content-loss checks, or template compilation cannot produce an acceptable compiled template. Preserve the attached source-located diagnostics rather than retrying in a permissive loop.
 
 ## The browser client cannot render after a reload
 
-Compiled templates live in the worker’s in-memory map. Compile the DOCX again after the worker is disposed, the page reloads, or the client reports `browser/template-missing`.
+Compiled templates live in the worker's in-memory map and are bound to their creating engine instance. Compile again after worker disposal or page reload.
 
 ## The renderer stopped due to a limit
 
-Inspect the diagnostic/error and decide whether the input should be rejected or whether an application-owned engine instance needs a deliberately reviewed `limits` override. Do not lift limits globally as a workaround for untrusted input.
+JSON node/text, loop, expanded-node, and expanded-text budgets are cumulative. Traversal/expression depth, per-array items, and pages are bounded separately. Review the input first. Override limits only on an application-owned engine after a deliberate security and capacity review.
+
+Cancellation is checked throughout package parsing, hashing, image validation, row/sample processing, layout, and PDF output. One limitation is deliberate: bounded PNG inflate is synchronous, so an abort raised during that call is observed immediately after inflate returns rather than interrupting it mid-call.

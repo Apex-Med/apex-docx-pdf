@@ -1,43 +1,89 @@
 ---
 title: "Convex integration"
-description: "A future application-owned storage and authorization boundary for rendering."
+description: "The optional Phase 7 persistence, ownership, upload, cache, and cleanup boundary."
 ---
 
 # Convex integration
 
-Convex integration is planned, not present in this repository. There is no `convex/` directory, schema, function, storage policy, or production endpoint to configure today.
+Phase 7 defines an optional application adapter around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; Convex owns demo isolation, metadata, file storage, status, and lifecycle operations. This page describes the reference integration contract, not a deployed production service or a general-purpose document authorization system.
 
-## Intended boundary
+<Warning>
+  The anonymous session used by the reference application isolates one browser
+  session from another for demonstration purposes. It is not user authentication
+  and must not be presented as a production security boundary.
+</Warning>
 
-An eventual Convex integration should keep document access and authorization outside the pure renderer. Fetch authorized bytes, invoke the engine with explicit inputs, record diagnostics, then store the returned PDF through the application’s storage policy.
+## Browser session ownership
 
-```ts
-// Boundary sketch only — not a present or runnable repository module.
-const templateBytes = await loadAuthorizedTemplateBytes(templateId, viewer)
-const engine = await createDocxPdfEngine({ limits })
-const compiled = await engine.compile(templateBytes, {
-  unsupportedFeatures: "strict",
-})
-const result = await engine.render(compiled, data, {
-  locale: "en-ZA",
-  timeZone: "Africa/Johannesburg",
-  metadata: { title: "Customer document" },
-})
+The reference adapter uses an anonymous per-browser session identifier supplied through `convex-helpers`. Every template, render, and cache lookup is scoped to that session. Server functions validate the helper's session argument and compare it with the stored owner; they must not accept a separate record owner that lets the browser select another session.
 
-await storeAuthorizedPdf(result.pdf, viewer)
-await recordRenderAudit({
-  templateHash: result.templateHash,
-  documentHash: result.documentHash,
-  diagnostics: result.diagnostics,
-})
+Clearing browser state, changing browsers, or changing devices can make anonymously owned documents inaccessible. Anyone who can copy or assume that browser session can act as that session. The demo therefore provides isolation, not identity assurance, account recovery, organization membership, roles, or tenant administration.
+
+The ownership check is deliberately kept behind one principal-resolution seam. A production host can replace anonymous session establishment with Clerk or WorkOS verification and map the verified principal into the same session-owned query and mutation contract. That migration should strengthen how the principal is established without requiring a second document ownership model or moving authorization into the renderer.
+
+## Opt-in persistence
+
+Persistence is off by default. With persistence disabled, DOCX bytes, JSON data, and rendered PDF bytes remain in the browser workflow and no Phase 7 storage mutation should run. The user must explicitly enable persistence before an upload or saved render is created.
+
+Enabling persistence changes the data boundary: templates and selected render artifacts can then be retained in Convex according to the host application's retention policy. The UI should explain that change before upload; a deployment should not silently turn it on for an existing browser session.
+
+## Direct uploads
+
+Large DOCX and PDF artifacts belong in Convex file storage, not database documents. A browser upload follows this shape:
+
+1. An owned mutation returns a short-lived Convex generated upload URL.
+2. The browser posts the DOCX bytes directly to that URL.
+3. The browser submits the returned storage ID to an owned finalization mutation.
+4. The mutation records bounded metadata and schedules or records render state.
+
+The DOCX does not pass through a Vercel server function. This avoids buffering a large document in the web server runtime and avoids treating that runtime as a file proxy. Generated upload URLs must be requested just in time and are not durable application credentials.
+
+Database records contain storage IDs and bounded metadata. They do not contain DOCX bytes, PDF bytes, document text, or the render JSON payload. Small status, hashes, timestamps, diagnostics summaries, and ownership metadata can remain in Convex documents; large artifacts remain in file storage.
+
+## Reads and download URLs
+
+An owned query first verifies that the requested template or render belongs to the current session. Only after that check may it generate a URL for the associated storage ID.
+
+A generated storage URL is a bearer URL: possession can be enough to fetch the object until the URL is no longer usable. It must not be treated as row-level or fine-grained authorization, embedded in logs, or reused as a durable identifier. Persist the storage ID, generate a URL only for an authorized read, and avoid exposing it to unrelated clients or third-party telemetry.
+
+## Deterministic render cache
+
+The cache identity is the canonical combination of:
+
+```text
+engineVersion
++ templateHash
++ fontRegistryHash
++ dataHash
++ renderOptionsHash
 ```
 
-## Decisions to make before implementation
+Each hash must be computed from the exact bytes or canonical bounded value used by the render. `renderOptionsHash` includes every output-affecting option, including explicit locale and time zone where applicable. Timing, status, generated URLs, storage IDs, and diagnostics are outputs or metadata, not cache-key inputs.
 
-- Define tenant-scoped template and rendered-PDF access rules.
-- Decide retention, deletion, and audit-redaction policies for template data and diagnostics.
-- Bound action duration, size, concurrency, cancellation, and retry behavior.
-- Choose whether rendering is synchronous, queued, or delegated to a browser worker.
-- Keep the exact `locale`, `timeZone`, engine version, options, and bytes available for reproducibility.
+The engine version is a required cache partition. A result created by one engine version is never served as a hit for another version, even if every other hash matches. The adapter must not implement a cross-engine fallback or infer compatibility from matching PDF bytes.
 
-Do not infer an endpoint or production behavior from this example. It only identifies the seam where a future Convex adapter belongs.
+Cache lookup remains session-owned. A matching key in another anonymous session is not a readable shared artifact. Deployments that later add authenticated sharing need an explicit authorization and deduplication design rather than weakening this rule.
+
+## Status, history, and realtime updates
+
+Status reads use indexed queries scoped by session and stable sort fields. History is cursor-paginated; clients must not fetch an unbounded session history or scan all renders. Convex subscriptions can update visible status in realtime as a render moves through `queued`, `rendering`, `complete`, `failed`, `cancelled`, or `deleting` states.
+
+Realtime delivery is a view of persisted state, not proof that work is still running. Clients must tolerate reconnects, repeated states, terminal states reached while offline, and missing browser workers. Production queueing, retry, leasing, and worker liveness remain host-application responsibilities unless separately implemented and verified.
+
+## Deletion and cleanup
+
+Deleting a template removes its template blob and the PDF blobs for its saved renders as well as their metadata. Cleanup is bounded: one mutation or action processes a limited page of related records and storage IDs, then continues from a cursor until the deletion is complete. While cleanup is in progress, the parent record should be marked as deleting and excluded from ordinary reads so a partially deleted document is not presented as intact.
+
+Direct uploads have an unavoidable abandonment window. If a tab closes after uploading bytes but before finalization, Convex file storage can contain a blob with no application record to own or enumerate through the normal document indexes. Request expiry does not itself delete an already uploaded blob. The host needs a bounded orphan strategy—such as a short-lived upload-intent record plus scheduled cleanup—and must document what its platform APIs can actually discover and delete. Phase 7 does not promise immediate or perfect reclamation of every abandoned upload.
+
+## Logging and audit data
+
+Application and platform logs must not contain DOCX bytes, extracted document text, render JSON, generated storage URLs, or PDF bytes. Log bounded operational metadata instead, such as opaque record IDs, engine version, non-secret hashes, state transitions, byte counts, page counts, duration, and redacted diagnostic codes.
+
+Hashes can still correlate documents and may be sensitive in a particular deployment. Retention, support access, telemetry export, malware scanning, legal deletion, and audit requirements remain explicit host-application policies.
+
+## Local and production boundaries
+
+Local Convex development and focused tests can demonstrate session scoping, validators, indexed pagination, status subscriptions, cache partitioning, and bounded cleanup logic. They do not establish production authentication, tenant isolation, retention compliance, backup behavior, malware protection, rate limiting, queue durability, regional policy, or incident response.
+
+Before production use, replace or harden the anonymous principal seam, review every function's ownership check, configure storage and retention policy, exercise interrupted upload and deletion cases, and verify behavior against the actual deployed Convex and identity-provider environments.

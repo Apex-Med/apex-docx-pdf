@@ -15,11 +15,13 @@
     "@apex-docx-pdf/core": "workspace:*",
     "@apex-docx-pdf/docx": "workspace:*",
     "@apex-docx-pdf/fonts": "workspace:*",
+    "@apex-docx-pdf/images": "workspace:*",
     "@apex-docx-pdf/layout": "workspace:*",
     "@apex-docx-pdf/pdf": "workspace:*",
     "@apex-docx-pdf/template": "workspace:*"
   },
   "devDependencies": {
+    "@apex-docx-pdf/testkit": "workspace:*",
     "fflate": "^0.8.3",
     "notosans-fontface": "1.3.0",
     "typescript": "^6"

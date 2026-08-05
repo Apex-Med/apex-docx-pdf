@@ -77,7 +77,16 @@ export function installRendererWorker(
           )
           compiledTemplates.clear()
           compiledTemplates.set(compiled.templateHash, compiled)
+          if (!engine.fontRegistryHash) {
+            throw new EngineOperationError(
+              "browser/font-registry-missing",
+              "The browser renderer requires an explicit font registry",
+              []
+            )
+          }
           const result: BrowserCompileResult = {
+            engineVersion: engine.version,
+            fontRegistryHash: engine.fontRegistryHash,
             templateHash: compiled.templateHash,
             manifest: compiled.manifest,
             jsonSchema: compiled.jsonSchema,

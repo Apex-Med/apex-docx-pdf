@@ -5,7 +5,7 @@ description: "How explicit inputs, integer layout, and stable ordering produce r
 
 # Determinism
 
-The renderer is designed around reproducible inputs rather than ambient process state. Its compatibility input includes template bytes, data, caller-supplied `FontConfiguration` and font bytes, engine version, locale, time zone, metadata, and explicit render options.
+The renderer is designed around reproducible inputs rather than ambient process state. Its compatibility input includes template bytes, bounded JSON data, caller-supplied `FontConfiguration` and font bytes, engine version, locale, time zone, metadata, limits, and explicit render options.
 
 ## Rules enforced by the pipeline
 
@@ -14,18 +14,30 @@ The renderer is designed around reproducible inputs rather than ambient process 
 - Semantic and layout collections are readonly and source ordered.
 - Meaningful nodes keep stable IDs and source locations.
 - Canonical JSON sorts object keys when computing the document hash.
+- Template manifests, nested JSON Schema, starter data, block expansion, and numbering definitions are emitted in deterministic order.
+- Loop, node, text, expression-depth, and traversal budgets are cumulative rather than reset by nesting.
+- Currency and date formatters use only caller-supplied `Intl` locale/time-zone context. Date values carry their own ISO 8601 offset; no current clock is read.
+- List counters continue and restart from explicit numbering definitions and overrides, not runtime state.
+- Table geometry comes only from positive integer-twip `tblGrid` columns. Explicit `tblW` and `tcW` values must equal their grid-derived widths; the renderer performs no content-driven autofit.
+- Table rows, cells, fragments, fills, borders, text, and trace events retain stable source-linked identities. Repeating headers reuse prepared geometry without advancing their numbering state.
+- Static image bytes come only from internal DOCX relationships. Assets and placements retain stable source identities; preparation and PDF serialization sort IDs, collision-check hashes with exact bytes, and deduplicate identical prepared content deterministically. Repeated placements reuse one PDF XObject, with one grayscale `/SMask` object when PNG alpha exists.
+- Each `nextPage` section starts a page with its exact integer-twip geometry. PDF `MediaBox` values derive from that page, so portrait and landscape pages remain deterministic within one document. Default header/footer references inherit until replaced and use exact edge-relative distances.
+- Layout reserves the width of the configured `maxPages` decimal digit count for every `PAGE`/`NUMPAGES` field, paginates globally, then materializes current and total values. Header/footer preparation is cached by definition, width, and reservation size.
+- Solid strokes reset dash state; dashed and dotted borders use deterministic dash arrays, dots use round caps, and double borders emit two offset strokes.
 - Font face IDs and the registry hash are derived deterministically from normalized family/style metadata, aliases, fallback family, and exact font bytes.
 - PDF output has no generated clock value or random document ID.
 - Engine stages do not implicitly read the current locale, time zone, clock, randomness, filesystem, network, or operating-system fonts.
 
 ## What to persist for a reproducible render
 
-Persist the exact template bytes or template hash, data JSON, complete font configuration and exact font bytes, engine version, `locale`, `timeZone`, metadata, render options, diagnostics, and optional layout trace. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
+Persist the exact template bytes or template hash, bounded data JSON, complete font configuration and exact font bytes, engine version (`0.0.0-phase.6` for this slice), `locale`, `timeZone`, limits, metadata, render options, diagnostics, and optional layout trace. Package-owned image bytes and section/header/footer parts are included in the template bytes/hash. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
 
 <Note>
   The current serializer does not compress PDF streams, and repeat-identical
   inputs are expected to produce byte-identical PDFs. Layout traces remain the
   stronger artifact for explaining a geometry difference.
 </Note>
+
+The PDF adapter converts y-down display-list geometry to PDF coordinates while leaving glyph outlines upright. Searchable standard and embedded text therefore remains upright beside table fills and styled strokes.
 
 For the underlying unit choice, see [ADR 0002](/adr/0002-integer-layout-units).

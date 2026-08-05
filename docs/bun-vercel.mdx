@@ -16,7 +16,7 @@ bun run build
 bun --cwd apps/web dev
 ```
 
-The web app uses the browser package and a module worker. The engine packages, including the explicit fontkit adapter, are intentionally portable across Bun, supported Node.js, and modern browsers within the documented compatibility profile. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application assets into those bytes remains outside the renderer.
+The web app uses the browser package and a module worker. The engine packages, including the explicit fontkit adapter and Phase 6 template/numbering/table/image/section path, are designed for Bun, supported Node.js, and modern browsers within the documented compatibility profile. This is a portability design boundary, not a claim of complete cross-runtime fixture proof. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application font assets remains outside the renderer. DOCX images are package-owned bytes and require no runtime fetch.
 
 ## Vercel status
 

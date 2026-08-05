@@ -1,32 +1,47 @@
 import { describe, expect, test } from "bun:test"
-import { strToU8, zipSync } from "fflate"
+import { validatePdfStructure } from "@apex-docx-pdf/testkit"
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 
-import { EngineOperationError, createDocxPdfEngine } from "../src"
+import {
+  ENGINE_VERSION,
+  EngineOperationError,
+  createDocxPdfEngine,
+} from "../src"
+import {
+  buildPhase5FormattingTableDocx,
+  buildPhase5TemplateTableDocx,
+} from "./fixtures/phase5-table-docx"
+import {
+  buildPhase6DocumentDocx,
+  generatedPng,
+} from "./fixtures/phase6-document-docx"
 
 function sampleDocx(
-  body = `<w:p><w:r><w:t xml:space="preserve">Prepared for </w:t></w:r><w:r><w:t>{{patient.</w:t></w:r><w:r><w:t>fullName:string}}</w:t></w:r></w:p>`
+  body = `<w:p><w:r><w:t xml:space="preserve">Prepared for </w:t></w:r><w:r><w:t>{{patient.</w:t></w:r><w:r><w:t>fullName:string}}</w:t></w:r></w:p>`,
+  extraParts: Readonly<Record<string, string>> = {}
 ): Uint8Array {
-  return zipSync(
-    {
-      "[Content_Types].xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+  const parts: Record<string, Uint8Array> = {
+    "[Content_Types].xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?>
         <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
           <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
           <Default Extension="xml" ContentType="application/xml"/>
           <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
         </Types>`),
-      "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+    "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8"?>
         <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
           <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
         </Relationships>`),
-      "word/document.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+    "word/document.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?>
         <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
           <w:body>
             ${body}
           </w:body>
         </w:document>`),
-    },
-    { level: 6 }
-  )
+  }
+  for (const [name, value] of Object.entries(extraParts)) {
+    parts[name] = strToU8(value)
+  }
+  return zipSync(parts, { level: 6 })
 }
 
 async function notoSansRegular(): Promise<Uint8Array> {
@@ -38,6 +53,166 @@ async function notoSansRegular(): Promise<Uint8Array> {
 }
 
 describe("engine vertical slice", () => {
+  test("renders the deterministic Phase 6 DOCX image, section, header, footer, field, table, and numbering story", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(buildPhase6DocumentDocx())
+    const options = {
+      locale: "en-ZA",
+      timeZone: "Africa/Johannesburg",
+      includeLayoutTrace: true,
+    } as const
+    const data = { patient: { name: "Amara Mokoena" } }
+    const first = await engine.render(compiled, data, options)
+    const second = await engine.render(compiled, data, options)
+    const validation = validatePdfStructure(first.pdf)
+    const pdfSource = new TextDecoder("latin1").decode(first.pdf)
+
+    expect(ENGINE_VERSION).toBe("0.0.0-phase.7")
+    expect(compiled.version).toBe(ENGINE_VERSION)
+    expect(compiled.source.assets).toHaveLength(2)
+    expect(
+      compiled.source.sections.map(({ properties }) => properties.orientation)
+    ).toEqual(["portrait", "landscape", "portrait"])
+    expect(
+      compiled.source.sections.map(({ defaultHeaderId, defaultFooterId }) => [
+        defaultHeaderId,
+        defaultFooterId,
+      ])
+    ).toEqual([
+      ["docx:header:word/header1.xml", "docx:footer:word/footer1.xml"],
+      ["docx:header:word/header1.xml", "docx:footer:word/footer1.xml"],
+      ["docx:header:word/header1.xml", "docx:footer:word/footer1.xml"],
+    ])
+    expect(first.pdf).toEqual(second.pdf)
+    expect(first.documentHash).toBe(second.documentHash)
+    expect(first.templateHash).toBe(compiled.templateHash)
+    expect(first.resourceUsage).toBeUndefined()
+    expect(first.pageCount).toBe(3)
+    expect(validation.valid).toBe(true)
+    expect(validation.errors).toEqual([])
+    expect(validation.pageCount).toBe(3)
+    expect(validation.pageTexts).toHaveLength(3)
+    expect(
+      validation.pageTexts.every(
+        (text) =>
+          text.includes("Header Amara Mokoena") &&
+          text.includes("Footer Amara Mokoena")
+      )
+    ).toBe(true)
+    expect(validation.pageTexts[0]).toContain("Page 1 of 3")
+    expect(validation.pageTexts[1]).toContain("Page 2 of 3")
+    expect(validation.pageTexts[2]).toContain("Page 3 of 3")
+    expect(validation.text).toContain("Before PNG  between JPEG  after images")
+    expect(validation.text).toContain("Table leftTable right")
+    expect(validation.text).toContain("1.First numbered body item")
+    expect(validation.text).toContain("2.Second numbered body item")
+    expect(validation.text).not.toContain("{{")
+    expect(pdfSource.match(/\/Subtype \/Image\b/gu)).toHaveLength(2)
+    expect(pdfSource.match(/\/XObject\b/gu)?.length).toBeGreaterThanOrEqual(3)
+    const mediaBoxes = [...pdfSource.matchAll(/\/MediaBox \[([^\]]+)\]/gu)].map(
+      (match) => match[1]
+    )
+    expect(mediaBoxes).toEqual([
+      "0 0 595.35 841.95",
+      "0 0 841.95 595.35",
+      "0 0 595.35 841.95",
+    ])
+    const imageMatrices = [
+      ...pdfSource.matchAll(
+        /q\n([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm\n\/Im\d+ Do/gu
+      ),
+    ]
+    expect(imageMatrices.length).toBeGreaterThanOrEqual(4)
+    expect(
+      imageMatrices.every((match) =>
+        match.slice(1).every((value) => Number(value) >= 0)
+      )
+    ).toBe(true)
+
+    expect(Object.isFrozen(compiled)).toBe(true)
+    expect(Object.isFrozen(compiled.source.assets)).toBe(true)
+    expect(Object.isFrozen(compiled.source.assets[0]?.bytes)).toBe(true)
+    expect(Object.hasOwn(compiled, "images")).toBe(false)
+    const firstByte = compiled.source.assets[0]?.bytes[0]
+    expect(() => {
+      ;(compiled.source.assets[0]?.bytes as number[])[0] = 0
+    }).toThrow()
+    expect(compiled.source.assets[0]?.bytes[0]).toBe(firstByte)
+  })
+
+  test("fails Phase 6 image and section inputs safely and keeps limits and cancellation effective", async () => {
+    const valid = buildPhase6DocumentDocx()
+    const damagedParts = unzipSync(valid)
+    const damagedPng = Uint8Array.from(generatedPng())
+    damagedPng[damagedPng.length - 5] =
+      (damagedPng[damagedPng.length - 5] ?? 0) ^ 1
+    damagedParts["word/media/generated.png"] = damagedPng
+    const damagedDocx = zipSync(damagedParts, {
+      level: 6,
+      mtime: new Date("1980-01-01T00:00:00.000Z"),
+    })
+    const engine = await createDocxPdfEngine()
+    try {
+      await engine.compile(damagedDocx)
+      throw new Error("Expected the damaged PNG to fail compilation")
+    } catch (error) {
+      expect(error).toBeInstanceOf(EngineOperationError)
+      expect((error as EngineOperationError).code).toBe(
+        "engine/docx-content-loss"
+      )
+      expect(
+        (error as EngineOperationError).diagnostics.map(({ code }) => code)
+      ).toContain("DOCX_UNSUPPORTED_IMAGE_PROFILE")
+    }
+
+    const malformedParts = unzipSync(valid)
+    const documentPart = malformedParts["word/document.xml"]
+    if (!documentPart) throw new Error("fixture must contain document.xml")
+    malformedParts["word/document.xml"] = strToU8(
+      strFromU8(documentPart).replace(
+        'w:w="16839" w:h="11907" w:orient="landscape"',
+        'w:w="11907" w:h="16839" w:orient="landscape"'
+      )
+    )
+    const malformedSection = zipSync(malformedParts, {
+      level: 6,
+      mtime: new Date("1980-01-01T00:00:00.000Z"),
+    })
+    await expect(engine.compile(malformedSection)).rejects.toBeInstanceOf(
+      EngineOperationError
+    )
+
+    const limitedEngine = await createDocxPdfEngine({ limits: { maxPages: 2 } })
+    const limited = await limitedEngine.compile(valid)
+    await expect(
+      limitedEngine.render(
+        limited,
+        { patient: { name: "Amara" } },
+        { locale: "en-ZA", timeZone: "Africa/Johannesburg" }
+      )
+    ).rejects.toThrow("Layout exceeded the configured maximum of 2 pages")
+
+    const decodedImageLimitedEngine = await createDocxPdfEngine({
+      limits: { maxDecodedImageBytes: 1 },
+    })
+    try {
+      await decodedImageLimitedEngine.compile(valid)
+      throw new Error("Expected decoded image limits to fail compilation")
+    } catch (error) {
+      expect(error).toBeInstanceOf(EngineOperationError)
+      expect((error as EngineOperationError).code).toBe("engine/image")
+      expect(
+        (error as EngineOperationError).diagnostics.map(({ code }) => code)
+      ).toContain("images/limit")
+    }
+
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      engine.compile(valid, { signal: controller.signal })
+    ).rejects.toThrow()
+  })
+
   test("compiles DOCX bytes and produces repeat-identical searchable PDFs", async () => {
     const engine = await createDocxPdfEngine()
     const compiled = await engine.compile(sampleDocx())
@@ -113,6 +288,277 @@ describe("engine vertical slice", () => {
     expect(pdfSource).toContain("<006600660069>")
   })
 
+  test("renders conditional repeated paragraphs and explicit-context formatters end to end", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(
+      sampleDocx(`
+        <w:p><w:r><w:t>{{#if invoice.show}}</w:t></w:r></w:p>
+        <w:p><w:r><w:t xml:space="preserve">{{invoice.title | upper}} — </w:t></w:r></w:p>
+        <w:p><w:r><w:t>{{#each invoice.items}}</w:t></w:r></w:p>
+        <w:p><w:r><w:t xml:space="preserve">Line {{name}}: {{amount:number | currency:"ZAR"}}</w:t></w:r></w:p>
+        <w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>
+        <w:p><w:r><w:t>{{else}}</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Hidden</w:t></w:r></w:p>
+        <w:p><w:r><w:t>{{/if}}</w:t></w:r></w:p>
+      `)
+    )
+    expect(compiled.manifest.fields.map(({ path }) => path)).toEqual([
+      "invoice.items",
+      "invoice.items[].amount",
+      "invoice.items[].name",
+      "invoice.show",
+      "invoice.title",
+    ])
+    const input = {
+      invoice: {
+        show: true,
+        title: "statement",
+        items: [
+          { name: "Consultation", amount: 1250 },
+          { name: "Medicine", amount: 230.5 },
+        ],
+      },
+    }
+    const options = {
+      locale: "en-ZA",
+      timeZone: "Africa/Johannesburg",
+    } as const
+    const first = await engine.render(compiled, input, options)
+    const second = await engine.render(compiled, input, options)
+    const validation = validatePdfStructure(first.pdf)
+
+    expect(first.pdf).toEqual(second.pdf)
+    expect(validation.valid).toBe(true)
+    expect(validation.text).toContain("STATEMENT")
+    expect(validation.text).toContain("Line Consultation:")
+    expect(validation.text).toContain("Line Medicine:")
+    expect(validation.text).not.toContain("Hidden")
+    expect(validation.text).not.toContain("{{")
+  })
+
+  test("continues searchable list numbering across repeated template paragraphs", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(
+      sampleDocx(
+        `
+          <w:p><w:r><w:t>{{#each items}}</w:t></w:r></w:p>
+          <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/></w:numPr></w:pPr><w:r><w:t>{{name:string}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>
+        `,
+        {
+          "word/_rels/document.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>`,
+          "word/numbering.xml": `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:suff w:val="tab"/><w:lvlJc w:val="right"/><w:pPr><w:ind w:start="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="7"><w:abstractNumId w:val="1"/></w:num></w:numbering>`,
+        }
+      )
+    )
+    const rendered = await engine.render(
+      compiled,
+      { items: [{ name: "Alpha" }, { name: "Beta" }] },
+      { locale: "en-ZA", timeZone: "Africa/Johannesburg" }
+    )
+    const validation = validatePdfStructure(rendered.pdf)
+
+    expect(validation.valid).toBe(true)
+    expect(validation.pageCount).toBe(1)
+    expect(validation.text).toBe("1.Alpha2.Beta")
+    expect(
+      rendered.diagnostics.some(({ severity }) => severity === "error")
+    ).toBe(false)
+    expect(
+      rendered.diagnostics.some(({ code }) => code.includes("numbering"))
+    ).toBe(false)
+  })
+
+  test("renders a real fixed-grid DOCX table with formatting, merges, fragmentation, and continuous numbering", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(buildPhase5FormattingTableDocx())
+    const section = compiled.source.sections[0]
+    const table = section?.blocks.find((block) => block.type === "table")
+    if (!section || table?.type !== "table")
+      throw new Error("Expected the fixture table to compile")
+
+    expect(ENGINE_VERSION).toBe("0.0.0-phase.7")
+    expect(compiled.version).toBe(ENGINE_VERSION)
+    expect(Number(section.properties.pageWidth)).toBeLessThan(
+      Number(section.properties.pageHeight)
+    )
+    expect(table.layout).toBe("fixed")
+    expect(table.columnWidths.map(Number)).toEqual([1600, 2400])
+    expect({
+      top: Number(table.cellPadding.top),
+      right: Number(table.cellPadding.right),
+      bottom: Number(table.cellPadding.bottom),
+      left: Number(table.cellPadding.left),
+    }).toEqual({ top: 80, right: 100, bottom: 80, left: 100 })
+    expect(table.borders).toMatchObject({
+      top: { style: "single", color: "#102030", width: 20, space: 20 },
+      right: { style: "double", color: "#405060", width: 30 },
+      bottom: { style: "dotted", color: "#708090" },
+      left: { style: "dashed", color: "#A0B0C0" },
+    })
+    expect(table.repeatHeaderRowCount).toBe(1)
+    expect(table.rows[0]).toMatchObject({
+      repeatAsHeader: true,
+      height: { rule: "exact", value: 640 },
+      cells: [
+        {
+          columnSpan: 2,
+          width: 4000,
+          fillColor: "#DDEEFF",
+          verticalAlignment: "center",
+        },
+      ],
+    })
+    expect(table.rows[1]?.cells[0]).toMatchObject({
+      verticalMerge: "restart",
+      fillColor: "#FFF4CC",
+      verticalAlignment: "top",
+    })
+    expect(table.rows[1]?.cells[1]?.verticalAlignment).toBe("bottom")
+    expect(table.rows[2]).toMatchObject({
+      height: { rule: "exact", value: 520 },
+      cells: [{ verticalMerge: "continue" }, { verticalAlignment: "center" }],
+    })
+
+    expect(Object.isFrozen(table)).toBe(true)
+    expect(Object.isFrozen(table.columnWidths)).toBe(true)
+    expect(Object.isFrozen(table.borders)).toBe(true)
+    expect(Object.isFrozen(table.cellPadding)).toBe(true)
+    expect(Object.isFrozen(table.rows)).toBe(true)
+    expect(Object.isFrozen(table.rows[0]?.cells)).toBe(true)
+    expect(Object.isFrozen(table.rows[0]?.cells[0]?.blocks)).toBe(true)
+    expect(Object.isFrozen(table.rows[0]?.cells[0]?.blocks[0]?.children)).toBe(
+      true
+    )
+    expect(() => {
+      ;(table.rows[0]?.cells[0] as { fillColor: string | null }).fillColor =
+        "#000000"
+    }).toThrow()
+    expect(table.rows[0]?.cells[0]?.fillColor).toBe("#DDEEFF")
+
+    const options = {
+      locale: "en-ZA",
+      timeZone: "Africa/Johannesburg",
+      includeLayoutTrace: true,
+    } as const
+    const first = await engine.render(compiled, {}, options)
+    const second = await engine.render(compiled, {}, options)
+    const validation = validatePdfStructure(first.pdf)
+
+    expect(first.pdf).toEqual(second.pdf)
+    expect(first.documentHash).toBe(second.documentHash)
+    expect(first.pageCount).toBeGreaterThan(1)
+    expect(validation.valid).toBe(true)
+    expect(validation.pageCount).toBe(first.pageCount)
+    expect(validation.errors.some((error) => error.includes("mirrored"))).toBe(
+      false
+    )
+    expect(
+      first.layoutTrace?.events.some(
+        (event) => event.reason === "table-row-fragment"
+      )
+    ).toBe(true)
+    expect(
+      validation.pageTexts.every((text) => text.includes("TABLE HEADER"))
+    ).toBe(true)
+    expect(validation.text.indexOf("1.Cell list")).toBeLessThan(
+      validation.text.indexOf("Row 1 right")
+    )
+    expect(validation.text.indexOf("Row 1 right")).toBeLessThan(
+      validation.text.indexOf("Row 2 right")
+    )
+    expect(validation.text.indexOf("2.After table")).toBeGreaterThan(
+      validation.text.indexOf("Fragment tail")
+    )
+  })
+
+  test("repeats dedicated template marker rows as row-major searchable table data", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(buildPhase5TemplateTableDocx())
+    const table = compiled.source.sections[0]?.blocks[0]
+    if (table?.type !== "table")
+      throw new Error("Expected the template fixture table to compile")
+
+    expect(compiled.manifest.fields.map(({ path }) => path)).toEqual([
+      "invoice.items",
+      "invoice.items[].name",
+      "invoice.items[].quantity",
+    ])
+    const items = Array.from({ length: 18 }, (_, index) => ({
+      name: `Item ${String(index + 1).padStart(2, "0")}`,
+      quantity: index + 1,
+    }))
+    const options = {
+      locale: "en-ZA",
+      timeZone: "Africa/Johannesburg",
+      includeLayoutTrace: true,
+    } as const
+    const first = await engine.render(compiled, { invoice: { items } }, options)
+    const second = await engine.render(
+      compiled,
+      { invoice: { items } },
+      options
+    )
+    const validation = validatePdfStructure(first.pdf)
+
+    expect(first.pageCount).toBeGreaterThan(1)
+    expect(first.pdf).toEqual(second.pdf)
+    expect(first.documentHash).toBe(second.documentHash)
+    expect(validation.valid).toBe(true)
+    expect(validation.pageTexts.every((text) => text.includes("ITEMQTY"))).toBe(
+      true
+    )
+    expect(validation.text).not.toContain("{{")
+    expect(validation.text).not.toContain("#each")
+    let previousOffset = -1
+    for (const [index, item] of items.entries()) {
+      const rowText = `${item.name}${item.quantity}`
+      const offset = validation.text.indexOf(rowText)
+      expect(offset).toBeGreaterThan(previousOffset)
+      previousOffset = offset
+      expect(validation.text.match(new RegExp(item.name, "gu"))).toHaveLength(1)
+      expect(index).toBeLessThan(items.length)
+    }
+    expect(validation.text.indexOf("Template tail")).toBeGreaterThan(
+      previousOffset
+    )
+  })
+
+  test("keeps table rendering bounded by maxPages and abort signals", async () => {
+    const limitedEngine = await createDocxPdfEngine({
+      limits: { maxPages: 1 },
+    })
+    const limited = await limitedEngine.compile(
+      buildPhase5FormattingTableDocx()
+    )
+    await expect(
+      limitedEngine.render(
+        limited,
+        {},
+        {
+          locale: "en-ZA",
+          timeZone: "Africa/Johannesburg",
+        }
+      )
+    ).rejects.toThrow("Layout exceeded the configured maximum of 1 pages")
+
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(buildPhase5FormattingTableDocx())
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      engine.render(
+        compiled,
+        {},
+        {
+          locale: "en-ZA",
+          timeZone: "Africa/Johannesburg",
+          signal: controller.signal,
+        }
+      )
+    ).rejects.toThrow()
+  })
+
   test("publishes a deeply immutable compiled template", async () => {
     const engine = await createDocxPdfEngine()
     const compiled = await engine.compile(sampleDocx())
@@ -128,9 +574,6 @@ describe("engine vertical slice", () => {
 
     expect(Object.isFrozen(compiled)).toBe(true)
     expect(Object.isFrozen(compiled.source.sections)).toBe(true)
-    expect(
-      Object.isFrozen(compiled.source.sections[0]?.blocks[0]?.children)
-    ).toBe(true)
     expect(Object.isFrozen(compiled.manifest.fields[0]?.formatters)).toBe(true)
     expect(Object.isFrozen(compiled.starterData.patient)).toBe(true)
     const section = compiled.source.sections[0]
@@ -138,15 +581,19 @@ describe("engine vertical slice", () => {
     const block = section.blocks[0]
     if (block === undefined)
       throw new Error("fixture section must contain a block")
+    if (block.type !== "paragraph")
+      throw new Error("fixture block must contain a paragraph")
+    expect(Object.isFrozen(block.children)).toBe(true)
     const child = block.children[0]
     if (child === undefined)
       throw new Error("fixture block must contain a child")
     expect(() => {
       ;(child as { text: string }).text = "mutated"
     }).toThrow()
-    expect(compiled.source.sections[0]?.blocks[0]?.children[0]?.text).toBe(
-      "Prepared for "
-    )
+    expect(child.type).toBe("text")
+    if (child.type !== "text")
+      throw new Error("fixture child must contain text")
+    expect(child.text).toBe("Prepared for ")
     const afterMutation = await engine.render(
       compiled,
       { patient: { fullName: "Amara" } },
@@ -291,7 +738,7 @@ describe("engine vertical slice", () => {
       )
       expect(
         (error as EngineOperationError).diagnostics.map(({ code }) => code)
-      ).toContain("DOCX_UNSUPPORTED_BLOCK")
+      ).toContain("DOCX_INVALID_TABLE")
     }
   })
 

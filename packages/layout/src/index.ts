@@ -19,8 +19,13 @@ import {
   type PositionedGlyph,
   type Rect,
   type ResolvedDocument,
+  type ResolvedInline,
   type ResolvedParagraph,
+  type ResolvedTable,
+  type ResolvedTableCell,
+  type ResolvedTableRow,
   type ShapedGlyph,
+  type TableBorder,
   type TextShaper,
   type TextStyle,
   type Twip,
@@ -77,6 +82,18 @@ type Cluster = Readonly<{
   glyphs?: readonly PreparedGlyph[]
   underlineOffset: Twip
   underlineThickness: Twip
+  atom?:
+    | Readonly<{ type: "image"; assetId: string; height: Twip }>
+    | Readonly<{
+        type: "pageField"
+        field: "PAGE" | "NUMPAGES"
+        embedded?: Readonly<{
+          faceId: FontFaceId
+          digits: ReadonlyMap<string, readonly ShapedGlyph[]>
+        }>
+        digitAdvances: ReadonlyMap<string, Twip>
+        reservedDigits: number
+      }>
 }>
 
 type Token = Readonly<{
@@ -116,6 +133,84 @@ type PreparedParagraph = Readonly<{
   label?: ResolvedListLabel
   properties: ParagraphProperties
   height: Twip
+}>
+
+type PreparedCellParagraph = PreparedParagraph &
+  Readonly<{ top: Twip; lineTops: readonly Twip[] }>
+
+type PreparedTableCell = Readonly<{
+  cell: ResolvedTableCell
+  x: Twip
+  width: Twip
+  contentX: Twip
+  contentWidth: Twip
+  topInset: Twip
+  bottomInset: Twip
+  contentHeight: Twip
+  paragraphs: readonly PreparedCellParagraph[]
+  mergeOwnerRow: number | null
+}>
+
+type PreparedTableRow = Readonly<{
+  row: ResolvedTableRow
+  index: number
+  cells: readonly PreparedTableCell[]
+  top: Twip
+  height: Twip
+}>
+
+type PreparedMergeChain = Readonly<{
+  ownerRow: number
+  finalRow: number
+  columnIndex: number
+  columnSpan: number
+}>
+
+type PreparedTable = Readonly<{
+  table: ResolvedTable
+  rows: readonly PreparedTableRow[]
+  mergeChains: readonly PreparedMergeChain[]
+  headerHeight: Twip
+}>
+
+type PreparedBlock =
+  | Readonly<{ type: "paragraph"; value: PreparedParagraph }>
+  | Readonly<{ type: "table"; value: PreparedTable }>
+
+type PendingPageField = Readonly<{
+  type: "pending-page-field"
+  sourceNodeId: NodeId
+  field: "PAGE" | "NUMPAGES"
+  style: TextStyle
+  x: Twip
+  baselineY: Twip
+  width: Twip
+  embedded?: Readonly<{
+    faceId: FontFaceId
+    digits: ReadonlyMap<string, readonly ShapedGlyph[]>
+  }>
+  digitAdvances: ReadonlyMap<string, Twip>
+  reservedDigits: number
+}>
+
+type InternalDisplayItem = DisplayListItem | PendingPageField
+
+type PreparedHeaderFooter = Readonly<{
+  id: string
+  blocks: readonly PreparedParagraph[]
+  height: Twip
+}>
+
+type InternalPage = Readonly<{
+  pageNumber: number
+  width: Twip
+  height: Twip
+  contentBounds: Rect
+  items: InternalDisplayItem[]
+  header?: PreparedHeaderFooter
+  footer?: PreparedHeaderFooter
+  headerY: Twip
+  footerY: Twip
 }>
 
 /**
@@ -165,7 +260,7 @@ export function layoutDocument(
     throw new TypeError("maxPages must be a positive safe integer")
 
   const diagnostics: Diagnostic[] = []
-  const pages: PageDisplayListPage[] = []
+  const pages: InternalPage[] = []
   const tracePages: Array<{
     pageNumber: number
     pageBounds: Rect
@@ -173,7 +268,55 @@ export function layoutDocument(
   }> = []
   const events: LayoutTraceEvent[] = []
   const numbering = createNumberingResolver(document, diagnostics)
+  const pageFieldDigits = String(maxPages).length
+  const assets = validateAssets(document)
+  const headers = indexHeaderFooters(document.headers, "header")
+  const footers = indexHeaderFooters(document.footers, "footer")
+  const headerFooterCache = new Map<string, PreparedHeaderFooter>()
   let current: PageState | undefined
+
+  const prepareHeaderFooter = (
+    id: string | null,
+    kind: "header" | "footer",
+    width: Twip
+  ): PreparedHeaderFooter | undefined => {
+    if (id === null) return undefined
+    const definitions = kind === "header" ? headers : footers
+    const definition = definitions.get(id)
+    if (!definition)
+      throw new RangeError(`Section references missing ${kind} '${id}'`)
+    const cacheKey = `${kind}:${id}:${width}:${pageFieldDigits}`
+    const cached = headerFooterCache.get(cacheKey)
+    if (cached) return cached
+    for (const paragraph of definition.blocks) {
+      if (paragraph.properties.numbering !== null)
+        throw new RangeError(
+          `${kind === "header" ? "Header" : "Footer"} paragraphs cannot use automatic numbering`
+        )
+    }
+    const blocks = definition.blocks.map((paragraph) =>
+      prepareParagraph(
+        paragraph,
+        width,
+        typography,
+        diagnostics,
+        numbering,
+        pageFieldDigits,
+        assets,
+        options.signal
+      )
+    )
+    const prepared: PreparedHeaderFooter = Object.freeze({
+      id,
+      blocks: Object.freeze(blocks),
+      height: safeTwipSum(
+        blocks.map((block) => block.height),
+        `${kind === "header" ? "Header" : "Footer"} height exceeds the safe integer range`
+      ),
+    })
+    headerFooterCache.set(cacheKey, prepared)
+    return prepared
+  }
 
   const createPage = (
     section: ResolvedDocument["sections"][number],
@@ -182,7 +325,16 @@ export function layoutDocument(
   ): PageState => {
     throwIfAborted(options.signal)
     if (pages.length >= maxPages) throw new LayoutLimitError(maxPages)
-    const { pageWidth, pageHeight, margins } = section.properties
+    const { pageWidth, pageHeight, margins, headerDistance, footerDistance } =
+      section.properties
+    if (!Number.isSafeInteger(headerDistance) || headerDistance < 0)
+      throw new RangeError(
+        "Section header distance must be a non-negative safe integer"
+      )
+    if (!Number.isSafeInteger(footerDistance) || footerDistance < 0)
+      throw new RangeError(
+        "Section footer distance must be a non-negative safe integer"
+      )
     const contentWidth = pageWidth - margins.left - margins.right
     const contentHeight = pageHeight - margins.top - margins.bottom
     if (contentWidth <= 0 || contentHeight <= 0)
@@ -193,12 +345,48 @@ export function layoutDocument(
       width: twips(contentWidth),
       height: twips(contentHeight),
     }
-    const page: PageDisplayListPage = {
+    const header = prepareHeaderFooter(
+      section.defaultHeaderId,
+      "header",
+      contentBounds.width
+    )
+    const footer = prepareHeaderFooter(
+      section.defaultFooterId,
+      "footer",
+      contentBounds.width
+    )
+    const headerBottom = header
+      ? safeTwipSum(
+          [headerDistance, header.height],
+          "Header position exceeds the safe integer range"
+        )
+      : headerDistance
+    if (header && headerBottom > margins.top)
+      throw new RangeError(
+        "Header content collides with the body because its distance and height exceed the top margin"
+      )
+    const footerExtent = footer
+      ? safeTwipSum(
+          [footerDistance, footer.height],
+          "Footer position exceeds the safe integer range"
+        )
+      : footerDistance
+    if (footer && footerExtent > margins.bottom)
+      throw new RangeError(
+        "Footer content collides with the body because its distance and height exceed the bottom margin"
+      )
+    const page: InternalPage = {
       pageNumber: pages.length + 1,
       width: pageWidth,
       height: pageHeight,
       contentBounds,
       items: [],
+      ...(header ? { header } : {}),
+      ...(footer ? { footer } : {}),
+      // OOXML header distance anchors the header top from the page top. Footer
+      // distance anchors the footer bottom from the page bottom.
+      headerY: headerDistance,
+      footerY: twips(pageHeight - footerExtent),
     }
     pages.push(page)
     tracePages.push({
@@ -218,7 +406,7 @@ export function layoutDocument(
         kind: "page-break",
         reason,
       })
-    return { page, y: contentBounds.y, items: page.items as DisplayListItem[] }
+    return { page, y: contentBounds.y, items: page.items }
   }
 
   for (const [sectionIndex, section] of document.sections.entries()) {
@@ -231,41 +419,48 @@ export function layoutDocument(
       )
     }
 
-    const sectionContentWidth = current.page.contentBounds.width
-    const prepared = section.blocks.map((paragraph) => {
+    const sectionPage = current.page
+    const sectionContentWidth = sectionPage.contentBounds.width
+    const prepared: readonly PreparedBlock[] = section.blocks.map((block) => {
       throwIfAborted(options.signal)
-      addCompatibilityDiagnostics(paragraph, typography, diagnostics)
-      const label = numbering.resolve(paragraph, typography, options.signal)
-      const properties = listParagraphProperties(paragraph.properties, label)
-      let lines = measureParagraph(
-        paragraph,
+      if (block.type === "table") {
+        return {
+          type: "table",
+          value: prepareTable(
+            block,
+            sectionContentWidth,
+            typography,
+            diagnostics,
+            numbering,
+            pageFieldDigits,
+            assets,
+            sectionPage.contentBounds.height,
+            options.signal
+          ),
+        }
+      }
+      const paragraph = prepareParagraph(
+        block,
         sectionContentWidth,
         typography,
         diagnostics,
-        properties,
+        numbering,
+        pageFieldDigits,
+        assets,
         options.signal
       )
-      if (label && lines[0]) {
-        const first = lines[0]
-        lines = Object.freeze([
-          {
-            ...first,
-            ascent: twips(Math.max(first.ascent, label.ascent)),
-            descent: twips(Math.max(first.descent, label.descent)),
-            lineGap: twips(Math.max(first.lineGap, label.lineGap)),
-          },
-          ...lines.slice(1),
-        ])
+      if (
+        paragraph.lineHeights.some(
+          (lineHeight) => lineHeight > sectionPage.contentBounds.height
+        )
+      )
+        throw new RangeError(
+          "Paragraph contains an atomic line box taller than a writable fresh page"
+        )
+      return {
+        type: "paragraph",
+        value: paragraph,
       }
-      const lineHeights = lines.map((line) =>
-        resolveLineHeight(properties, line)
-      )
-      const height = twips(
-        paragraph.properties.spacingBefore +
-          paragraph.properties.spacingAfter +
-          lineHeights.reduce((total, height) => total + height, 0)
-      )
-      return { paragraph, lines, lineHeights, label, properties, height }
     })
 
     for (
@@ -274,7 +469,20 @@ export function layoutDocument(
       paragraphIndex += 1
     ) {
       throwIfAborted(options.signal)
-      const item = prepared[paragraphIndex] as PreparedParagraph
+      const block = prepared[paragraphIndex] as PreparedBlock
+      if (block.type === "table") {
+        current = paginateTable(
+          block.value,
+          section,
+          current,
+          createPage,
+          diagnostics,
+          events,
+          options.signal
+        )
+        continue
+      }
+      const item = block.value
       const { paragraph, lines, lineHeights, label, properties } = item
       let contentBottom = twips(
         current.page.contentBounds.y + current.page.contentBounds.height
@@ -290,18 +498,33 @@ export function layoutDocument(
         )
       }
 
+      const previous = prepared[paragraphIndex - 1]
+      const isChainStart =
+        paragraphIndex === 0 ||
+        previous?.type !== "paragraph" ||
+        !previous.value.paragraph.properties.keepWithNext ||
+        paragraph.properties.pageBreakBefore
       let chainEnd = paragraphIndex
-      while (
-        chainEnd < prepared.length - 1 &&
-        prepared[chainEnd]?.paragraph.properties.keepWithNext &&
-        !prepared[chainEnd + 1]?.paragraph.properties.pageBreakBefore
-      ) {
+      while (isChainStart && chainEnd < prepared.length - 1) {
+        const chainCurrent = prepared[chainEnd]
+        const chainNext = prepared[chainEnd + 1]
+        if (
+          chainCurrent?.type !== "paragraph" ||
+          !chainCurrent.value.paragraph.properties.keepWithNext ||
+          chainNext?.type !== "paragraph" ||
+          chainNext.value.paragraph.properties.pageBreakBefore
+        )
+          break
         chainEnd += 1
       }
       const chainHeight = twips(
         prepared
           .slice(paragraphIndex, chainEnd + 1)
-          .reduce((total, entry) => total + entry.height, 0)
+          .reduce(
+            (total, entry) =>
+              total + (entry.type === "paragraph" ? entry.value.height : 0),
+            0
+          )
       )
       if (chainEnd > paragraphIndex) {
         if (chainHeight <= current.page.contentBounds.height) {
@@ -514,10 +737,68 @@ export function layoutDocument(
     }
   }
 
+  const totalPages = pages.length
   const displayList: PageDisplayList = Object.freeze({
-    pages: pages.map((page) =>
-      Object.freeze({ ...page, items: Object.freeze([...page.items]) })
-    ),
+    pages: pages.map((page) => {
+      throwIfAborted(options.signal)
+      const decorated: InternalDisplayItem[] = []
+      if (page.header)
+        emitHeaderFooter(
+          decorated,
+          page.header,
+          page.contentBounds,
+          page.headerY,
+          page.pageNumber,
+          totalPages
+        )
+      decorated.push(...page.items)
+      if (page.footer)
+        emitHeaderFooter(
+          decorated,
+          page.footer,
+          page.contentBounds,
+          page.footerY,
+          page.pageNumber,
+          totalPages
+        )
+      if (options.includeTrace) {
+        for (const item of decorated) {
+          if (item.type === "image") {
+            events.push({
+              pageNumber: page.pageNumber,
+              sourceNodeId: item.sourceNodeId,
+              kind: "block",
+              bounds: item.bounds,
+              reason: "inline-image",
+            })
+          } else if (item.type === "pending-page-field") {
+            events.push({
+              pageNumber: page.pageNumber,
+              sourceNodeId: item.sourceNodeId,
+              kind: "line",
+              bounds: {
+                x: item.x,
+                y: twips(item.baselineY - item.style.fontSize),
+                width: item.width,
+                height: item.style.fontSize,
+              },
+              reason: `page-field:${item.field.toLowerCase()}`,
+            })
+          }
+        }
+      }
+      return Object.freeze({
+        pageNumber: page.pageNumber,
+        width: page.width,
+        height: page.height,
+        contentBounds: page.contentBounds,
+        items: Object.freeze(
+          decorated.flatMap((item) =>
+            materializeItem(item, page.pageNumber, totalPages)
+          )
+        ),
+      }) as PageDisplayListPage
+    }),
   })
   const trace: LayoutTrace | undefined = options.includeTrace
     ? Object.freeze({
@@ -532,14 +813,1223 @@ export function layoutDocument(
   })
 }
 
+function prepareParagraph(
+  paragraph: ResolvedParagraph,
+  width: Twip,
+  typography: Typography,
+  diagnostics: Diagnostic[],
+  numbering: NumberingResolver,
+  pageFieldDigits: number,
+  assets: ReadonlySet<string>,
+  signal?: AbortSignal
+): PreparedParagraph {
+  throwIfAborted(signal)
+  addCompatibilityDiagnostics(paragraph, typography, diagnostics)
+  const label = numbering.resolve(paragraph, typography, signal)
+  const properties = listParagraphProperties(paragraph.properties, label)
+  let lines = measureParagraph(
+    paragraph,
+    width,
+    typography,
+    diagnostics,
+    properties,
+    pageFieldDigits,
+    assets,
+    signal
+  )
+  if (label && lines[0]) {
+    const first = lines[0]
+    lines = Object.freeze([
+      {
+        ...first,
+        ascent: twips(Math.max(first.ascent, label.ascent)),
+        descent: twips(Math.max(first.descent, label.descent)),
+        lineGap: twips(Math.max(first.lineGap, label.lineGap)),
+      },
+      ...lines.slice(1),
+    ])
+  }
+  const lineHeights = lines.map((line) => resolveLineHeight(properties, line))
+  const height = safeTwipSum(
+    [
+      paragraph.properties.spacingBefore,
+      ...lineHeights,
+      paragraph.properties.spacingAfter,
+    ],
+    "Paragraph height exceeds the safe integer range"
+  )
+  return { paragraph, lines, lineHeights, label, properties, height }
+}
+
+function prepareTable(
+  table: ResolvedTable,
+  availableWidth: Twip,
+  typography: Typography,
+  diagnostics: Diagnostic[],
+  numbering: NumberingResolver,
+  pageFieldDigits: number,
+  assets: ReadonlySet<string>,
+  maximumAtomicHeight: Twip,
+  signal?: AbortSignal
+): PreparedTable {
+  throwIfAborted(signal)
+  if (table.columnWidths.length === 0)
+    throw new RangeError("Invalid table grid: at least one column is required")
+  for (const width of table.columnWidths) {
+    if (!Number.isSafeInteger(width) || width <= 0)
+      throw new RangeError(
+        "Invalid table grid: column widths must be positive safe integers"
+      )
+  }
+  const gridWidth = safeTwipSum(
+    table.columnWidths,
+    "Invalid table grid: combined width exceeds the safe integer range"
+  )
+  if (table.width !== gridWidth)
+    throw new RangeError(
+      "Invalid table grid: resolved table width does not equal the grid width"
+    )
+  if (gridWidth > availableWidth)
+    throw new RangeError("Invalid table grid: table exceeds the writable width")
+  if (table.rows.length === 0)
+    throw new RangeError("Invalid table: at least one row is required")
+  if (
+    !Number.isSafeInteger(table.repeatHeaderRowCount) ||
+    table.repeatHeaderRowCount < 0 ||
+    table.repeatHeaderRowCount > table.rows.length
+  )
+    throw new RangeError("Invalid table header-row count")
+  for (const side of Object.values(table.cellPadding)) {
+    if (!Number.isSafeInteger(side) || side < 0)
+      throw new RangeError("Invalid table cell padding")
+  }
+  validateBorders(table)
+
+  const columnX: Twip[] = [twips(0)]
+  for (const width of table.columnWidths)
+    columnX.push(
+      safeTwipSum(
+        [columnX.at(-1) as Twip, width],
+        "Invalid table grid: column position exceeds the safe integer range"
+      )
+    )
+
+  const mergeOwners = new Map<
+    number,
+    Readonly<{ row: number; span: number; header: boolean }>
+  >()
+  const rows: PreparedTableRow[] = []
+  for (const [rowIndex, row] of table.rows.entries()) {
+    throwIfAborted(signal)
+    const isHeader = rowIndex < table.repeatHeaderRowCount
+    if (row.repeatAsHeader !== isHeader)
+      throw new RangeError(
+        "Invalid table headers: repeat rows must be contiguous and match repeatHeaderRowCount"
+      )
+    if (row.cells.length === 0)
+      throw new RangeError("Invalid table row: at least one cell is required")
+    let previousColumnIndex = -1
+    for (const cell of row.cells) {
+      if (cell.columnIndex <= previousColumnIndex)
+        throw new RangeError(
+          "Invalid table row: cells must use strictly increasing columnIndex order"
+        )
+      previousColumnIndex = cell.columnIndex
+    }
+    const occupied = new Array<boolean>(table.columnWidths.length).fill(false)
+    const continuedOwners = new Set<number>()
+    const preparedCells: PreparedTableCell[] = []
+    for (const cell of row.cells) {
+      throwIfAborted(signal)
+      if (
+        !Number.isSafeInteger(cell.columnIndex) ||
+        !Number.isSafeInteger(cell.columnSpan) ||
+        cell.columnIndex < 0 ||
+        cell.columnSpan < 1 ||
+        cell.columnIndex + cell.columnSpan > table.columnWidths.length
+      )
+        throw new RangeError("Invalid table grid span")
+      for (
+        let column = cell.columnIndex;
+        column < cell.columnIndex + cell.columnSpan;
+        column += 1
+      ) {
+        if (occupied[column])
+          throw new RangeError("Invalid overlapping table cells")
+        occupied[column] = true
+      }
+      const width = safeTwipSum(
+        table.columnWidths.slice(
+          cell.columnIndex,
+          cell.columnIndex + cell.columnSpan
+        ),
+        "Invalid table cell width"
+      )
+      if (cell.width !== width)
+        throw new RangeError(
+          "Invalid table grid: resolved cell width does not equal its spanned columns"
+        )
+
+      const active = mergeOwners.get(cell.columnIndex)
+      let mergeOwnerRow: number | null = null
+      if (cell.verticalMerge === "continue") {
+        if (!active || active.span !== cell.columnSpan)
+          throw new RangeError("Invalid vertical merge continuation chain")
+        if (active.header !== isHeader)
+          throw new RangeError(
+            "Invalid vertical merge: a merge cannot cross the header/body boundary"
+          )
+        mergeOwnerRow = active.row
+        continuedOwners.add(cell.columnIndex)
+        if (cell.blocks.some((block) => paragraphHasVisibleContent(block)))
+          throw new RangeError(
+            "Invalid vertical merge continuation: continuation cells cannot own visible content"
+          )
+      } else if (cell.verticalMerge === "restart") {
+        mergeOwners.set(cell.columnIndex, {
+          row: rowIndex,
+          span: cell.columnSpan,
+          header: isHeader,
+        })
+        continuedOwners.add(cell.columnIndex)
+        mergeOwnerRow = rowIndex
+      } else if (cell.verticalMerge !== "none") {
+        throw new RangeError("Invalid vertical merge value")
+      }
+
+      const leftBorder =
+        cell.columnIndex === 0
+          ? table.borders.left
+          : table.borders.insideVertical
+      const rightBorder =
+        cell.columnIndex + cell.columnSpan === table.columnWidths.length
+          ? table.borders.right
+          : table.borders.insideVertical
+      const topBorder =
+        rowIndex === 0 ? table.borders.top : table.borders.insideHorizontal
+      const bottomBorder =
+        rowIndex === table.rows.length - 1
+          ? table.borders.bottom
+          : table.borders.insideHorizontal
+      const leftInset = safeTwipSum(
+        [table.cellPadding.left, borderSpace(leftBorder)],
+        "Invalid table cell inset"
+      )
+      const rightInset = safeTwipSum(
+        [table.cellPadding.right, borderSpace(rightBorder)],
+        "Invalid table cell inset"
+      )
+      const topInset = safeTwipSum(
+        [table.cellPadding.top, borderSpace(topBorder)],
+        "Invalid table cell inset"
+      )
+      const bottomInset = safeTwipSum(
+        [table.cellPadding.bottom, borderSpace(bottomBorder)],
+        "Invalid table cell inset"
+      )
+      const contentWidth = width - leftInset - rightInset
+      if (!Number.isSafeInteger(contentWidth) || contentWidth <= 0)
+        throw new RangeError(
+          "Invalid table cell: non-positive content box width"
+        )
+      const paragraphs: PreparedCellParagraph[] = []
+      let paragraphTop = twips(0)
+      if (cell.verticalMerge !== "continue") {
+        for (const paragraph of cell.blocks) {
+          const prepared = prepareParagraph(
+            paragraph,
+            twips(contentWidth),
+            typography,
+            diagnostics,
+            numbering,
+            pageFieldDigits,
+            assets,
+            signal
+          )
+          if (
+            prepared.lineHeights.some(
+              (lineHeight) => lineHeight > maximumAtomicHeight
+            )
+          )
+            throw new RangeError(
+              "Table row contains an atomic line box taller than a writable fresh page"
+            )
+          const lineTops: Twip[] = []
+          let lineTop = safeTwipSum(
+            [paragraphTop, paragraph.properties.spacingBefore],
+            "Table cell content height exceeds the safe integer range"
+          )
+          for (const lineHeight of prepared.lineHeights) {
+            lineTops.push(lineTop)
+            lineTop = safeTwipSum(
+              [lineTop, lineHeight],
+              "Table cell content height exceeds the safe integer range"
+            )
+          }
+          paragraphs.push({ ...prepared, top: paragraphTop, lineTops })
+          paragraphTop = safeTwipSum(
+            [paragraphTop, prepared.height],
+            "Table cell content height exceeds the safe integer range"
+          )
+        }
+      }
+      preparedCells.push({
+        cell,
+        x: columnX[cell.columnIndex] as Twip,
+        width,
+        contentX: safeTwipSum(
+          [columnX[cell.columnIndex] as Twip, leftInset],
+          "Table cell position exceeds the safe integer range"
+        ),
+        contentWidth: twips(contentWidth),
+        topInset,
+        bottomInset,
+        contentHeight: paragraphTop,
+        paragraphs: Object.freeze(paragraphs),
+        mergeOwnerRow,
+      })
+      // A non-continuation at this column terminates a previous chain.
+      if (cell.verticalMerge === "none") mergeOwners.delete(cell.columnIndex)
+    }
+    if (occupied.some((value) => !value))
+      throw new RangeError("Invalid table grid: row contains uncovered columns")
+    for (const column of [...mergeOwners.keys()]) {
+      if (!continuedOwners.has(column)) mergeOwners.delete(column)
+    }
+
+    const naturalHeight = preparedCells.reduce<Twip>(
+      (maximum, cell) =>
+        cell.cell.verticalMerge === "none"
+          ? twips(
+              Math.max(
+                maximum,
+                safeTwipSum(
+                  [cell.topInset, cell.contentHeight, cell.bottomInset],
+                  "Table row height exceeds the safe integer range"
+                )
+              )
+            )
+          : maximum,
+      twips(0)
+    )
+    let height = twips(Math.max(1, naturalHeight))
+    if (row.height) {
+      if (!Number.isSafeInteger(row.height.value) || row.height.value <= 0)
+        throw new RangeError("Invalid table row height")
+      height =
+        row.height.rule === "exact"
+          ? naturalHeight > row.height.value
+            ? (() => {
+                throw new RangeError(
+                  "Exact-height table row cannot contain its content without clipping"
+                )
+              })()
+            : row.height.value
+          : row.height.rule === "atLeast"
+            ? twips(Math.max(naturalHeight, row.height.value))
+            : (() => {
+                throw new RangeError("Invalid table row height rule")
+              })()
+    }
+    if (height <= 0)
+      throw new RangeError("Invalid table row: non-positive content box height")
+    for (const cell of preparedCells.filter(
+      (candidate) => candidate.cell.verticalMerge === "none"
+    )) {
+      if (height - cell.topInset - cell.bottomInset <= 0)
+        throw new RangeError(
+          "Invalid table cell: non-positive content box height"
+        )
+    }
+    rows.push({
+      row,
+      index: rowIndex,
+      cells: preparedCells,
+      top: twips(0),
+      height,
+    })
+  }
+
+  const mergeChains: PreparedMergeChain[] = []
+  for (const ownerRow of rows) {
+    for (const owner of ownerRow.cells) {
+      if (owner.cell.verticalMerge !== "restart") continue
+      let finalRow = ownerRow.index
+      for (
+        let rowIndex = ownerRow.index + 1;
+        rowIndex < rows.length;
+        rowIndex += 1
+      ) {
+        const continuation = rows[rowIndex]?.cells.find(
+          (cell) =>
+            cell.cell.columnIndex === owner.cell.columnIndex &&
+            cell.cell.columnSpan === owner.cell.columnSpan
+        )
+        if (continuation?.cell.verticalMerge !== "continue") break
+        finalRow = rowIndex
+      }
+      mergeChains.push({
+        ownerRow: ownerRow.index,
+        finalRow,
+        columnIndex: owner.cell.columnIndex,
+        columnSpan: owner.cell.columnSpan,
+      })
+    }
+  }
+
+  const sizedRows = rows.map((row) => ({ ...row }))
+  for (const chain of mergeChains) {
+    const owner = findPreparedCell(
+      sizedRows[chain.ownerRow] as PreparedTableRow,
+      chain.columnIndex,
+      chain.columnSpan
+    )
+    const finalCell = findPreparedCell(
+      sizedRows[chain.finalRow] as PreparedTableRow,
+      chain.columnIndex,
+      chain.columnSpan
+    )
+    const required = safeTwipSum(
+      [owner.topInset, owner.contentHeight, finalCell.bottomInset],
+      "Vertically merged table cell height exceeds the safe integer range"
+    )
+    const allocated = safeTwipSum(
+      sizedRows
+        .slice(chain.ownerRow, chain.finalRow + 1)
+        .map((row) => row.height),
+      "Vertically merged table rows exceed the safe integer range"
+    )
+    if (required > allocated) {
+      const final = sizedRows[chain.finalRow] as PreparedTableRow
+      if (final.row.height?.rule === "exact") {
+        diagnostics.push({
+          code: "layout/table-vertical-merge-expanded-exact-row",
+          severity: "warning",
+          message:
+            "A vertically merged cell required expansion of its final exact-height row to avoid clipping",
+          source: final.row.source,
+          nodeId: final.row.id,
+          details: { deficit: required - allocated },
+        })
+      }
+      sizedRows[chain.finalRow] = {
+        ...final,
+        height: safeTwipSum(
+          [final.height, required - allocated],
+          "Vertically merged table row height exceeds the safe integer range"
+        ),
+      }
+    }
+  }
+  let rowTop = twips(0)
+  for (const [index, row] of sizedRows.entries()) {
+    sizedRows[index] = { ...row, top: rowTop }
+    rowTop = safeTwipSum(
+      [rowTop, row.height],
+      "Table height exceeds the safe integer range"
+    )
+  }
+  const headerHeight = safeTwipSum(
+    sizedRows.slice(0, table.repeatHeaderRowCount).map((row) => row.height),
+    "Table header height exceeds the safe integer range"
+  )
+  return {
+    table,
+    rows: Object.freeze(sizedRows),
+    mergeChains: Object.freeze(mergeChains),
+    headerHeight,
+  }
+}
+
+function paginateTable(
+  prepared: PreparedTable,
+  section: ResolvedDocument["sections"][number],
+  initial: PageState,
+  createPage: (
+    section: ResolvedDocument["sections"][number],
+    reason?: string,
+    sourceNodeId?: NodeId
+  ) => PageState,
+  diagnostics: Diagnostic[],
+  events: LayoutTraceEvent[],
+  signal?: AbortSignal
+): PageState {
+  let current = initial
+  const { table, rows } = prepared
+  const bodyStart = table.repeatHeaderRowCount
+  let originalHeadersComplete = bodyStart === 0
+  let currentHasRepeatedHeaders = false
+  let diagnosedHeaderDegradation = false
+  let diagnosedHeaderTooTall = false
+
+  const bottom = (): Twip =>
+    safeTwipSum(
+      [current.page.contentBounds.y, current.page.contentBounds.height],
+      "Page content bounds exceed the safe integer range"
+    )
+  const freshPage = (sourceNodeId: NodeId, repeatHeaders = true): void => {
+    current = createPage(section, "table-continuation", sourceNodeId)
+    currentHasRepeatedHeaders = false
+    if (repeatHeaders && originalHeadersComplete && prepared.headerHeight > 0) {
+      if (prepared.headerHeight >= current.page.contentBounds.height) {
+        if (!diagnosedHeaderTooTall) {
+          diagnosedHeaderTooTall = true
+          diagnostics.push({
+            code: "layout/table-header-too-tall",
+            severity: "warning",
+            message:
+              "Repeating table headers leave no room for body rows and were omitted on continuation pages",
+            source: table.source,
+            nodeId: table.id,
+            details: { headerHeight: prepared.headerHeight },
+          })
+        }
+      } else {
+        for (const header of rows.slice(0, bodyStart)) {
+          emitTableRowFragment(
+            prepared,
+            header,
+            twips(0),
+            header.height,
+            current,
+            events
+          )
+          current.y = safeTwipSum(
+            [current.y, header.height],
+            "Table position exceeds the safe integer range"
+          )
+        }
+        currentHasRepeatedHeaders = true
+      }
+    }
+  }
+
+  if (
+    bodyStart > 0 &&
+    prepared.headerHeight <= current.page.contentBounds.height &&
+    prepared.headerHeight > bottom() - current.y &&
+    current.y !== current.page.contentBounds.y
+  ) {
+    current = createPage(section, "table-header-group", table.id)
+  }
+
+  for (const row of rows) {
+    throwIfAborted(signal)
+    let offset = twips(0)
+    let diagnosedCantSplit = false
+    while (offset < row.height) {
+      throwIfAborted(signal)
+      const remaining = row.height - offset
+      let capacity = bottom() - current.y
+      if (
+        offset === 0 &&
+        !row.row.allowBreakAcrossPages &&
+        remaining <=
+          current.page.contentBounds.height -
+            (row.index >= bodyStart ? prepared.headerHeight : 0) &&
+        remaining > capacity &&
+        current.y !== current.page.contentBounds.y
+      ) {
+        freshPage(row.row.id)
+        continue
+      }
+      if (
+        offset === 0 &&
+        !row.row.allowBreakAcrossPages &&
+        remaining >
+          current.page.contentBounds.height -
+            (row.index >= bodyStart ? prepared.headerHeight : 0) &&
+        !diagnosedCantSplit
+      ) {
+        diagnosedCantSplit = true
+        diagnostics.push({
+          code: "layout/table-cant-split-too-tall",
+          severity: "warning",
+          message:
+            "A cantSplit table row is taller than a fresh page and was fragmented deterministically",
+          source: row.row.source,
+          nodeId: row.row.id,
+          details: { rowHeight: row.height },
+        })
+      }
+      capacity = bottom() - current.y
+      if (capacity <= 0) {
+        freshPage(row.row.id)
+        continue
+      }
+      const fragmentHeight = safeTableFragmentHeight(
+        prepared,
+        row,
+        offset,
+        twips(capacity)
+      )
+      if (fragmentHeight <= 0) {
+        if (currentHasRepeatedHeaders) {
+          if (!diagnosedHeaderDegradation) {
+            diagnosedHeaderDegradation = true
+            diagnostics.push({
+              code: "layout/table-header-repeat-degraded-for-atomic-line",
+              severity: "warning",
+              message:
+                "Repeating headers were omitted from one or more continuation pages so an atomic table line could fit",
+              source: row.row.source,
+              nodeId: row.row.id,
+            })
+          }
+          freshPage(row.row.id, false)
+          continue
+        }
+        if (current.y !== current.page.contentBounds.y) {
+          freshPage(row.row.id)
+          continue
+        }
+        throw new RangeError(
+          "Table row contains an atomic line box taller than a writable fresh page"
+        )
+      }
+      emitTableRowFragment(
+        prepared,
+        row,
+        offset,
+        fragmentHeight,
+        current,
+        events
+      )
+      current.y = safeTwipSum(
+        [current.y, fragmentHeight],
+        "Table position exceeds the safe integer range"
+      )
+      offset = safeTwipSum(
+        [offset, fragmentHeight],
+        "Table fragment offset exceeds the safe integer range"
+      )
+      if (offset < row.height) freshPage(row.row.id)
+    }
+    if (row.index === bodyStart - 1) originalHeadersComplete = true
+  }
+  return current
+}
+
+function emitTableRowFragment(
+  prepared: PreparedTable,
+  row: PreparedTableRow,
+  offset: Twip,
+  height: Twip,
+  current: PageState,
+  events: LayoutTraceEvent[]
+): void {
+  const { table } = prepared
+  const rowY = current.y
+  const isFirstFragment = offset === 0
+  const isLastFragment = offset + height === row.height
+
+  // Paint every background before any text in this fragment.
+  const shadings: DisplayListItem[] = []
+  for (const cell of row.cells) {
+    const x = safeTwipSum(
+      [current.page.contentBounds.x, cell.x],
+      "Table cell position exceeds the safe integer range"
+    )
+    const paintOwner = mergeOwnerCell(prepared, cell)
+    if (paintOwner.cell.fillColor) {
+      shadings.push({
+        type: "rectangle",
+        sourceNodeId: paintOwner.cell.id,
+        bounds: { x, y: rowY, width: cell.width, height },
+        fillColor: paintOwner.cell.fillColor,
+      })
+    }
+  }
+  insertTableLayerItems(current.items, shadings, prepared, "shading")
+
+  // Emit only complete line boxes whose logical starts belong to this row
+  // fragment. Atomic-boundary pagination guarantees they fit on this page.
+  const logicalStart = safeTwipSum(
+    [row.top, offset],
+    "Table fragment position exceeds the safe integer range"
+  )
+  const logicalEnd = safeTwipSum(
+    [logicalStart, height],
+    "Table fragment position exceeds the safe integer range"
+  )
+  const pageBottom = safeTwipSum(
+    [current.page.contentBounds.y, current.page.contentBounds.height],
+    "Page content bounds exceed the safe integer range"
+  )
+  const textItems: InternalDisplayItem[] = []
+  for (const placement of tableLinePlacements(prepared)) {
+    if (
+      placement.top < logicalStart ||
+      placement.top >= logicalEnd ||
+      placement.bottom - logicalStart > pageBottom - rowY
+    )
+      continue
+    emitTableLinePlacement(
+      placement,
+      current,
+      textItems,
+      rowY,
+      logicalStart,
+      events
+    )
+  }
+  insertTableLayerItems(current.items, textItems, prepared, "text")
+
+  // Borders are last so they remain crisp above shading and text.
+  for (const cell of row.cells) {
+    const x = safeTwipSum(
+      [current.page.contentBounds.x, cell.x],
+      "Table cell position exceeds the safe integer range"
+    )
+    const isMergeContinuation = cell.cell.verticalMerge === "continue"
+    if (isFirstFragment) {
+      const topBorder =
+        row.index === 0 ? table.borders.top : table.borders.insideHorizontal
+      if (!isMergeContinuation)
+        emitBorder(
+          current.items,
+          topBorder,
+          cell.cell.id,
+          x,
+          rowY,
+          cell.width,
+          true
+        )
+    }
+    // Shared inside-horizontal borders are emitted only as the following
+    // row's top border. The table bottom is the sole bottom-edge emission.
+    if (isLastFragment && row.index === prepared.rows.length - 1) {
+      emitBorder(
+        current.items,
+        table.borders.bottom,
+        cell.cell.id,
+        x,
+        twips(rowY + height),
+        cell.width,
+        true
+      )
+    }
+    const leftBorder =
+      cell.cell.columnIndex === 0
+        ? table.borders.left
+        : table.borders.insideVertical
+    emitBorder(current.items, leftBorder, cell.cell.id, x, rowY, height, false)
+    if (
+      cell.cell.columnIndex + cell.cell.columnSpan ===
+      table.columnWidths.length
+    ) {
+      emitBorder(
+        current.items,
+        table.borders.right,
+        cell.cell.id,
+        twips(x + cell.width),
+        rowY,
+        height,
+        false
+      )
+    }
+  }
+  events.push({
+    pageNumber: current.page.pageNumber,
+    sourceNodeId: row.row.id,
+    kind: "block",
+    bounds: {
+      x: current.page.contentBounds.x,
+      y: rowY,
+      width: table.width,
+      height,
+    },
+    ...(offset > 0 || height < row.height
+      ? { reason: "table-row-fragment" }
+      : {}),
+  })
+}
+
+type TableLinePlacement = Readonly<{
+  cell: PreparedTableCell
+  paragraph: PreparedCellParagraph
+  lineIndex: number
+  line: MeasuredLine
+  top: Twip
+  bottom: Twip
+}>
+
+function tableLinePlacements(
+  prepared: PreparedTable
+): readonly TableLinePlacement[] {
+  const placements: TableLinePlacement[] = []
+  for (const row of prepared.rows) {
+    for (const cell of row.cells) {
+      if (cell.cell.verticalMerge === "continue") continue
+      const contentTop = tableCellContentTop(prepared, row, cell)
+      for (const paragraph of cell.paragraphs) {
+        for (const [lineIndex, line] of paragraph.lines.entries()) {
+          const top = safeTwipSum(
+            [contentTop, paragraph.lineTops[lineIndex] as Twip],
+            "Table cell line position exceeds the safe integer range"
+          )
+          placements.push({
+            cell,
+            paragraph,
+            lineIndex,
+            line,
+            top,
+            bottom: safeTwipSum(
+              [top, paragraph.lineHeights[lineIndex] as Twip],
+              "Table cell line position exceeds the safe integer range"
+            ),
+          })
+        }
+      }
+    }
+  }
+  return placements
+}
+
+function safeTableFragmentHeight(
+  prepared: PreparedTable,
+  row: PreparedTableRow,
+  offset: Twip,
+  capacity: Twip
+): Twip {
+  const start = safeTwipSum(
+    [row.top, offset],
+    "Table fragment position exceeds the safe integer range"
+  )
+  const rowEnd = safeTwipSum(
+    [row.top, row.height],
+    "Table fragment position exceeds the safe integer range"
+  )
+  const pageLimit = safeTwipSum(
+    [start, capacity],
+    "Table fragment position exceeds the safe integer range"
+  )
+  let end = twips(Math.min(rowEnd, pageLimit))
+  const placements = tableLinePlacements(prepared)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const placement of placements) {
+      if (
+        placement.top < end &&
+        placement.bottom > end &&
+        // A line may cross an internal row boundary, but never a page break.
+        !(end === rowEnd && placement.bottom <= pageLimit)
+      ) {
+        end = twips(Math.max(start, placement.top))
+        changed = true
+      }
+    }
+  }
+  return twips(end - start)
+}
+
+function tableCellContentTop(
+  prepared: PreparedTable,
+  row: PreparedTableRow,
+  cell: PreparedTableCell
+): Twip {
+  const chain = prepared.mergeChains.find(
+    (candidate) =>
+      candidate.ownerRow === row.index &&
+      candidate.columnIndex === cell.cell.columnIndex &&
+      candidate.columnSpan === cell.cell.columnSpan
+  )
+  const regionTop = row.top
+  const regionHeight = chain
+    ? safeTwipSum(
+        prepared.rows
+          .slice(chain.ownerRow, chain.finalRow + 1)
+          .map((candidate) => candidate.height),
+        "Vertically merged table cell height exceeds the safe integer range"
+      )
+    : row.height
+  const bottomInset = chain
+    ? findPreparedCell(
+        prepared.rows[chain.finalRow] as PreparedTableRow,
+        chain.columnIndex,
+        chain.columnSpan
+      ).bottomInset
+    : cell.bottomInset
+  const extra = Math.max(
+    0,
+    regionHeight - cell.topInset - bottomInset - cell.contentHeight
+  )
+  const alignmentOffset =
+    cell.cell.verticalAlignment === "bottom"
+      ? extra
+      : cell.cell.verticalAlignment === "center"
+        ? Math.floor(extra / 2)
+        : 0
+  return safeTwipSum(
+    [regionTop, cell.topInset, twips(alignmentOffset)],
+    "Table cell content position exceeds the safe integer range"
+  )
+}
+
+function emitTableLinePlacement(
+  placement: TableLinePlacement,
+  current: PageState,
+  items: InternalDisplayItem[],
+  rowY: Twip,
+  logicalStart: Twip,
+  events: LayoutTraceEvent[]
+): void {
+  const { cell, paragraph, lineIndex, line } = placement
+  const lineHeight = paragraph.lineHeights[lineIndex] as Twip
+  const localY = safeTwipSum(
+    [rowY, placement.top - logicalStart],
+    "Table cell line position exceeds the safe integer range"
+  )
+  const bounds: Rect = {
+    x: safeTwipSum(
+      [current.page.contentBounds.x, cell.contentX],
+      "Table cell line position exceeds the safe integer range"
+    ),
+    y: localY,
+    width: cell.contentWidth,
+    height: lineHeight,
+  }
+  const box = paragraphLineBox(paragraph.properties, bounds, lineIndex === 0)
+  const justify =
+    paragraph.paragraph.properties.alignment === "justify" && line.wrapped
+  const additions = justify
+    ? justificationAdditions(line, box.width)
+    : new Map<number, Twip>()
+  const renderedWidth = justify ? box.width : line.width
+  const startX = alignedX(
+    paragraph.paragraph.properties.alignment,
+    box,
+    renderedWidth
+  )
+  const naturalHeight = line.ascent + line.descent + line.lineGap
+  const leading = Math.max(0, lineHeight - naturalHeight)
+  const baselineY = twips(localY + line.ascent + Math.floor(leading / 2))
+  if (paragraph.label && lineIndex === 0)
+    emitListLabel(items, paragraph.label, bounds, baselineY)
+  emitLine(items, line, additions, startX, baselineY)
+  events.push({
+    pageNumber: current.page.pageNumber,
+    sourceNodeId: paragraph.paragraph.id,
+    kind: "line",
+    bounds: {
+      x: startX,
+      y: localY,
+      width: renderedWidth,
+      height: lineHeight,
+    },
+  })
+}
+
+function insertTableLayerItems(
+  target: InternalDisplayItem[],
+  additions: readonly InternalDisplayItem[],
+  prepared: PreparedTable,
+  layer: "shading" | "text"
+): void {
+  if (additions.length === 0) return
+  const cellIds = new Set(
+    prepared.rows.flatMap((row) => row.cells.map((cell) => cell.cell.id))
+  )
+  const tableIds = new Set<NodeId>(cellIds)
+  for (const row of prepared.rows) {
+    tableIds.add(row.row.id)
+    for (const cell of row.cells) {
+      for (const paragraph of cell.paragraphs) {
+        tableIds.add(paragraph.paragraph.id)
+        for (const child of paragraph.paragraph.children) tableIds.add(child.id)
+      }
+    }
+  }
+  const index = target.findIndex((item) => {
+    if (!tableIds.has(item.sourceNodeId)) return false
+    if (layer === "shading") return item.type !== "rectangle"
+    return item.type === "line" && cellIds.has(item.sourceNodeId)
+  })
+  if (index < 0) target.push(...additions)
+  else target.splice(index, 0, ...additions)
+}
+
+function mergeOwnerCell(
+  prepared: PreparedTable,
+  cell: PreparedTableCell
+): PreparedTableCell {
+  if (cell.mergeOwnerRow === null) return cell
+  return findPreparedCell(
+    prepared.rows[cell.mergeOwnerRow] as PreparedTableRow,
+    cell.cell.columnIndex,
+    cell.cell.columnSpan
+  )
+}
+
+function findPreparedCell(
+  row: PreparedTableRow,
+  columnIndex: number,
+  columnSpan: number
+): PreparedTableCell {
+  const cell = row.cells.find(
+    (candidate) =>
+      candidate.cell.columnIndex === columnIndex &&
+      candidate.cell.columnSpan === columnSpan
+  )
+  if (!cell) throw new RangeError("Invalid vertical merge owner geometry")
+  return cell
+}
+
+function emitBorder(
+  items: InternalDisplayItem[],
+  border: TableBorder | null,
+  sourceNodeId: NodeId,
+  x: Twip,
+  y: Twip,
+  length: Twip,
+  horizontal: boolean
+): void {
+  if (!border || border.style === "none" || border.width <= 0) return
+  const push = (offset: Twip): void => {
+    const dashArray =
+      border.style === "dotted"
+        ? ([border.width, twips(Math.max(1, border.width * 2))] as const)
+        : border.style === "dashed"
+          ? ([
+              twips(Math.max(1, border.width * 4)),
+              twips(Math.max(1, border.width * 2)),
+            ] as const)
+          : undefined
+    items.push({
+      type: "line",
+      sourceNodeId,
+      x1: horizontal ? x : twips(x + offset),
+      y1: horizontal ? twips(y + offset) : y,
+      x2: horizontal ? twips(x + length) : twips(x + offset),
+      y2: horizontal ? twips(y + offset) : twips(y + length),
+      width: border.width,
+      color: border.color,
+      ...(dashArray ? { dashArray } : {}),
+      ...(border.style === "dotted" ? { lineCap: "round" as const } : {}),
+    })
+  }
+  if (border.style === "double") {
+    push(twips(-border.width))
+    push(border.width)
+  } else push(twips(0))
+}
+
+function validateBorders(table: ResolvedTable): void {
+  for (const border of Object.values(table.borders)) {
+    if (!border) continue
+    if (
+      !["none", "single", "double", "dotted", "dashed"].includes(
+        border.style
+      ) ||
+      !Number.isSafeInteger(border.width) ||
+      border.width < 0 ||
+      !Number.isSafeInteger(border.space) ||
+      border.space < 0 ||
+      typeof border.color !== "string"
+    )
+      throw new RangeError("Invalid table border")
+  }
+}
+
+function borderSpace(border: TableBorder | null): Twip {
+  return border?.style === "none" ? twips(0) : (border?.space ?? twips(0))
+}
+
+function paragraphHasVisibleContent(paragraph: ResolvedParagraph): boolean {
+  return paragraph.children.some(
+    (child) => child.type !== "text" || child.text.length > 0
+  )
+}
+
+function validateAssets(document: ResolvedDocument): ReadonlySet<string> {
+  const ids = new Set<string>()
+  for (const asset of document.assets ?? []) {
+    if (typeof asset.id !== "string" || asset.id.length === 0)
+      throw new RangeError("Image asset IDs must be non-empty strings")
+    if (ids.has(asset.id))
+      throw new RangeError(`Duplicate image asset '${asset.id}'`)
+    ids.add(asset.id)
+  }
+  return ids
+}
+
+function indexHeaderFooters(
+  definitions: ResolvedDocument["headers"] | ResolvedDocument["footers"],
+  kind: "header" | "footer"
+): ReadonlyMap<string, ResolvedDocument["headers"][number]> {
+  const result = new Map<string, ResolvedDocument["headers"][number]>()
+  for (const definition of definitions ?? []) {
+    if (definition.type !== kind)
+      throw new RangeError(`Invalid ${kind} definition type`)
+    if (typeof definition.id !== "string" || definition.id.length === 0)
+      throw new RangeError(`${kind} IDs must be non-empty strings`)
+    if (result.has(definition.id))
+      throw new RangeError(`Duplicate ${kind} '${definition.id}'`)
+    result.set(definition.id, definition)
+  }
+  return result
+}
+
+function validateImage(
+  image: Extract<ResolvedInline, { type: "image" }>,
+  assets: ReadonlySet<string>
+): void {
+  if (!assets.has(image.assetId))
+    throw new RangeError(
+      `Inline image references missing asset '${image.assetId}'`
+    )
+  if (
+    !Number.isSafeInteger(image.width) ||
+    !Number.isSafeInteger(image.height) ||
+    image.width <= 0 ||
+    image.height <= 0
+  )
+    throw new RangeError(
+      "Inline image dimensions must be positive safe integers"
+    )
+}
+
+const IMAGE_STYLE: TextStyle = Object.freeze({
+  fontFamily: "Helvetica",
+  fontSize: twips(1),
+  fontWeight: 400,
+  fontStyle: "normal",
+  underline: false,
+  color: "#000000",
+})
+
+function prepareImageCluster(
+  image: Extract<ResolvedInline, { type: "image" }>
+): Cluster {
+  return Object.freeze({
+    text: "",
+    style: IMAGE_STYLE,
+    sourceNodeId: image.id,
+    width: image.width,
+    ascent: image.height,
+    descent: twips(0),
+    lineGap: twips(0),
+    whitespace: false,
+    preserveSpace: true,
+    underlineOffset: twips(0),
+    underlineThickness: twips(0),
+    atom: Object.freeze({
+      type: "image",
+      assetId: image.assetId,
+      height: image.height,
+    }),
+  })
+}
+
+function preparePageFieldCluster(
+  field: Extract<ResolvedInline, { type: "pageField" }>,
+  typography: Typography,
+  digits: number
+): Cluster {
+  if (field.format !== "decimal")
+    throw new TypeError("Only decimal PAGE and NUMPAGES fields are supported")
+  let widestDigit = twips(0)
+  const digitAdvances = new Map<string, Twip>()
+  let embedded:
+    | Readonly<{
+        faceId: FontFaceId
+        digits: ReadonlyMap<string, readonly ShapedGlyph[]>
+      }>
+    | undefined
+  if (typography.kind === "standard") {
+    for (const digit of "0123456789") {
+      const advance = typography.metrics.measureText(digit, field.style)
+      if (!Number.isSafeInteger(advance) || advance < 0)
+        throw new RangeError(
+          "Page-field digit advances must be non-negative safe integers"
+        )
+      digitAdvances.set(digit, advance)
+      widestDigit = twips(Math.max(widestDigit, advance))
+    }
+  } else {
+    const match = typography.fonts.matchFace({
+      family: field.style.fontFamily,
+      weight: field.style.fontWeight,
+      style: field.style.fontStyle,
+    })
+    const face = typography.fonts.face(match.faceId)
+    const shaped = typography.shaper.shape({
+      face,
+      text: "0123456789",
+      fontSize: field.style.fontSize,
+      direction: "ltr",
+    })
+    const digits = new Map<string, readonly ShapedGlyph[]>()
+    for (let index = 0; index < 10; index += 1) {
+      const glyphs = shaped.glyphs.filter(
+        (glyph) => glyph.clusterStart <= index && index < glyph.clusterEnd
+      )
+      if (glyphs.length === 0)
+        throw new RangeError(
+          "Font shaper did not return a decimal page-field glyph"
+        )
+      digits.set(String(index), Object.freeze(glyphs))
+      const advance = safeTwipSum(
+        glyphs.map((glyph) => glyph.advanceX),
+        "Page-field digit advance exceeds the safe integer range"
+      )
+      if (advance < 0)
+        throw new RangeError(
+          "Page-field digit advances must be non-negative safe integers"
+        )
+      digitAdvances.set(String(index), advance)
+      widestDigit = twips(Math.max(widestDigit, advance))
+    }
+    embedded = Object.freeze({ faceId: match.faceId, digits })
+  }
+  const height = twips(Math.max(1, Math.round((field.style.fontSize * 6) / 5)))
+  const ascent = twips(Math.round((height * 4) / 5))
+  return Object.freeze({
+    text: "9".repeat(digits),
+    style: field.style,
+    sourceNodeId: field.id,
+    width: safeTwipSum(
+      Array.from({ length: digits }, () => widestDigit),
+      "Page-field reservation exceeds the safe integer range"
+    ),
+    ascent,
+    descent: twips(height - ascent),
+    lineGap: twips(0),
+    whitespace: false,
+    preserveSpace: true,
+    underlineOffset: twips(Math.max(1, Math.round(field.style.fontSize / 10))),
+    underlineThickness: twips(
+      Math.max(1, Math.round(field.style.fontSize / 20))
+    ),
+    atom: Object.freeze({
+      type: "pageField",
+      field: field.field,
+      ...(embedded ? { embedded } : {}),
+      digitAdvances,
+      reservedDigits: digits,
+    }),
+  })
+}
+
+function safeTwipSum(values: readonly number[], message: string): Twip {
+  let total = 0
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || !Number.isSafeInteger(total + value))
+      throw new RangeError(message)
+    total += value
+  }
+  return twips(total)
+}
+
 type Typography =
   | Readonly<{ kind: "standard"; metrics: Phase1FontMetrics }>
   | Readonly<{ kind: "embedded"; fonts: FontRegistry; shaper: TextShaper }>
 
 type PageState = {
-  page: PageDisplayListPage
+  page: InternalPage
   y: Twip
-  items: DisplayListItem[]
+  items: InternalDisplayItem[]
 }
 
 type NumberingResolver = Readonly<{
@@ -722,10 +2212,7 @@ function createNumberingResolver(
           const referencedLevel = levelMap.get(
             referenced
           ) as NumberingLevelDefinition
-          const format =
-            level.legal && referenced < level.level
-              ? "decimal"
-              : referencedLevel.format
+          const format = level.legal ? "decimal" : referencedLevel.format
           return formatCounter(state.get(referenced) as number, format)
         }
       )
@@ -770,16 +2257,18 @@ function isValidNumberingLevel(
   return (
     isLevelIndex(value.level) &&
     Number.isSafeInteger(value.startAt) &&
-    (value.startAt as number) >= 1 &&
+    (value.startAt as number) >= 0 &&
     NUMBERING_FORMATS.includes(value.format as NumberingFormat) &&
     typeof value.levelText === "string" &&
     value.levelText.length > 0 &&
+    !/%(?:0|[1-9][0-9]+)/u.test(value.levelText) &&
     ["tab", "space", "nothing"].includes(value.suffix as string) &&
     ["left", "center", "right"].includes(value.alignment as string) &&
     Number.isSafeInteger(value.indentStart) &&
     Number.isSafeInteger(value.firstLineIndent) &&
     (value.restartAfterLevel === null ||
-      isLevelIndex(value.restartAfterLevel)) &&
+      (isLevelIndex(value.restartAfterLevel) &&
+        value.restartAfterLevel < (value.level as number))) &&
     typeof value.legal === "boolean"
   )
 }
@@ -852,7 +2341,10 @@ function prepareListLabel(
   signal?: AbortSignal
 ): ResolvedListLabel {
   throwIfAborted(signal)
-  const first = paragraph.children[0]
+  const first = paragraph.children.find(
+    (child): child is Extract<ResolvedInline, { type: "text" | "pageField" }> =>
+      child.type === "text" || child.type === "pageField"
+  )
   const labelStyle: TextStyle = first?.style ?? {
     fontFamily: "Helvetica",
     fontSize: twips(240),
@@ -930,6 +2422,7 @@ function addCompatibilityDiagnostics(
 ): void {
   if (typography.kind === "standard") {
     for (const child of paragraph.children) {
+      if (child.type === "image") continue
       if (child.style.fontFamily !== "Helvetica") {
         diagnostics.push({
           code: "layout/font-fallback",
@@ -962,9 +2455,18 @@ function measureParagraph(
   typography: Typography,
   diagnostics: Diagnostic[],
   properties: ParagraphProperties = paragraph.properties,
+  pageFieldDigits = 1,
+  assets: ReadonlySet<string> = new Set(),
   signal?: AbortSignal
 ): readonly MeasuredLine[] {
-  const tokens = prepareTokens(paragraph, typography, diagnostics, signal)
+  const tokens = prepareTokens(
+    paragraph,
+    typography,
+    diagnostics,
+    pageFieldDigits,
+    assets,
+    signal
+  )
   const lines: MeasuredLine[] = []
   let clusters: Cluster[] = []
   let width = twips(0)
@@ -1054,6 +2556,8 @@ function measureParagraph(
     if (clusters.length > 0) finish(true)
     for (const cluster of token.clusters) {
       throwIfAborted(signal)
+      if (cluster.atom?.type === "image" && cluster.width > boxWidth())
+        throw new RangeError("Inline image is wider than the writable line box")
       if (clusters.length > 0 && width + cluster.width > boxWidth())
         finish(true)
       append(cluster)
@@ -1067,11 +2571,34 @@ function prepareTokens(
   paragraph: ResolvedParagraph,
   typography: Typography,
   diagnostics: Diagnostic[],
+  pageFieldDigits: number,
+  assets: ReadonlySet<string>,
   signal?: AbortSignal
 ): readonly Token[] {
   const result: Token[] = []
   for (const child of paragraph.children) {
     throwIfAborted(signal)
+    if (child.type === "image") {
+      validateImage(child, assets)
+      result.push({
+        clusters: Object.freeze([prepareImageCluster(child)]),
+        whitespace: false,
+        hardBreak: false,
+        preserveSpace: true,
+      })
+      continue
+    }
+    if (child.type === "pageField") {
+      result.push({
+        clusters: Object.freeze([
+          preparePageFieldCluster(child, typography, pageFieldDigits),
+        ]),
+        whitespace: false,
+        hardBreak: false,
+        preserveSpace: true,
+      })
+      continue
+    }
     if (child.text.includes("\t")) {
       diagnostics.push({
         code: "layout/tab-stop-unsupported",
@@ -1109,7 +2636,7 @@ function prepareTokens(
 type IndexedCluster = Cluster & Readonly<{ start: number }>
 
 function prepareStandardRun(
-  child: ResolvedParagraph["children"][number],
+  child: Extract<ResolvedInline, { type: "text" }>,
   metrics: Phase1FontMetrics
 ): readonly IndexedCluster[] {
   const height = metrics.lineHeight(child.style)
@@ -1142,7 +2669,7 @@ function prepareStandardRun(
 }
 
 function prepareEmbeddedRun(
-  child: ResolvedParagraph["children"][number],
+  child: Extract<ResolvedInline, { type: "text" }>,
   typography: Extract<Typography, { kind: "embedded" }>,
   diagnostics: Diagnostic[]
 ): readonly IndexedCluster[] {
@@ -1247,7 +2774,7 @@ function emptyLineMetrics(
   typography: Typography
 ): Readonly<{ ascent: Twip; descent: Twip; lineGap: Twip }> {
   const child = paragraph.children[0]
-  if (child && typography.kind === "standard") {
+  if (child && child.type !== "image" && typography.kind === "standard") {
     const height = typography.metrics.lineHeight(child.style)
     const ascent = twips(Math.round((height * 4) / 5))
     return { ascent, descent: twips(height - ascent), lineGap: twips(0) }
@@ -1276,7 +2803,16 @@ function resolveLineHeight(
   const natural = twips(Math.max(1, line.ascent + line.descent + line.lineGap))
   const spacing = properties.lineSpacing
   if (spacing === null) return natural
-  if (spacing.rule === "exact") return twips(Math.max(1, spacing.value))
+  if (spacing.rule === "exact") {
+    if (
+      spacing.value < natural &&
+      line.clusters.some((cluster) => cluster.atom?.type === "image")
+    )
+      throw new RangeError(
+        "Exact line spacing cannot contain an inline image without clipping"
+      )
+    return twips(Math.max(1, spacing.value))
+  }
   if (spacing.rule === "atLeast") return twips(Math.max(natural, spacing.value))
   if (spacing.rule !== "auto")
     throw new TypeError("Unsupported line-spacing rule")
@@ -1337,7 +2873,7 @@ function fittingLineCount(
 }
 
 function emitListLabel(
-  items: DisplayListItem[],
+  items: InternalDisplayItem[],
   label: ResolvedListLabel,
   contentBounds: Rect,
   baselineY: Twip
@@ -1368,8 +2904,143 @@ function emitListLabel(
   )
 }
 
+function emitHeaderFooter(
+  items: InternalDisplayItem[],
+  prepared: PreparedHeaderFooter,
+  contentBounds: Rect,
+  startY: Twip,
+  _pageNumber: number,
+  _totalPages: number
+): void {
+  let y = startY
+  for (const paragraph of prepared.blocks) {
+    y = safeTwipSum(
+      [y, paragraph.paragraph.properties.spacingBefore],
+      "Header/footer position exceeds the safe integer range"
+    )
+    for (const [lineIndex, line] of paragraph.lines.entries()) {
+      const lineHeight = paragraph.lineHeights[lineIndex] as Twip
+      const box = paragraphLineBox(
+        paragraph.properties,
+        contentBounds,
+        lineIndex === 0
+      )
+      const justify =
+        paragraph.paragraph.properties.alignment === "justify" && line.wrapped
+      const additions = justify
+        ? justificationAdditions(line, box.width)
+        : new Map<number, Twip>()
+      const renderedWidth = justify ? box.width : line.width
+      const startX = alignedX(
+        paragraph.paragraph.properties.alignment,
+        box,
+        renderedWidth
+      )
+      const naturalHeight = line.ascent + line.descent + line.lineGap
+      const leading = Math.max(0, lineHeight - naturalHeight)
+      const baselineY = twips(y + line.ascent + Math.floor(leading / 2))
+      emitLine(items, line, additions, startX, baselineY)
+      y = safeTwipSum(
+        [y, lineHeight],
+        "Header/footer position exceeds the safe integer range"
+      )
+    }
+    y = safeTwipSum(
+      [y, paragraph.paragraph.properties.spacingAfter],
+      "Header/footer position exceeds the safe integer range"
+    )
+  }
+}
+
+function materializeItem(
+  item: InternalDisplayItem,
+  pageNumber: number,
+  totalPages: number
+): readonly DisplayListItem[] {
+  if (item.type !== "pending-page-field") return [item]
+  const text = String(item.field === "PAGE" ? pageNumber : totalPages)
+  if (text.length > item.reservedDigits)
+    throw new RangeError(
+      "Materialized page field exceeds its reserved decimal digit count"
+    )
+  const actualWidth = safeTwipSum(
+    [...text].map((digit) => {
+      const advance = item.digitAdvances.get(digit)
+      if (advance === undefined)
+        throw new RangeError(
+          "Prepared page-field advances are missing a decimal digit"
+        )
+      return advance
+    }),
+    "Materialized page-field width exceeds the safe integer range"
+  )
+  if (actualWidth > item.width)
+    throw new RangeError("Materialized page field exceeds its reserved width")
+  const run: GlyphRun = item.embedded
+    ? {
+        type: "glyph-run",
+        fontSource: "embedded",
+        sourceNodeId: item.sourceNodeId,
+        text,
+        faceId: item.embedded.faceId,
+        glyphs: Object.freeze(
+          [...text].flatMap((digit) => {
+            const glyphs = item.embedded?.digits.get(digit)
+            if (!glyphs)
+              throw new RangeError(
+                "Prepared page-field glyph set is missing a decimal digit"
+              )
+            return glyphs.map((glyph) => ({
+              glyphId: glyph.glyphId,
+              unicode: digit,
+              xAdvance: glyph.advanceX,
+              yAdvance: glyph.advanceY,
+              xOffset: glyph.offsetX,
+              yOffset: glyph.offsetY,
+            }))
+          })
+        ),
+        fontSize: item.style.fontSize,
+        color: item.style.color,
+        x: item.x,
+        baselineY: item.baselineY,
+        width: item.width,
+      }
+    : {
+        type: "glyph-run",
+        fontSource: "standard",
+        sourceNodeId: item.sourceNodeId,
+        text,
+        fontFamily: item.style.fontFamily,
+        fontSize: item.style.fontSize,
+        color: item.style.color,
+        x: item.x,
+        baselineY: item.baselineY,
+        // Retain the conservative maxPages reservation; actual digits never
+        // reshape or move neighboring content after the immutable page plan exists.
+        width: item.width,
+      }
+  if (!item.style.underline) return [run]
+  const underlineOffset = twips(
+    Math.max(1, Math.round(item.style.fontSize / 10))
+  )
+  return [
+    run,
+    {
+      type: "line",
+      sourceNodeId: item.sourceNodeId,
+      x1: item.x,
+      y1: twips(item.baselineY + underlineOffset),
+      x2: twips(item.x + item.width),
+      y2: twips(item.baselineY + underlineOffset),
+      width: twips(Math.max(1, Math.round(item.style.fontSize / 20))),
+      color: item.style.color,
+    },
+  ]
+}
+
 function emitLine(
-  items: DisplayListItem[],
+  items: InternalDisplayItem[],
   line: MeasuredLine,
   additions: ReadonlyMap<number, Twip>,
   startX: Twip,
@@ -1431,6 +3102,37 @@ function emitLine(
   }
 
   for (const [index, cluster] of line.clusters.entries()) {
+    if (cluster.atom) {
+      flush()
+      if (cluster.atom.type === "image") {
+        items.push({
+          type: "image",
+          sourceNodeId: cluster.sourceNodeId,
+          assetId: cluster.atom.assetId,
+          bounds: {
+            x,
+            y: twips(baselineY - cluster.atom.height),
+            width: cluster.width,
+            height: cluster.atom.height,
+          },
+        })
+      } else {
+        items.push({
+          type: "pending-page-field",
+          sourceNodeId: cluster.sourceNodeId,
+          field: cluster.atom.field,
+          style: cluster.style,
+          x,
+          baselineY,
+          width: cluster.width,
+          ...(cluster.atom.embedded ? { embedded: cluster.atom.embedded } : {}),
+          digitAdvances: cluster.atom.digitAdvances,
+          reservedDigits: cluster.atom.reservedDigits,
+        })
+      }
+      x = twips(x + cluster.width)
+      continue
+    }
     const addition = additions.get(index) ?? twips(0)
     const first = segment[0]?.cluster
     const compatible =

@@ -42,6 +42,8 @@ export type EmbeddedGlyphRun = Readonly<{
 
 export type GlyphRun = StandardGlyphRun | EmbeddedGlyphRun
 
+export type LineCap = "butt" | "round" | "square"
+
 export type Line = Readonly<{
   type: "line"
   sourceNodeId: NodeId
@@ -51,6 +53,9 @@ export type Line = Readonly<{
   y2: Twip
   width: Twip
   color: string
+  dashArray?: readonly Twip[]
+  dashPhase?: Twip
+  lineCap?: LineCap
 }>
 
 export type Rectangle = Readonly<{
@@ -62,7 +67,14 @@ export type Rectangle = Readonly<{
   strokeWidth?: Twip
 }>
 
-export type DisplayListItem = GlyphRun | Line | Rectangle
+export type ImagePlacement = Readonly<{
+  type: "image"
+  sourceNodeId: NodeId
+  assetId: string
+  bounds: Rect
+}>
+
+export type DisplayListItem = GlyphRun | Line | Rectangle | ImagePlacement
 
 export type PageDisplayListPage = Readonly<{
   pageNumber: number

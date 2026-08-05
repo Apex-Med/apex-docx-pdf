@@ -40,6 +40,7 @@ const fontFaces = Promise.all([
     aliases: [
       { from: "Calibri", to: "Noto Sans" },
       { from: "Arial", to: "Noto Sans" },
+      { from: "Helvetica", to: "Noto Sans" },
       { from: "Times New Roman", to: "Noto Sans" },
     ],
     fallbackFamily: "Noto Sans",

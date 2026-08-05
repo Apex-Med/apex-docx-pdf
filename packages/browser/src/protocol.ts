@@ -25,6 +25,8 @@ export type WorkerProgress = Readonly<{
 }>
 
 export type BrowserCompileResult = Readonly<{
+  engineVersion: string
+  fontRegistryHash: string
   templateHash: string
   manifest: TemplateManifest
   jsonSchema: JsonSchema

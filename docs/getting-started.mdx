@@ -5,14 +5,17 @@ description: "Compile a supported DOCX template and render a searchable PDF."
 
 # Getting started
 
-Use a standard DOCX main document containing paragraphs and text runs. Put an inline value tag such as `{{customer.name}}` in its text, then compile once and render with data.
+Use a standard DOCX containing supported paragraphs, text runs, fixed-grid tables, static inline PNG/JPEG images, and deterministic `nextPage` sections. Phase 6 also supports inherited default headers/footers, reusable header/footer template values, decimal page fields, whole-paragraph and dedicated table-row blocks, safe formatters, DOCX numbering, and bounded pagination controls.
 
 ## 1. Prepare a template
 
-In Word or another DOCX editor, add a paragraph such as:
+In Word or another DOCX editor, add paragraphs such as:
 
 ```text
-Hello, {{customer.name:string}}
+Invoice {{invoice.number:string | upper}}
+{{#each invoice.items}}
+{{description:string}} — {{amount:number | currency:"ZAR"}}
+{{/each}}
 ```
 
 Save it as `letter.docx`. The compiler recognizes the logical text of a paragraph, so a value tag may span DOCX runs; authoring it in one run is still easier to inspect.
@@ -26,7 +29,7 @@ import { createDocxPdfEngine } from "@apex-docx-pdf/engine"
 
 const engine = await createDocxPdfEngine()
 const templateBytes = new Uint8Array(
-  await Bun.file("letter.docx").arrayBuffer()
+  await Bun.file("invoice.docx").arrayBuffer()
 )
 
 const compiled = await engine.compile(templateBytes, {
@@ -35,19 +38,28 @@ const compiled = await engine.compile(templateBytes, {
 
 const result = await engine.render(
   compiled,
-  { customer: { name: "Apex" } },
+  {
+    invoice: {
+      number: "inv-1042",
+      items: [{ description: "Consultation", amount: 1250 }],
+    },
+  },
   {
     locale: "en-ZA",
     timeZone: "Africa/Johannesburg",
-    metadata: { title: "Example letter" },
+    metadata: { title: "Example invoice" },
     includeLayoutTrace: true,
   }
 )
 
-await Bun.write("letter.pdf", result.pdf)
+await Bun.write("invoice.pdf", result.pdf)
 ```
 
-`compiled` exposes a field manifest, a JSON Schema, starter data, and diagnostics. `result` contains PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a layout trace.
+`compiled.version` is `0.0.0-phase.6`. The compiled result exposes canonical manifest paths such as `invoice.items[].description`, a deterministic nested JSON Schema, one-item starter arrays, immutable package-owned image assets, and diagnostics. `result` contains searchable PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a source-linked layout trace. Tables can cross pages and repeat contiguous leading header rows; sections produce their declared portrait/landscape pages; default headers and footers repeat with current decimal page values.
+
+For a table, author positive integer-twip columns in `tblGrid`. The renderer uses their sum as the fixed width; any explicit `tblW` must equal that sum, and any explicit cell `tcW` must equal the sum of its `gridSpan` columns. This rule also applies when the DOCX declares `autofit`: the renderer does not implement Word's content-driven autofit algorithm.
+
+For an image, embed a PNG or JPEG as an internal DOCX relationship and use inline DrawingML with an explicit positive `wp:extent`. Nothing is fetched during compile or render. Author page fields as simple or complete complex `PAGE`/`NUMPAGES` fields using decimal/no-op switches only; cached Word display text is not trusted for the rendered number.
 
 <Note>
   The `Bun.file` and `Bun.write` lines are Bun conveniences. The engine itself
@@ -55,7 +67,7 @@ await Bun.write("letter.pdf", result.pdf)
   supported runtime.
 </Note>
 
-The zero-argument engine uses the historical built-in Helvetica fallback. For document fonts, create the engine with an explicit `fonts` configuration containing the exact TrueType `Uint8Array` programs. See [font handling](/font-handling).
+The zero-argument engine uses the historical built-in Helvetica fallback. For document fonts, create the engine with an explicit `fonts` configuration containing the exact TrueType `Uint8Array` programs. Formatting receives the render's explicit `locale` and `timeZone`; it never reads ambient defaults. See [font handling](/font-handling) and [template language](/template-language).
 
 ## 3. Treat diagnostics as output
 

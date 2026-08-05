@@ -1,44 +1,71 @@
 ---
 title: "Security"
-description: "Hostile-input boundaries, limits, diagnostics, and safe integration expectations."
+description: "Hostile-input boundaries, cumulative limits, diagnostics, and integration responsibilities."
 ---
 
 # Security
 
-Treat DOCX, ZIP, XML, template text, JSON data, and caller-supplied font bytes as hostile. The renderer is designed to diagnose unsupported input rather than execute or fetch it.
+Treat DOCX, ZIP, XML, template text, JSON data, caller-supplied font bytes, and embedded raster bytes as hostile. The renderer diagnoses unsupported input, never evaluates template code, and never fetches template or image resources.
 
-## Current protections
+## Current default limits
 
-Package validation enforces conservative limits before allocation where practical:
+| Limit                                 |                        Default |
+| ------------------------------------- | -----------------------------: |
+| Template bytes                        |                     20,000,000 |
+| ZIP archive entries                   |                          2,000 |
+| Decompressed bytes                    |                    100,000,000 |
+| XML depth / nodes / text bytes        |   128 / 1,000,000 / 50,000,000 |
+| Image parts / total image bytes       |               100 / 20,000,000 |
+| Image side / pixels per image         |          100,000 / 100,000,000 |
+| Image chunks / decoded working bytes  |           10,000 / 400,000,000 |
+| Expression / object-traversal depth   |                        32 / 32 |
+| JSON nodes / text bytes / array items | 100,000 / 10,000,000 / 100,000 |
+| Loop iterations                       |                         10,000 |
+| Expanded nodes / text bytes           |           100,000 / 10,000,000 |
+| Pages                                 |                            500 |
 
-| Limit                            |                                     Default |
-| -------------------------------- | ------------------------------------------: |
-| Template bytes                   |                                       20 MB |
-| ZIP archive entries              |                                       2,000 |
-| Decompressed bytes               |                                      100 MB |
-| XML depth                        |                                         128 |
-| Expression and object-path depth |                                          32 |
-| Loop iterations                  | 10,000 (reserved; loops are rejected today) |
-| Expanded nodes                   |                                     100,000 |
-| Expanded text bytes              |                                       10 MB |
-| Pages                            |                                         500 |
+JSON node/text, loop, expanded-node, and expanded-text limits are cumulative across one render. Each JSON array has its own item bound; expression and traversal depth are bounded separately. Nested blocks do not receive fresh expansion budgets. Every `each` item must be a plain object-shaped JSON value; arrays, primitives, accessors, sparse arrays, cycles, non-finite numbers, and other non-JSON inputs are rejected by the engine boundary.
 
-The DOCX reader rejects unsafe ZIP paths, duplicate parts, ZIP64/multi-volume archives, malformed XML, forbidden `DOCTYPE`/entity declarations, relationship parts without a `Relationships` root, and every external relationship it encounters. The package root must contain exactly one internal `officeDocument` relationship whose target resolves to an existing package part. Template paths cannot address prototype-related fields, and values are resolved without evaluating code.
+The DOCX reader rejects unsafe ZIP paths, duplicate parts, ZIP64/multi-volume archives, malformed XML, forbidden `DOCTYPE`/entity declarations, invalid relationship roots, and external relationships. The package root must contain exactly one internal `officeDocument` relationship. The numbering part must be reached through the main document's internal numbering relationship; invalid or ambiguous numbering references are diagnosed.
 
-Font configuration accepts explicit `Uint8Array` programs only. The font adapter performs no filesystem access, system-font discovery, network fetch, or `Buffer`-specific processing. Registrations, aliases, fallback-family requirements, metrics, glyph mappings, and embedded TrueType bytes are validated before use. Font licensing and redistribution rights remain the caller's responsibility.
+Table parsing rejects missing/empty/non-positive grids, unsafe width sums, uncovered or overlapping rows, spans beyond the grid, inconsistent explicit widths, invalid merge chains, non-contiguous header declarations, and unsupported table properties. Percentage widths, nested tables, table styles/themes, complex shading, and complete Word autofit are rejected rather than interpreted heuristically. Static images may appear in supported table-cell paragraphs, subject to both table and image limits. A `cantSplit` row taller than a fresh writable page is fragmented deterministically with a warning so rendering cannot stall; page and expansion limits still apply to multi-page and repeated-row output.
 
-`maxLoopIterations` is present in the shared resource-limit contract for future block expansion. It does not imply loop support or provide a current protection path because loop tags are rejected before execution.
+Image relationships must be internal and owner-relative. Every placement requires one inline drawing, an internal PNG/JPEG part, and an explicit positive extent. The parser checks declared MIME against signature and dimensions, limits total distinct parts/bytes and each image's side/pixel area, and rejects external relationships, anchors, malformed drawings, locked-aspect mismatches, APNG, interlaced or invalid-profile PNG, invalid chunk order/CRC/filter/scanline sizes, unsupported JPEG frames/scans/orientation/color transforms, ICC profiles, CMYK/YCCK, and ambiguous color. Preparation repeats bounded structural checks before allocation, normalizes supported PNG data to 8-bit gray/RGB plus optional alpha, and retains JPEG bytes only inside the bounded accepted profile. Dynamic image tags, crop, rotation, SVG, and network image acquisition are unsupported.
+
+Image preparation accepts `AbortSignal` and checks it throughout hashing, chunk/marker parsing, row/sample processing, and around decompression. PNG inflate uses a bounded caller-owned output buffer, but the underlying inflate call is synchronous: cancellation cannot interrupt it mid-inflate and is observed immediately before or after that call.
+
+Only deterministic `nextPage` sections are accepted. Page geometry must use positive integer twips and agree with portrait/landscape orientation. Header/footer relationships must be internal defaults; references inherit across sections until replaced. Distances must be non-negative and header/footer content may not collide with body margins. First/even header variants, continuous/odd/even breaks, automatic numbering in headers/footers, and non-decimal/arbitrary fields are rejected. `PAGE`/`NUMPAGES` reserve bounded width before pagination and materialize only after the global page count is known.
+
+Template paths cannot address prototype-related fields, inherited properties are not traversed, and values are resolved without executing code. The safe formatter set is closed. Currency formatting requires explicit locale; date formatting requires explicit locale and time zone plus an offset-bearing ISO date-time. No formatter reads ambient locale, time zone, or clock state.
+
+Font configuration accepts explicit `Uint8Array` programs only. The adapter performs no filesystem access, system-font discovery, network fetch, or `Buffer`-specific processing. Font licensing and redistribution rights remain the caller's responsibility.
 
 ## Application responsibilities
 
-- Apply tenant authorization before reading template bytes or storing output.
-- Keep a size policy before accepting browser uploads; the local playground uses a 20 MB demo cap.
-- Persist diagnostics and render inputs in an audit-safe form appropriate to your data policy.
+- Apply tenant authorization before reading template bytes, creating download URLs, or storing output.
+- Enforce upload/rate policies in addition to engine limits.
+- Keep large DOCX and PDF artifacts in file storage rather than database documents or web-server request bodies.
+- Keep document text, DOCX/PDF bytes, render JSON, and bearer storage URLs out of logs. Persist only bounded, redacted diagnostics and operational metadata appropriate to the data policy.
 - Use `AbortSignal` to stop abandoned work.
-- Do not add network fetches, system-font lookup, or executable template helpers inside rendering stages.
+- Do not add network fetches, system-font lookup, executable helpers, or ambient locale/time/clock dependencies inside rendering stages.
+- Preserve source-located image, section, field, header/footer, and table diagnostics; review warnings such as oversized `cantSplit` rows or table headers too tall to repeat. Do not equate a produced PDF with full Word fidelity.
+- Treat dynamic/external/floating/cropped/rotated/SVG images, unsupported image profiles/colors, percentage/nested/styled/themed tables, non-`nextPage` sections, first/even headers, header/footer numbering, and deployment as unavailable until later phases establish explicit boundaries.
+
+## Convex reference boundary
+
+The Phase 7 reference adapter uses an anonymous per-browser session identifier from `convex-helpers`. It scopes records for the demo, but it is not authentication: it does not prove a person's identity, organization, role, or entitlement. Production hosts should replace the principal-establishment seam with verified Clerk or WorkOS identity while preserving the session-owned data access contract and its server-side ownership checks.
+
+Persistence is opt-in and off by default. When it is disabled, the browser renderer must not invoke persistence uploads or save render artifacts. When it is enabled, the browser uploads DOCX bytes directly to a Convex generated upload URL; large document bytes must not be proxied through or buffered by a Vercel server function. Large DOCX and PDF artifacts remain in file storage, with storage IDs and bounded metadata stored in application records.
+
+Every file read begins with an ownership check. A bearer URL is generated only after that check and must not be treated as fine-grained authorization, a durable identifier, or safe log data. The underlying storage ID, not the generated URL, belongs in the database.
+
+Saved render reuse is session-owned and keyed by the exact `engineVersion`, `templateHash`, `fontRegistryHash`, `dataHash`, and `renderOptionsHash`. Results never cross an engine-version boundary. Status queries must use ownership-scoped indexes and cursor pagination; realtime subscriptions observe those bounded records rather than authorizing them.
+
+Deletion must remove both the template storage object and saved PDF storage objects through bounded, resumable cleanup. A direct upload can be abandoned after bytes reach storage but before its application record is finalized, so upload-intent expiry and scheduled orphan cleanup are operational requirements. They reduce orphan retention but cannot be described as perfect or immediate cleanup without evidence from the deployed environment.
+
+See [Convex integration](/convex) for the complete storage, cache, lifecycle, and local-versus-production contract.
 
 <Warning>
-  Resource limits reduce risk; they do not replace application-level
-  authentication, authorization, malware scanning, retention policy, or rate
-  limiting.
+  Resource limits reduce risk; they do not replace authentication,
+  authorization, malware scanning, retention policy, or rate limiting.
 </Warning>

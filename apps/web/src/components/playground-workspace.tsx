@@ -1,7 +1,9 @@
 import {
+  Add01Icon,
   Cancel02Icon,
   CheckmarkCircle02Icon,
   CopyIcon,
+  Delete02Icon,
   File02Icon,
   PlayIcon,
   Refresh01Icon,
@@ -36,7 +38,14 @@ import { DocxViewerPreview } from "@/components/extend/docx-viewer"
 import { PDFViewer } from "@/components/extend/pdf-viewer"
 import { JsonEditor } from "@/components/json-editor"
 import { SiteHeader } from "@/components/site-header"
-import { formatJsonIssue, isRecord, parseTemplateJson } from "@/lib/json-editor"
+import { formatJsonIssue, parseTemplateJson } from "@/lib/json-editor"
+import {
+  addArrayItem,
+  concretePath,
+  getPath,
+  removeArrayItem,
+  setPath,
+} from "@/lib/form-data"
 import { SAMPLE_DATA, createSampleDocx } from "@/lib/sample-docx"
 
 const DOCX_MIME =
@@ -237,13 +246,20 @@ export function PlaygroundWorkspace() {
     setJsonError(formatJsonIssue(result.issue))
   }
 
-  const updateField = (field: TemplateField, value: string | boolean): void => {
-    const parsedValue =
-      field.kind === "number" ? (value === "" ? 0 : Number(value)) : value
-    const next = setPath(data, field.path, parsedValue)
+  const commitData = (next: Readonly<Record<string, unknown>>): void => {
     setData(next)
     setJsonText(JSON.stringify(next, null, 2))
     setJsonError(undefined)
+  }
+
+  const updateField = (
+    field: TemplateField,
+    path: string,
+    value: string | boolean
+  ): void => {
+    const parsedValue =
+      field.kind === "number" ? (value === "" ? 0 : Number(value)) : value
+    commitData(setPath(data, path, parsedValue))
   }
 
   const cancel = (): void => {
@@ -269,11 +285,11 @@ export function PlaygroundWorkspace() {
               <h1 className="text-xl font-semibold tracking-tight">
                 Document playground
               </h1>
-              <Badge variant="secondary">Phase 3 profile</Badge>
+              <Badge variant="secondary">Phase 6 profile</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Compile and render locally in a Web Worker. Your document is not
-              uploaded.
+              Compile tables, images, sections, headers, and page fields locally
+              in a Web Worker. Your document is not uploaded.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -321,6 +337,7 @@ export function PlaygroundWorkspace() {
             jsonError={jsonError}
             onJsonChange={onJsonChange}
             onFieldChange={updateField}
+            onDataChange={commitData}
             onReset={() => {
               const next = compiled?.starterData ?? SAMPLE_DATA
               setData(next)
@@ -374,7 +391,7 @@ function TemplatePanel({
       <PanelHeader
         index="01"
         title="Template"
-        description="Upload and inspect the supported DOCX profile."
+        description="Inspect the Phase 6 DOCX profile, including tables, images, and sections."
       />
       <div className="p-5">
         <label
@@ -471,7 +488,12 @@ type DataPanelProps = Readonly<{
   jsonText: string
   jsonError?: string
   onJsonChange: (value: string) => void
-  onFieldChange: (field: TemplateField, value: string | boolean) => void
+  onFieldChange: (
+    field: TemplateField,
+    path: string,
+    value: string | boolean
+  ) => void
+  onDataChange: (value: Readonly<Record<string, unknown>>) => void
   onReset: () => void
 }>
 
@@ -482,6 +504,7 @@ function DataPanel({
   jsonError,
   onJsonChange,
   onFieldChange,
+  onDataChange,
   onReset,
 }: DataPanelProps) {
   return (
@@ -509,14 +532,32 @@ function DataPanel({
           <TabsContent value="form" className="pt-6">
             {compiled?.manifest.fields.length ? (
               <div className="space-y-5">
-                {compiled.manifest.fields.map((field) => (
-                  <FieldInput
-                    key={field.path}
-                    field={field}
-                    value={getPath(data, field.path)}
-                    onChange={(value) => onFieldChange(field, value)}
-                  />
-                ))}
+                {compiled.manifest.fields
+                  .filter(isRootScalarField)
+                  .map((field) => (
+                    <FieldInput
+                      key={field.path}
+                      field={field}
+                      value={getPath(data, field.path)}
+                      concreteDataPath={field.path}
+                      onChange={(value) =>
+                        onFieldChange(field, field.path, value)
+                      }
+                    />
+                  ))}
+                {compiled.manifest.fields
+                  .filter(isRootArrayField)
+                  .map((field) => (
+                    <ArrayFieldEditor
+                      key={field.path}
+                      field={field}
+                      fields={compiled.manifest.fields}
+                      indexes={[]}
+                      data={data}
+                      onFieldChange={onFieldChange}
+                      onDataChange={onDataChange}
+                    />
+                  ))}
               </div>
             ) : (
               <EmptyState
@@ -742,17 +783,27 @@ function FieldList({ fields }: Readonly<{ fields: readonly TemplateField[] }>) {
 function FieldInput({
   field,
   value,
+  concreteDataPath,
   onChange,
 }: Readonly<{
   field: TemplateField
   value: unknown
+  concreteDataPath: string
   onChange: (value: string | boolean) => void
 }>) {
-  const id = `field-${field.path.replaceAll(".", "-")}`
+  const id = `field-${concreteDataPath.replaceAll(/[^a-zA-Z0-9_-]/gu, "-")}`
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <Label htmlFor={id}>{field.path}</Label>
+        <Label htmlFor={id}>
+          {field.path}
+          {field.required ? (
+            <span className="text-destructive" aria-hidden="true">
+              *
+            </span>
+          ) : null}
+          {field.required ? <span className="sr-only">(required)</span> : null}
+        </Label>
         <span className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase">
           {field.kind}
         </span>
@@ -766,6 +817,7 @@ function FieldInput({
             id={id}
             type="checkbox"
             checked={value === true}
+            required={field.required}
             onChange={(event) => onChange(event.target.checked)}
           />
           {value === true ? "True" : "False"}
@@ -785,11 +837,226 @@ function FieldInput({
               ? String(value).slice(0, field.kind === "date" ? 10 : undefined)
               : ""
           }
+          required={field.required}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
     </div>
   )
+}
+
+type FieldChangeHandler = (
+  field: TemplateField,
+  path: string,
+  value: string | boolean
+) => void
+
+function ArrayFieldEditor({
+  field,
+  fields,
+  indexes,
+  data,
+  onFieldChange,
+  onDataChange,
+}: Readonly<{
+  field: TemplateField
+  fields: readonly TemplateField[]
+  indexes: readonly number[]
+  data: Readonly<Record<string, unknown>>
+  onFieldChange: FieldChangeHandler
+  onDataChange: (value: Readonly<Record<string, unknown>>) => void
+}>) {
+  const path = concretePath(field.path, indexes)
+  const value = path ? getPath(data, path) : undefined
+  const rows = Array.isArray(value) ? value : []
+  const itemDepth = countArrayMarkers(field.path) + 1
+  const itemPrefix = `${field.path}[]`
+  const scalarFields = fields.filter(
+    (candidate) =>
+      isScalarField(candidate) &&
+      candidate.path.startsWith(`${itemPrefix}.`) &&
+      countArrayMarkers(candidate.path) === itemDepth
+  )
+  const childArrays = fields.filter(
+    (candidate) =>
+      candidate.kind === "array" &&
+      candidate.path.startsWith(`${itemPrefix}.`) &&
+      countArrayMarkers(candidate.path) === itemDepth
+  )
+  const headingId = `array-${(path ?? field.path).replaceAll(
+    /[^a-zA-Z0-9_-]/gu,
+    "-"
+  )}`
+  const rowKeysRef = useRef<string[]>([])
+  const rowSequenceRef = useRef(0)
+  while (rowKeysRef.current.length < rows.length) {
+    rowKeysRef.current.push(`${headingId}-row-${rowSequenceRef.current}`)
+    rowSequenceRef.current += 1
+  }
+  if (rowKeysRef.current.length > rows.length) {
+    rowKeysRef.current.length = rows.length
+  }
+  const keyedRows = rows.map((row, rowIndex) => ({
+    row,
+    rowIndex,
+    key: rowKeysRef.current[rowIndex],
+  }))
+
+  return (
+    <fieldset className="min-w-0 border p-4" aria-labelledby={headingId}>
+      <legend className="sr-only">{field.path}</legend>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3
+              id={headingId}
+              className="truncate font-mono text-xs font-medium"
+            >
+              {field.path}
+            </h3>
+            {field.required ? (
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
+            ) : null}
+            {field.required ? <span className="sr-only">required</span> : null}
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {rows.length} {rows.length === 1 ? "row" : "rows"}
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="min-h-11 sm:min-h-7"
+          variant="outline"
+          size="xs"
+          disabled={!path}
+          aria-label={`Add row to ${field.path}`}
+          onClick={() => {
+            if (!path) return
+            onDataChange(
+              addArrayItem(data, path, createArrayItem(field, fields))
+            )
+          }}
+        >
+          <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+          Add row
+        </Button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="mt-4 border border-dashed bg-muted/20 px-4 py-6 text-center">
+          <p className="text-xs text-muted-foreground">
+            No rows. Add one to provide repeated data.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-4">
+          {keyedRows.map(({ rowIndex, key }) => {
+            const rowIndexes = [...indexes, rowIndex]
+            return (
+              <div key={key} className="min-w-0 border bg-muted/10 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3 border-b pb-3">
+                  <p className="text-xs font-medium">Row {rowIndex + 1}</p>
+                  <Button
+                    type="button"
+                    className="size-11 sm:size-8"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={!path}
+                    aria-label={`Remove row ${rowIndex + 1} from ${field.path}`}
+                    onClick={() => {
+                      if (!path) return
+                      rowKeysRef.current.splice(rowIndex, 1)
+                      onDataChange(removeArrayItem(data, path, rowIndex))
+                    }}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} />
+                  </Button>
+                </div>
+                <div className="space-y-5">
+                  {scalarFields.map((candidate) => {
+                    const candidatePath = concretePath(
+                      candidate.path,
+                      rowIndexes
+                    )
+                    if (!candidatePath) return null
+                    return (
+                      <FieldInput
+                        key={candidate.path}
+                        field={candidate}
+                        concreteDataPath={candidatePath}
+                        value={getPath(data, candidatePath)}
+                        onChange={(next) =>
+                          onFieldChange(candidate, candidatePath, next)
+                        }
+                      />
+                    )
+                  })}
+                  {childArrays.map((candidate) => (
+                    <ArrayFieldEditor
+                      key={candidate.path}
+                      field={candidate}
+                      fields={fields}
+                      indexes={rowIndexes}
+                      data={data}
+                      onFieldChange={onFieldChange}
+                      onDataChange={onDataChange}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </fieldset>
+  )
+}
+
+function isScalarField(field: TemplateField): boolean {
+  return field.kind !== "array" && field.kind !== "object"
+}
+
+function isRootScalarField(field: TemplateField): boolean {
+  return isScalarField(field) && !field.path.includes("[]")
+}
+
+function isRootArrayField(field: TemplateField): boolean {
+  return field.kind === "array" && !field.path.includes("[]")
+}
+
+function countArrayMarkers(path: string): number {
+  return path.match(/\[\]/gu)?.length ?? 0
+}
+
+function createArrayItem(
+  field: TemplateField,
+  fields: readonly TemplateField[]
+): Readonly<Record<string, unknown>> {
+  const itemPrefix = `${field.path}[].`
+  const itemDepth = countArrayMarkers(field.path) + 1
+  let item: Readonly<Record<string, unknown>> = {}
+
+  for (const candidate of fields) {
+    if (!candidate.path.startsWith(itemPrefix)) continue
+    if (countArrayMarkers(candidate.path) !== itemDepth) continue
+    const relativePath = candidate.path.slice(itemPrefix.length)
+    if (!relativePath || relativePath.includes("[]")) continue
+    if (candidate.kind === "object") continue
+    item = setPath(
+      item,
+      relativePath,
+      candidate.kind === "array" ? [] : starterValue(candidate)
+    )
+  }
+  return item
+}
+
+function starterValue(field: TemplateField): string | number | boolean {
+  if (field.kind === "number") return 0
+  if (field.kind === "boolean") return false
+  return ""
 }
 
 function DiagnosticList({
@@ -879,37 +1146,6 @@ function handleFailure(
     state: "error",
     label: error instanceof Error ? error.message : "The operation failed",
   })
-}
-
-function getPath(
-  data: Readonly<Record<string, unknown>>,
-  path: string
-): unknown {
-  let current: unknown = data
-  for (const segment of path.split(".")) {
-    if (!isRecord(current)) return undefined
-    current = current[segment]
-  }
-  return current
-}
-
-function setPath(
-  data: Readonly<Record<string, unknown>>,
-  path: string,
-  value: unknown
-): Readonly<Record<string, unknown>> {
-  const result: Record<string, unknown> = structuredClone(data)
-  const segments = path.split(".")
-  let current = result
-  for (const [index, segment] of segments.entries()) {
-    if (index === segments.length - 1) {
-      current[segment] = value
-      break
-    }
-    if (!isRecord(current[segment])) current[segment] = {}
-    current = current[segment] as Record<string, unknown>
-  }
-  return result
 }
 
 function formatBytes(bytes: number): string {

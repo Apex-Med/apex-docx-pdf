@@ -77,7 +77,50 @@ export type SemanticText = Readonly<{
   style: TextStyle
 }>
 
-export type SemanticInline = SemanticText
+export type SemanticImageMimeType = "image/png" | "image/jpeg"
+
+/** Package-owned bytes. Arrays, rather than typed arrays, make deep immutability enforceable. */
+export type SemanticImageAsset = Readonly<{
+  type: "imageAsset"
+  id: string
+  source: SourceLocation
+  packagePath: string
+  mimeType: SemanticImageMimeType
+  bytes: readonly number[]
+  pixelWidth: number
+  pixelHeight: number
+}>
+
+export type SemanticImage = Readonly<{
+  type: "image"
+  id: NodeId
+  source: SourceLocation
+  assetId: string
+  width: Twip
+  height: Twip
+  aspect: Readonly<{
+    pixelWidth: number
+    pixelHeight: number
+    intrinsicRatio: number
+    /** True only when DrawingML explicitly locks aspect ratio and the extent agrees. */
+    preserve: boolean
+  }>
+}>
+
+export type PageFieldKind = "PAGE" | "NUMPAGES"
+
+export type SemanticPageField = Readonly<{
+  type: "pageField"
+  id: NodeId
+  source: SourceLocation
+  field: PageFieldKind
+  /** Cached Word display text; layout replaces this with the current value. */
+  displayText: string
+  format: "decimal"
+  style: TextStyle
+}>
+
+export type SemanticInline = SemanticText | SemanticImage | SemanticPageField
 
 export type SemanticParagraph = Readonly<{
   type: "paragraph"
@@ -87,12 +130,96 @@ export type SemanticParagraph = Readonly<{
   children: readonly SemanticInline[]
 }>
 
-export type SemanticBlock = SemanticParagraph
+export type TableLayout = "fixed" | "autofit"
+
+export type TableBorderStyle =
+  "none" | "single" | "double" | "dotted" | "dashed"
+
+export type TableBorder = Readonly<{
+  style: TableBorderStyle
+  color: string
+  /** Border thickness, rounded from OOXML eighth-points to integer twips. */
+  width: Twip
+  /** Distance between the border and cell content. */
+  space: Twip
+}>
+
+export type TableBorders = Readonly<{
+  top: TableBorder | null
+  right: TableBorder | null
+  bottom: TableBorder | null
+  left: TableBorder | null
+  insideHorizontal: TableBorder | null
+  insideVertical: TableBorder | null
+}>
+
+export type SemanticTableCell = Readonly<{
+  type: "tableCell"
+  id: NodeId
+  source: SourceLocation
+  /** Zero-based index into the table grid. */
+  columnIndex: number
+  /** Deterministic width computed from the spanned grid columns. */
+  width: Twip
+  /** Declared `tcW`, or null when absent/auto. */
+  preferredWidth: Twip | null
+  columnSpan: number
+  verticalMerge: "none" | "restart" | "continue"
+  verticalAlignment: "top" | "center" | "bottom"
+  /** Solid RGB fill, or null for no cell shading. */
+  fillColor: string | null
+  blocks: readonly SemanticParagraph[]
+}>
+
+export type SemanticTableRow = Readonly<{
+  type: "tableRow"
+  id: NodeId
+  source: SourceLocation
+  /** Header rows repeat when a table crosses a page boundary. */
+  repeatAsHeader: boolean
+  /** False corresponds to WordprocessingML `cantSplit`. */
+  allowBreakAcrossPages: boolean
+  height: Readonly<{ rule: "exact" | "atLeast"; value: Twip }> | null
+  cells: readonly SemanticTableCell[]
+}>
+
+export type SemanticTable = Readonly<{
+  type: "table"
+  id: NodeId
+  source: SourceLocation
+  /** Effective integer width. Auto widths resolve to the grid-column sum. */
+  width: Twip
+  /** Declared `tblW`, or null when absent/auto. */
+  preferredWidth: Twip | null
+  layout: TableLayout
+  columnWidths: readonly Twip[]
+  borders: TableBorders
+  cellPadding: Insets
+  /** Number of contiguous leading rows marked to repeat on every page. */
+  repeatHeaderRowCount: number
+  rows: readonly SemanticTableRow[]
+}>
+
+export type SemanticBlock = SemanticParagraph | SemanticTable
 
 export type SectionProperties = Readonly<{
   pageWidth: Twip
   pageHeight: Twip
+  orientation: "portrait" | "landscape"
   margins: Insets
+  /** Distance from the page edge to the header reference line. */
+  headerDistance: Twip
+  /** Distance from the page edge to the footer reference line. */
+  footerDistance: Twip
+}>
+
+export type HeaderFooterId = string
+
+export type SemanticHeaderFooter = Readonly<{
+  type: "header" | "footer"
+  id: HeaderFooterId
+  source: SourceLocation
+  blocks: readonly SemanticParagraph[]
 }>
 
 export type SemanticSection = Readonly<{
@@ -100,6 +227,8 @@ export type SemanticSection = Readonly<{
   id: NodeId
   source: SourceLocation
   properties: SectionProperties
+  defaultHeaderId: HeaderFooterId | null
+  defaultFooterId: HeaderFooterId | null
   blocks: readonly SemanticBlock[]
 }>
 
@@ -107,16 +236,28 @@ export type SemanticDocument = Readonly<{
   type: "document"
   id: NodeId
   source: SourceLocation
+  assets: readonly SemanticImageAsset[]
+  headers: readonly SemanticHeaderFooter[]
+  footers: readonly SemanticHeaderFooter[]
   numberingDefinitions: readonly NumberingDefinition[]
   sections: readonly SemanticSection[]
 }>
 
 export type ResolvedText = SemanticText
-export type ResolvedInline = ResolvedText
+export type ResolvedInline = SemanticInline
 export type ResolvedParagraph = Omit<SemanticParagraph, "children"> & {
   readonly children: readonly ResolvedInline[]
 }
-export type ResolvedBlock = ResolvedParagraph
+export type ResolvedTableCell = Omit<SemanticTableCell, "blocks"> & {
+  readonly blocks: readonly ResolvedParagraph[]
+}
+export type ResolvedTableRow = Omit<SemanticTableRow, "cells"> & {
+  readonly cells: readonly ResolvedTableCell[]
+}
+export type ResolvedTable = Omit<SemanticTable, "rows"> & {
+  readonly rows: readonly ResolvedTableRow[]
+}
+export type ResolvedBlock = ResolvedParagraph | ResolvedTable
 export type ResolvedSection = Omit<SemanticSection, "blocks"> & {
   readonly blocks: readonly ResolvedBlock[]
 }

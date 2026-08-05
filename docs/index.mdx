@@ -7,12 +7,15 @@ description: "A deterministic DOCX-profile renderer that produces searchable PDF
 
 Apex DOCX PDF renders a deliberately documented DOCX profile to searchable PDF. It is not a Word clone: unsupported or materially lossy source content is diagnosed with source location instead of being silently discarded.
 
-Phases 1–3 now form a working renderer slice: ordinary main-document paragraphs, inline value placeholders, document styles, paragraph geometry, and caller-supplied TrueType fonts render to searchable PDF. Page dimensions and margins come from the document's final body-level section properties, with A4 dimensions used when page-size values are absent or invalid.
+Phases 1–6 now form a working renderer slice. Engine version `0.0.0-phase.6` adds bounded package-owned inline PNG/JPEG images, multiple `nextPage` sections, portrait/landscape pages, inherited default headers/footers, reusable header/footer templates, and decimal `PAGE`/`NUMPAGES` fields to the earlier table, paragraph, style, template, numbering, and explicit-font path.
 
 <Warning>
-  The supported profile remains intentionally small. Tables, conditional and
-  loop tags, images, headers, footers, complex-script shaping, Convex wiring,
-  and deployment are not implemented.
+  The supported profile remains intentionally bounded. Dynamic image tags, image
+  fetches, anchors/floating placement, crop, rotation, SVG, broad image
+  profile/color conversion, continuous/odd/even section breaks, first/even
+  headers, automatic header/footer numbering, nested tables, complete Word
+  autofit, complex-script shaping, and CFF embedding are not implemented. Phase
+  6 is not a broad Word, cross-runtime, or production-readiness claim.
 </Warning>
 
 ## Start here
@@ -25,7 +28,7 @@ Phases 1–3 now form a working renderer slice: ordinary main-document paragraph
     Prepare the current supported DOCX profile.
   </Card>
   <Card title="Template language" icon="braces" href="/template-language">
-    Learn value-tag paths and the supported type annotations.
+    Learn value paths, safe formatters, paragraph/table-row blocks, and limits.
   </Card>
   <Card title="Feature status" icon="list-checks" href="/supported-features">
     See exactly what the current renderer supports and what it rejects.
@@ -38,4 +41,4 @@ This documentation repository intentionally does not declare a public product or
 
 ## Design contract
 
-The renderer treats template bytes, data, caller-supplied font configuration and bytes, engine version, locale, time zone, metadata, and explicit render options as compatibility inputs. It does not discover system fonts or fetch font resources. Identical inputs are intended to produce identical layout traces and byte-identical PDFs. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.
+The renderer treats template bytes, bounded JSON data, caller-supplied font configuration and bytes, engine version, locale, time zone, metadata, limits, and explicit render options as compatibility inputs. Formatter output uses only explicit `Intl` context and never consults ambient locale, time zone, or clock state. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.

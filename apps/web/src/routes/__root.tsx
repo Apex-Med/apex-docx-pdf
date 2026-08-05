@@ -1,10 +1,15 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import {
+  HeadContent,
+  Scripts,
+  createRootRouteWithContext,
+} from "@tanstack/react-router"
 
 import appCss from "@workspace/ui/globals.css?url"
 
 import { ThemeProvider, themeInitScript } from "@/components/theme-provider"
+import type { RouterContext } from "@/lib/router-context"
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       {

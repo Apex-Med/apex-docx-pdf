@@ -1,44 +1,106 @@
 ---
 title: "Authoring guide"
-description: "Create templates that fit the current supported DOCX profile."
+description: "Create Phase 6 templates with bounded tables, static images, sections, headers, footers, and page fields."
 ---
 
 # Authoring guide
 
-The renderer accepts one ordinary DOCX main document and normalizes its paragraphs, styles, and text runs before templating and layout. Keep templates within the documented profile and make unsupported content an intentional future migration, not an assumption.
+The renderer accepts one ordinary DOCX package and normalizes supported paragraphs, tables, static images, multiple sections, default headers/footers, styles, runs, numbering, fields, and pagination properties before templating and layout.
 
-## Supported authoring shape
+## Author within the supported shape
 
 - Use paragraphs and text runs in the main document.
-- Use inline value tags in paragraph text, for example `{{invoice.number}}`.
-- Set the final body-level section's page size and margins deliberately. Missing or invalid page-size values fall back to A4 dimensions.
-- Use document defaults, paragraph and character styles, `basedOn` inheritance, and direct run formatting for the supported properties.
-- Configure every required font face explicitly. Keep text to well-formed left-to-right Latin and ensure the supplied TrueType program contains each required glyph.
-- Avoid tabs; tab-stop layout is not implemented.
+- Use inline values such as `{{invoice.number:string}}` and the documented safe formatters.
+- Put every `if`, `else`, `each`, and closing marker in its own paragraph. Blocks may nest.
+- Inside `each`, use paths relative to the current object, such as `{{description}}`; supply only object items.
+- Use ordinary Word list numbering backed by the document's internal numbering part. Supported formats include bullets, decimal, letters, Roman numerals, multilevel/custom labels, and legal numbering.
+- Use document defaults, paragraph/character styles, `basedOn` inheritance, direct formatting, supported keep/widow controls, and intentional page size/margins.
+- Configure required font faces explicitly and keep text to well-formed LTR Latin supported by those TrueType programs.
+- Build tables with a positive integer-twip `tblGrid`. If `tblW` is explicit, make it equal the grid sum; if `tcW` is explicit, make it equal the sum of that cell's spanned grid columns.
+- Use contiguous leading rows for repeating headers. Use `cantSplit` for a row that should move intact when it fits on a fresh page; an oversized row still fragments with a diagnostic so pagination can make progress.
+- Embed PNG/JPEG parts through internal relationships and use inline DrawingML with explicit positive extents. Keep raster profiles within the documented security limits.
+- Use `nextPage` section breaks only. Make explicit page width/height agree with portrait or landscape orientation.
+- Use default header/footer references; later sections inherit them until a replacement is declared. Keep the exact header/footer distance plus content height inside the corresponding body margin.
+- Use decimal `PAGE` and `NUMPAGES` fields for global page numbering. Header/footer paragraphs may contain template values and blocks, but not automatic list numbering.
 
-## Use explicit value types where helpful
+## Example template
+
+Place each displayed line in a separate Word paragraph:
 
 ```text
-Invoice: {{invoice.number:string}}
-Amount: {{invoice.total:number}}
-Paid: {{invoice.paid:boolean}}
-Issued: {{invoice.issuedAt:date}}
+Invoice {{invoice.number:string | upper}}
+{{#if invoice.showItems}}
+{{#each invoice.items}}
+{{description:string}} — {{amount:number | currency:"ZAR"}}
+{{/each}}
+{{else}}
+No item details
+{{/if}}
+Issued {{invoice.issuedAt:date | date:"d MMMM yyyy"}}
 ```
 
-An untyped tag is permitted, but explicit types make generated schema and data validation more useful. Each field is required by the generated JSON Schema.
+Render with an explicit locale and time zone, and provide an offset-bearing date-time:
+
+```json
+{
+  "invoice": {
+    "number": "inv-1042",
+    "showItems": true,
+    "items": [{ "description": "Consultation", "amount": 1250 }],
+    "issuedAt": "2026-08-05T09:30:00+02:00"
+  }
+}
+```
+
+The compiled manifest records `invoice.items[].description` and `invoice.items[].amount`; its deterministic starter data contains a one-object `items` array.
+
+## Lists and pagination
+
+Configure numbering, starts, overrides, indentation, and restart behavior in the DOCX rather than typing list labels into template values. List labels remain searchable and linked to their source paragraph. Numbering continues through repeated template paragraphs and restarts only when the concrete numbering definition requires it.
+
+`keepWithNext` chains, `keepLinesTogether`, widow/orphan control, and list indentation/wrapping are supported. General tabs remain unsupported; the numbering suffix tab is treated only as list spacing.
+
+## Fixed-grid tables
+
+The renderer treats `tblGrid` as authoritative geometry. Auto or absent `tblW` resolves to the grid sum; an explicit integer-twip `tblW` must equal it. A cell's width is the sum of its `gridSpan` columns, and an explicit integer-twip `tcW` must equal that result. The parsed `fixed`/`autofit` flag is preserved, but both use the fixed grid: there is no complete Word content-driven autofit algorithm.
+
+Supported table presentation is deliberately narrow:
+
+- table-level cell margins, defaulting to 0 twips top/bottom and 115 twips start/end when absent;
+- `none`, `single`, `double`, `dotted`, and `dashed` outer/inside borders with explicit RGB, width, and spacing;
+- clear-pattern cell shading with an automatic foreground and one six-digit RGB fill;
+- exact and at-least row heights, plus top, center, and bottom cell alignment;
+- horizontal `gridSpan` and validated `vMerge` restart/continuation chains;
+- contiguous leading repeated-header rows and deterministic multi-page row fragmentation.
+
+Vertical-merge continuations must match the restart span, contain no visible content, and cannot cross the header/body boundary. Nested tables are unsupported.
+
+Static inline images may appear in a supported table-cell paragraph. They remain atomic inline content, use their explicit extent, contribute to row measurement/fragmentation, and count against both the image and table/page limits. A dynamic image tag in a cell remains unsupported.
+
+## Table-row conditions and loops
+
+To conditionally include or repeat rows, put each structural marker in a dedicated table row. Across all of that row's cells, the marker must be the only visible content:
+
+```text
+row: {{#each invoice.items}}
+row: {{description:string}} | {{amount:number | currency:"ZAR"}}
+row: {{/each}}
+```
+
+`if`, optional `else`, and `each` row blocks may nest and share the same cumulative limits as paragraph blocks. A structural row block cannot contain or alter repeating header rows, and it cannot enclose vertical merges. Markers opened in a table cell paragraph cannot cross the cell boundary; row markers cannot cross the table boundary.
 
 ## Preserve an inspectable template
 
-Use semantic paths such as `customer.address.city`; avoid dynamic expressions, helpers, or arbitrary code. Compilation reports malformed tags, unsafe paths, and incompatible explicit types as source-located error diagnostics on the returned compiled template. Inspect them before calling render.
+Use semantic paths and fixed safe formatters; avoid dynamic expressions or arbitrary helpers. Save redistributable representative fixtures with known data and keep layout traces/PDFs as regression artifacts. Compilation and rendering diagnostics are part of the result contract.
 
-<Tip>
-  Save a representative template fixture with known data and keep its layout
-  trace/PDF as a regression artifact. This makes intentional renderer changes
-  distinguishable from accidental drift.
-</Tip>
+## Images, sections, and page furniture
+
+Static images are source content, not template data. The compiler preserves internal package bytes and explicit extent; it performs no fetch. Reusing identical source bytes is deterministic and produces one reusable PDF image XObject. Supported PNG alpha is emitted through a grayscale `/SMask`; JPEG stays in its accepted DCT form. Do not rely on anchors/floating placement, crop, rotation, SVG, EXIF orientation other than 1, ICC conversion, CMYK/YCCK, or unlisted PNG/JPEG profiles.
+
+A paragraph-level `sectPr` closes that section, and the final body-level `sectPr` closes the document. Each later section begins on a new page. Default headers/footers inherit across boundaries and repeat on every page in their section. Missing `w:header`/`w:footer` distances default to exactly 720 twips. Header top is measured from the page top; footer bottom is measured from the page bottom.
+
+Header/footer template values, formatters, and whole-paragraph blocks resolve from the same render data and cumulative budgets as the body. `PAGE` and `NUMPAGES` are global decimal fields: the layout reserves enough width for the configured maximum page count, completes pagination, then inserts current/total values. This stable reservation can be wider than the final number.
 
 ## Do not rely on these yet
 
-Tables, images, headers, footers, conditions, loops, image tags, keep-with-next, widow/orphan controls, and complex scripts are outside the current profile. The correct behavior is a diagnostic or fallback where documented—not a best-effort recreation of Word.
-
-See [template language](/template-language) for grammar and [font handling](/font-handling) for explicit registration and embedding behavior.
+Dynamic image tags, external/fetched images, anchors/floating placement, crop, rotation, SVG, unsupported image profiles/colors, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, arbitrary fields, percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex scripts, CFF embedding, true default subsetting, Convex integration, and deployment are outside the current profile. See [template language](/template-language), [font handling](/font-handling), and the [support matrix](/supported-features).

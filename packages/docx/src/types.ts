@@ -3,6 +3,8 @@ import type {
   FontStyle,
   FontWeight,
   NumberingFormat,
+  PageFieldKind,
+  SemanticImageMimeType,
   SourceLocation,
 } from "@apex-docx-pdf/core"
 
@@ -17,6 +19,28 @@ export type ParsedDocxText = Readonly<{
   preserveSpace: boolean
   source: SourceLocation
 }>
+
+export type ParsedDocxImage = Readonly<{
+  type: "docx-image"
+  source: SourceLocation
+  assetId: string
+  widthTwips: number
+  heightTwips: number
+  pixelWidth: number
+  pixelHeight: number
+  intrinsicRatio: number
+  preserveAspect: boolean
+}>
+
+export type ParsedDocxPageField = Readonly<{
+  type: "docx-page-field"
+  source: SourceLocation
+  field: PageFieldKind
+  displayText: string
+}>
+
+export type ParsedDocxInline =
+  ParsedDocxText | ParsedDocxImage | ParsedDocxPageField
 
 export type ParsedDocxRunProperties = Readonly<{
   fontFamily: string
@@ -36,6 +60,7 @@ export type ParsedDocxRun = Readonly<{
   type: "docx-run"
   source: SourceLocation
   properties: ParsedDocxRunProperties
+  inlines: readonly ParsedDocxInline[]
   texts: readonly ParsedDocxText[]
 }>
 
@@ -84,6 +109,66 @@ export type ParsedDocxParagraph = Readonly<{
   runs: readonly ParsedDocxRun[]
 }>
 
+export type ParsedDocxTableBorder = Readonly<{
+  style: "none" | "single" | "double" | "dotted" | "dashed"
+  color: string
+  /** OOXML eighth-points. */
+  size: number
+  /** OOXML whole points. */
+  space: number
+}>
+
+export type ParsedDocxTableBorders = Readonly<{
+  top: ParsedDocxTableBorder | null
+  right: ParsedDocxTableBorder | null
+  bottom: ParsedDocxTableBorder | null
+  left: ParsedDocxTableBorder | null
+  insideHorizontal: ParsedDocxTableBorder | null
+  insideVertical: ParsedDocxTableBorder | null
+}>
+
+export type ParsedDocxTableCell = Readonly<{
+  type: "docx-table-cell"
+  source: SourceLocation
+  columnIndex: number
+  width: number
+  preferredWidth: number | null
+  columnSpan: number
+  verticalMerge: "none" | "restart" | "continue"
+  verticalAlignment: "top" | "center" | "bottom"
+  fillColor: string | null
+  paragraphs: readonly ParsedDocxParagraph[]
+}>
+
+export type ParsedDocxTableRow = Readonly<{
+  type: "docx-table-row"
+  source: SourceLocation
+  repeatAsHeader: boolean
+  allowBreakAcrossPages: boolean
+  height: Readonly<{ rule: "exact" | "atLeast"; value: number }> | null
+  cells: readonly ParsedDocxTableCell[]
+}>
+
+export type ParsedDocxTable = Readonly<{
+  type: "docx-table"
+  source: SourceLocation
+  width: number
+  preferredWidth: number | null
+  layout: "fixed" | "autofit"
+  columnWidths: readonly number[]
+  borders: ParsedDocxTableBorders
+  cellPadding: Readonly<{
+    top: number
+    right: number
+    bottom: number
+    left: number
+  }>
+  repeatHeaderRowCount: number
+  rows: readonly ParsedDocxTableRow[]
+}>
+
+export type ParsedDocxBlock = ParsedDocxParagraph | ParsedDocxTable
+
 export type ParsedDocxSectionProperties = Readonly<{
   pageWidth: number
   pageHeight: number
@@ -91,13 +176,50 @@ export type ParsedDocxSectionProperties = Readonly<{
   marginRight: number
   marginBottom: number
   marginLeft: number
+  orientation: "portrait" | "landscape"
+  headerDistance: number
+  footerDistance: number
+}>
+
+export type ParsedDocxImageAsset = Readonly<{
+  type: "docx-image-asset"
+  id: string
+  source: SourceLocation
+  packagePath: string
+  mimeType: SemanticImageMimeType
+  bytes: readonly number[]
+  pixelWidth: number
+  pixelHeight: number
+}>
+
+export type ParsedDocxHeaderFooter = Readonly<{
+  type: "docx-header" | "docx-footer"
+  id: string
+  source: SourceLocation
+  part: string
+  paragraphs: readonly ParsedDocxParagraph[]
+}>
+
+export type ParsedDocxSection = Readonly<{
+  type: "docx-section"
+  source: SourceLocation
+  properties: ParsedDocxSectionProperties
+  defaultHeaderId: string | null
+  defaultFooterId: string | null
+  blocks: readonly ParsedDocxBlock[]
 }>
 
 export type ParsedDocxDocument = Readonly<{
   type: "docx-document"
   source: SourceLocation
   documentPart: string
+  assets: readonly ParsedDocxImageAsset[]
+  headers: readonly ParsedDocxHeaderFooter[]
+  footers: readonly ParsedDocxHeaderFooter[]
   numberingDefinitions: readonly ParsedDocxNumberingDefinition[]
+  sections: readonly ParsedDocxSection[]
+  blocks: readonly ParsedDocxBlock[]
+  /** Convenience projection retained for paragraph-only consumers. */
   paragraphs: readonly ParsedDocxParagraph[]
   sectionProperties: ParsedDocxSectionProperties
 }>
@@ -113,6 +235,10 @@ export type DocxParseOptions = Readonly<{
     /** Maximum element count accepted for any individual XML part. */
     maxXmlNodes?: number
     maxXmlDepth?: number
+    maxImageCount?: number
+    maxImageBytes?: number
+    maxImageDimensionPixels?: number
+    maxImagePixels?: number
   }>
   /** Unsupported meaningful OOXML is an error by default. */
   unsupportedFeatures?: "strict" | "compatible" | "lenient"

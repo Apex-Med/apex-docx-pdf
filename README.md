@@ -4,7 +4,9 @@ A Bun-first, deterministic DOCX-template-to-PDF engine and TanStack Start refere
 
 The project is being built around an explicit supported DOCX profile. It performs its own template compilation, document layout, pagination, and PDF rendering without LibreOffice, Chromium, Microsoft Word, or an external conversion API.
 
-The implemented Phase 3 slice adds DOCX style cascades, supported paragraph formatting, and explicit caller-supplied TrueType fonts. Font parsing and LTR Latin shaping use exact-pinned `fontkit` 2.0.4; PDF output embeds complete font programs by default and does not claim true subsetting. The local worker reference bundles four openly licensed Noto Sans faces as explicit application assets. Tables, images, headers, footers, complex scripts, and deployment remain outside the current supported boundary.
+Phase 6 is implemented and hardening under engine version `0.0.0-phase.6`. It adds bounded package-owned inline PNG/JPEG images, multiple `nextPage` sections, portrait/landscape page geometry, inherited default headers and footers, reusable header/footer template values, and decimal `PAGE`/`NUMPAGES` fields to the earlier template, numbering, table, paragraph, and explicit-font slices. PDF output remains deterministic, searchable, source-linked, and upright; repeated image bytes are deduplicated into stable XObjects, with PNG alpha emitted as an `/SMask`. Font parsing and LTR Latin shaping use exact-pinned `fontkit` 2.0.4, and the default PDF path embeds complete font programs rather than claiming true subsetting.
+
+The Phase 6 image profile is deliberately static: images must be internal DOCX relationships with explicit positive DrawingML dimensions. The renderer performs no image fetch and does not support dynamic image tags, anchors/floating placement, crop, rotation, SVG, or broad color-profile conversion. Continuous/odd/even section breaks, first/even headers, automatic header/footer numbering, complex scripts, CFF embedding, true default font subsetting, complete Word autofit, Convex integration, deployment, and broad Word/cross-runtime/production claims remain outside the current boundary.
 
 ## Development
 
@@ -63,3 +65,5 @@ DOCX bytes -> validated package -> parsed OOXML -> semantic document
 ```
 
 See [docs/architecture.md](docs/architecture.md) for package boundaries, invariants, and the current supported slices.
+
+Authoring and compatibility details live in the [template language](docs/template-language.mdx), [authoring guide](docs/authoring.mdx), and [support matrix](docs/supported-features.mdx).

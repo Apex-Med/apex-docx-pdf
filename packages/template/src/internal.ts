@@ -3,6 +3,7 @@ import type {
   FormatterReference,
   ResourceLimits,
   SemanticParagraph,
+  SemanticTableRow,
   SemanticText,
   SourceLocation,
   TemplateFieldKind,
@@ -40,6 +41,13 @@ export type ParsedParagraph = Readonly<{
   diagnostics: readonly Diagnostic[]
 }>
 
+/** Non-text inlines occupy one logical position and split template syntax. */
+export function inlineLogicalLength(
+  inline: SemanticParagraph["children"][number]
+): number {
+  return inline.type === "text" ? inline.text.length : 1
+}
+
 export function templateDiagnostic(
   code: string,
   message: string,
@@ -56,19 +64,28 @@ export function templateDiagnostic(
 }
 
 export function paragraphText(paragraph: SemanticParagraph): string {
-  return paragraph.children.map((child) => child.text).join("")
+  return paragraph.children
+    .filter((child): child is SemanticText => child.type === "text")
+    .map((child) => child.text)
+    .join("")
 }
 
 function nodeAt(paragraph: SemanticParagraph, offset: number): SemanticText {
   let cursor = 0
   for (const child of paragraph.children) {
+    if (child.type !== "text") {
+      cursor += 1
+      continue
+    }
     const next = cursor + child.text.length
     if (offset < next || (child.text.length === 0 && offset === cursor)) {
       return child
     }
     cursor = next
   }
-  const fallback = paragraph.children[paragraph.children.length - 1]
+  let fallback: SemanticText | undefined
+  for (const child of paragraph.children)
+    if (child.type === "text") fallback = child
   if (fallback === undefined) {
     throw new TypeError("A template tag cannot exist in an empty paragraph")
   }
@@ -145,7 +162,12 @@ function parseFormatter(
   const match = /^(?<name>[A-Za-z]+)(?:\s*:\s*(?<argument>.*))?$/u.exec(text)
   const name = match?.groups?.name?.toLowerCase()
   const argument = match?.groups?.argument
-  if (name !== "upper" && name !== "lower" && name !== "currency" && name !== "date") {
+  if (
+    name !== "upper" &&
+    name !== "lower" &&
+    name !== "currency" &&
+    name !== "date"
+  ) {
     return templateDiagnostic(
       "TEMPLATE_UNKNOWN_FORMATTER",
       `Unknown template formatter ${name ?? text}`,
@@ -247,7 +269,11 @@ function parseValueBody(
     )
   }
   const expression = parts[0]
-  if (expression === undefined || expression.length === 0 || parts.slice(1).some((part) => part.length === 0)) {
+  if (
+    expression === undefined ||
+    expression.length === 0 ||
+    parts.slice(1).some((part) => part.length === 0)
+  ) {
     return templateDiagnostic(
       "TEMPLATE_INVALID_EXPRESSION",
       "A template value requires a path and complete formatter expressions",
@@ -255,8 +281,15 @@ function parseValueBody(
       node
     )
   }
-  const match = /^(?<path>[A-Za-z_$][A-Za-z0-9_$.]*)(?:\s*:\s*(?<kind>[A-Za-z]+))?$/u.exec(expression)
-  if (match === null || match.groups === undefined || match.groups.path === undefined) {
+  const match =
+    /^(?<path>[A-Za-z_$][A-Za-z0-9_$.]*)(?:\s*:\s*(?<kind>[A-Za-z]+))?$/u.exec(
+      expression
+    )
+  if (
+    match === null ||
+    match.groups === undefined ||
+    match.groups.path === undefined
+  ) {
     return templateDiagnostic(
       "TEMPLATE_INVALID_EXPRESSION",
       "A template value must be a dotted property path with an optional type before formatters",
@@ -280,7 +313,12 @@ function parseValueBody(
         node
       )
     }
-    if (kindName !== "string" && kindName !== "number" && kindName !== "boolean" && kindName !== "date") {
+    if (
+      kindName !== "string" &&
+      kindName !== "number" &&
+      kindName !== "boolean" &&
+      kindName !== "date"
+    ) {
       return templateDiagnostic(
         "TEMPLATE_INVALID_EXPRESSION",
         "Template values support only string, number, boolean, and date types",
@@ -325,6 +363,8 @@ export function parseBlockMarker(
   paragraph: SemanticParagraph,
   limits: ResourceLimits
 ): BlockMarker | Diagnostic | undefined {
+  if (paragraph.children.some((child) => child.type !== "text"))
+    return undefined
   const text = paragraphText(paragraph)
   const match = /^\s*\{\{(?<body>[\s\S]*?)\}\}\s*$/u.exec(text)
   const body = match?.groups?.body?.trim()
@@ -358,42 +398,155 @@ export function parseBlockMarker(
   return undefined
 }
 
+/** Returns a marker only when its paragraph is the row's sole visible content. */
+export function parseTableRowMarker(
+  row: SemanticTableRow,
+  limits: ResourceLimits
+): BlockMarker | Diagnostic | undefined {
+  const markers: BlockMarker[] = []
+  let visibleParagraphs = 0
+  for (const cell of row.cells) {
+    for (const block of cell.blocks) {
+      if (block.type !== "paragraph") {
+        return {
+          code: "TEMPLATE_UNSUPPORTED_NESTED_TABLE",
+          severity: "error",
+          message:
+            "Nested tables in template table cells are unsupported and would cause content loss",
+          source: block.source,
+          nodeId: block.id,
+        }
+      }
+      if (
+        paragraphText(block).trim().length > 0 ||
+        block.children.some((child) => child.type !== "text")
+      )
+        visibleParagraphs += 1
+      const parsed = parseBlockMarker(block, limits)
+      if (parsed !== undefined && "code" in parsed) return parsed
+      if (parsed !== undefined) markers.push(parsed)
+    }
+  }
+  const marker = markers[0]
+  if (marker === undefined) return undefined
+  if (markers.length !== 1 || visibleParagraphs !== 1) {
+    return templateDiagnostic(
+      "TEMPLATE_TABLE_ROW_MARKER_CONTENT",
+      "A table row block marker must be the row's only visible content",
+      marker.source,
+      marker.node
+    )
+  }
+  return marker
+}
+
 /** Parses tags against a paragraph's logical text, rather than individual OOXML runs. */
 export function parseParagraph(
   paragraph: SemanticParagraph,
   limits: ResourceLimits
 ): ParsedParagraph {
-  const text = paragraphText(paragraph)
   const placeholders: ParsedPlaceholder[] = []
   const diagnostics: Diagnostic[] = []
-  let cursor = 0
-  while (cursor < text.length) {
-    const open = text.indexOf("{{", cursor)
-    const unmatchedClose = text.indexOf("}}", cursor)
-    if (unmatchedClose !== -1 && (open === -1 || unmatchedClose < open)) {
-      const node = nodeAt(paragraph, unmatchedClose)
-      diagnostics.push(templateDiagnostic("TEMPLATE_MALFORMED_TAG", "Found a closing tag without an opening tag", node.source, node))
-      cursor = unmatchedClose + 2
+  let logicalOffset = 0
+  let segmentText = ""
+  let segmentStart = 0
+  const parseSegment = (text: string, base: number): void => {
+    let cursor = 0
+    while (cursor < text.length) {
+      const open = text.indexOf("{{", cursor)
+      const unmatchedClose = text.indexOf("}}", cursor)
+      if (unmatchedClose !== -1 && (open === -1 || unmatchedClose < open)) {
+        const node = nodeAt(paragraph, base + unmatchedClose)
+        diagnostics.push(
+          templateDiagnostic(
+            "TEMPLATE_MALFORMED_TAG",
+            "Found a closing tag without an opening tag",
+            node.source,
+            node
+          )
+        )
+        cursor = unmatchedClose + 2
+        continue
+      }
+      if (open === -1) break
+      const node = nodeAt(paragraph, base + open)
+      const close = text.indexOf("}}", open + 2)
+      const nestedOpen = text.indexOf("{{", open + 2)
+      if (close === -1 || (nestedOpen !== -1 && nestedOpen < close)) {
+        diagnostics.push(
+          templateDiagnostic(
+            "TEMPLATE_MALFORMED_TAG",
+            "Template tags cannot be nested or left unclosed",
+            node.source,
+            node
+          )
+        )
+        cursor = open + 2
+        continue
+      }
+      const raw = text.slice(open + 2, close)
+      const result = parseValueBody(raw, node.source, node, limits)
+      if ("code" in result) diagnostics.push(result)
+      else
+        placeholders.push({
+          ...result,
+          start: base + open,
+          end: base + close + 2,
+          source: node.source,
+          node,
+        })
+      cursor = close + 2
+    }
+  }
+  for (const child of paragraph.children) {
+    if (child.type === "text") {
+      if (segmentText.length === 0) segmentStart = logicalOffset
+      segmentText += child.text
+      logicalOffset += child.text.length
       continue
     }
-    if (open === -1) break
-    const node = nodeAt(paragraph, open)
-    const close = text.indexOf("}}", open + 2)
-    const nestedOpen = text.indexOf("{{", open + 2)
-    if (close === -1 || (nestedOpen !== -1 && nestedOpen < close)) {
-      diagnostics.push(templateDiagnostic("TEMPLATE_MALFORMED_TAG", "Template tags cannot be nested or left unclosed", node.source, node))
-      cursor = open + 2
-      continue
-    }
-    const raw = text.slice(open + 2, close)
-    const result = parseValueBody(raw, node.source, node, limits)
-    if ("code" in result) diagnostics.push(result)
-    else placeholders.push({ ...result, start: open, end: close + 2, source: node.source, node })
-    cursor = close + 2
+    parseSegment(segmentText, segmentStart)
+    segmentText = ""
+    logicalOffset += 1
+  }
+  parseSegment(segmentText, segmentStart)
+
+  const textBeforeBarrier = paragraph.children.some((child, index) => {
+    if (child.type === "text" || index === 0) return false
+    const before = paragraph.children
+      .slice(0, index)
+      .filter((item): item is SemanticText => item.type === "text")
+      .map((item) => item.text)
+      .join("")
+    const after = paragraph.children
+      .slice(index + 1)
+      .filter((item): item is SemanticText => item.type === "text")
+      .map((item) => item.text)
+      .join("")
+    return (
+      before.lastIndexOf("{{") > before.lastIndexOf("}}") &&
+      after.includes("}}")
+    )
+  })
+  if (textBeforeBarrier) {
+    const node = paragraph.children.find(
+      (child): child is SemanticText => child.type === "text"
+    )
+    if (node !== undefined)
+      diagnostics.push(
+        templateDiagnostic(
+          "TEMPLATE_INLINE_BARRIER",
+          "Template tags cannot span images or page fields",
+          node.source,
+          node
+        )
+      )
   }
   return { placeholders, diagnostics }
 }
 
-export function stableDiagnostics(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
+export function stableDiagnostics(
+  diagnostics: readonly Diagnostic[]
+): readonly Diagnostic[] {
   return diagnostics.slice()
 }

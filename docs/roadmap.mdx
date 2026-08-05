@@ -1,25 +1,54 @@
 ---
 title: "Roadmap"
-description: "What Phases 1–3 prove and the planned work for a broader DOCX profile."
+description: "Phase 6 status and the original future-phase ordering."
 ---
 
 # Roadmap
 
-Phases 1–3 prove a staged, deterministic path from a constrained DOCX main document through typed inline values, document styles, paragraph geometry, explicit TrueType font bytes, LTR Latin shaping, and searchable PDF output. The default font provider embeds complete TrueType programs; it does not perform true subsetting.
+Phases 1–6 form the current implemented renderer slice. Engine version `0.0.0-phase.6` adds bounded package-owned inline PNG/JPEG images, mixed portrait/landscape `nextPage` sections, inherited default headers/footers, header/footer template values, and global decimal page fields to the earlier table, paragraph, style, browser, template, numbering, and explicit-font capabilities. Phase 6 is implemented and hardening; it is not a claim of broad Word compatibility, complete cross-runtime proof, or production readiness.
 
-## Next renderer capabilities
+## Phase 4 — Implemented; hardening ongoing
 
-- Table parsing, normalization, measurement, fragmentation, and PDF display-list support.
-- Broader scripts and bidirectional shaping beyond the current LTR Latin boundary.
-- A production-ready deterministic TrueType subsetter behind the existing source-to-subset glyph-mapping seam.
-- Conditional and loop template blocks with explicit limits and source diagnostics.
-- Images and image-template tags with decoding, resource policy, and layout support.
-- Header/footer and broader section behavior.
+- Relationship-owned numbering definitions and overrides; supported bullet, decimal, letter, Roman, multilevel/custom, and legal labels.
+- Searchable source-linked labels, counter continuation/restarts, list indentation/wrapping, keep chains, keep-lines-together, and widow/orphan control.
+- Nested whole-paragraph `if`/optional `else`/`each`, item-relative object fields, safe formatters, canonical loop manifest paths, deterministic nested schema/starter data, and cumulative limits.
+- Explicit locale/time-zone formatter context with no ambient locale, time zone, or clock dependency.
 
-## Integration and operations
+## Phase 5 — Implemented; hardening ongoing
 
-- A defined Convex adapter with application-owned authorization, storage, audit, and retention policy.
-- Deployment configuration and a canonical hosted playground/product URL.
-- Broader compatibility fixtures, golden PDFs, layout-trace comparisons, and cross-runtime verification.
+- Positive integer-twip `tblGrid` geometry with exact explicit `tblW`/`tcW` equality and deterministic default margins.
+- Supported borders, clear-pattern solid shading, exact/at-least row heights, vertical alignment, `gridSpan`, and validated `vMerge` chains.
+- Dedicated whole-row `if`/optional `else`/`each` blocks with structural header/merge safeguards and cumulative limits.
+- Contiguous repeated headers, deterministic row fragmentation and `cantSplit` fallback diagnostics, source-linked traces, multi-page searchable output, and deterministic PDF strokes.
+- Explicitly excluded: percentage widths, nested tables, table styles/themes, complex shading, and complete Word autofit. Static images in supported cell paragraphs arrive in Phase 6.
 
-Each feature must enter through the staged architecture rather than bypassing it. Fontkit and complete TrueType embedding are recorded in [ADR 0004](/adr/0004-fontkit-full-font-embedding); that decision does not establish real-font fixture breadth, production readiness, or deployment proof.
+## Phase 6 — Implemented; hardening ongoing
+
+- Internal relationship-owned PNG/JPEG content with explicit positive inline dimensions, immutable bytes, source links, exact MIME/signature/dimension/profile validation, and count/byte/side/pixel/decoded-work limits.
+- Deterministic image preparation and exact-content deduplication; PDF image XObjects use DCT for JPEG, Flate for normalized PNG planes, and grayscale `/SMask` objects for alpha.
+- Multiple deterministic `nextPage` sections with portrait/landscape page geometry and matching per-page PDF `MediaBox` values.
+- Inherited default headers/footers with exact edge-relative distances (720-twip defaults), static images, reusable template values/formatters/paragraph blocks, and global decimal `PAGE`/`NUMPAGES` fields.
+- Binary-safe workspace-PDF validation that follows classic xref offsets and stream lengths, validates upright text/image resources, and extracts searchable per-page text.
+- Explicitly excluded: dynamic image tags/fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields.
+
+## Future phases
+
+The ordering below preserves the original project brief.
+
+### Phase 7 — Convex
+
+Define an optional Convex integration while preserving application-owned authorization, storage, auditing, retention, and deployment policy.
+
+### Phase 8 — Broader text and fonts
+
+Extend beyond LTR Latin, broaden licensed fixtures, evaluate deterministic true TrueType subsetting, and address CFF embedding without system-font discovery.
+
+### Phase 9 — Compatibility and runtime hardening
+
+Expand redistributable Word fixtures, golden PDFs, layout-trace comparisons, browser/supported-runtime verification, and resource-boundary evidence.
+
+### Phase 10 — Release and operational readiness
+
+Complete packaging, release policy, deployment documentation, production validation boundaries, and a canonical hosted product/playground decision.
+
+Each feature must enter through the staged architecture. Current focused tests do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, Convex behavior, deployment proof, or production readiness.

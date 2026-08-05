@@ -1,17 +1,19 @@
 ---
 title: "Template language"
-description: "Phase 1 inline value tags, paths, and type annotations."
+description: "Phase 6 values, safe formatters, body/header/footer blocks, static-inline barriers, and generated contracts."
 ---
 
 # Template language
 
-Phase 1 resolves inline value tags only. It never evaluates template code.
+Engine version `0.0.0-phase.6` resolves typed values, safe formatters, bounded whole-paragraph block tags in the body and reusable headers/footers, and dedicated whole-row table blocks. It never evaluates JavaScript or arbitrary helper code.
 
-## Grammar
+## Value tags
 
 ```text
 {{ path }}
 {{ path:type }}
+{{ path | formatter }}
+{{ path:type | formatter:"argument" }}
 ```
 
 `path` is a dotted property path. Each segment begins with a letter, `_`, or `$`, and remaining characters may also be digits. Prototype-related segments (`__proto__`, `prototype`, and `constructor`) are forbidden.
@@ -23,40 +25,113 @@ Phase 1 resolves inline value tags only. It never evaluates template code.
 {{invoice.issuedAt:date}}
 ```
 
-Supported explicit types are `string`, `number`, `boolean`, and `date`. Date values are strings; Phase 1 does not format them beyond substitution.
+Supported explicit types are `string`, `number`, `boolean`, and `date`. An explicit type requires its matching JSON value:
 
-## Data rules
+| Type      | Required input                            | Unformatted text       |
+| --------- | ----------------------------------------- | ---------------------- |
+| `string`  | string                                    | unchanged              |
+| `number`  | finite number                             | JavaScript string form |
+| `boolean` | boolean                                   | `true` or `false`      |
+| `date`    | string; formatter imposes the rules below | unchanged              |
 
-An explicit type requires its matching JSON value:
+Untyped fields accept strings, finite numbers, and booleans. Missing paths and type mismatches are errors by default.
 
-| Type      | Required input | Rendered text          |
-| --------- | -------------- | ---------------------- |
-| `string`  | string         | unchanged              |
-| `number`  | finite number  | JavaScript string form |
-| `boolean` | boolean        | `true` or `false`      |
-| `date`    | string         | unchanged              |
+## Safe formatters
 
-For untyped fields, strings, finite numbers, and booleans are accepted. Missing paths and type mismatches are errors by default. The lower-level resolver has a permissive mode that substitutes empty text with a warning; use that only when an application deliberately chooses it.
+Only these formatters are supported:
+
+```text
+{{customer.name:string | upper}}
+{{customer.code:string | lower}}
+{{invoice.total:number | currency:"ZAR"}}
+{{invoice.issuedAt:date | date:"d MMMM yyyy"}}
+```
+
+- `upper` and `lower` accept no argument.
+- `currency:"ISO"` requires one uppercase three-letter ISO currency code and an explicit render `locale`.
+- `date:"d MMMM yyyy"` supports only that exact pattern. It requires explicit render `locale` and `timeZone`, and the value must be an ISO 8601 date-time with an explicit `Z` or numeric offset, such as `2026-08-05T09:30:00+02:00`.
+
+Formatting uses explicit `Intl` context. It does not read the ambient locale, time zone, or clock. Unknown formatters, invalid arguments, incompatible formatter/type chains, and missing formatter context are errors.
+
+## Whole-paragraph blocks
+
+Block markers must be the only non-whitespace content in their paragraphs. Blocks may nest, and `if` may have one optional `else` branch.
+
+```text
+{{#if invoice.showDetails}}
+Details
+{{#each invoice.items}}
+{{description:string}} — {{amount:number | currency:"ZAR"}}
+{{/each}}
+{{else}}
+No details available
+{{/if}}
+```
+
+An `if` path must resolve to a boolean. An `each` path must resolve to an array, and every loop item must be an object. Value and nested block paths inside `each` are relative to the current item; root-level data is not used as an implicit fallback for a missing item field.
+
+Block tags cannot selectively include text inside a paragraph.
+
+## Table-row blocks
+
+The same `if`, optional `else`, and `each` syntax can structurally include or repeat table rows. Each marker must be in its own dedicated row and be the only visible content across every cell in that row. The enclosed content rows may contain inline values and nested row blocks; paths inside `each` remain item-relative.
+
+```text
+row: {{#if invoice.showItems}}
+row: {{#each invoice.items}}
+row: {{description:string}} | {{amount:number | currency:"ZAR"}}
+row: {{/each}}
+row: {{else}}
+row: No item details
+row: {{/if}}
+```
+
+Row blocks cannot contain or alter repeating header rows and cannot enclose vertical merges. A paragraph block opened inside a cell must close in that cell, and a row block must close in the same table. Mixed marker/content rows, cross-container blocks, unbalanced markers, and unsafe structural changes produce source-located diagnostics.
+
+Static images and `PAGE`/`NUMPAGES` fields are preserved inline content and act as hard boundaries for tag reconstruction and structural markers. They may be repeated by a valid surrounding paragraph/table block and count toward expansion/layout limits, but template resolution never creates or changes their resource, dimensions, or field kind.
+
+## Headers and footers
+
+Referenced default headers and footers are compiled once as reusable template definitions. Their paragraphs support the same inline values, safe formatters, nested whole-paragraph `if`/optional `else`/`each`, item-relative loop paths, and cumulative budgets as body paragraphs. A block must open and close inside the same header or footer; it cannot cross into another definition or the body. Automatic paragraph numbering in headers/footers is unsupported.
+
+Decimal `PAGE` and `NUMPAGES` are document fields, not template paths. They require no JSON data and are materialized by layout after global pagination.
 
 ## Generated contract
 
-Compilation generates these values from the tags it finds:
-
-- a sorted field manifest with source locations;
-- a JSON Schema (Draft 2020-12) where discovered fields are required; and
-- starter data using empty strings, `0`, `false`, or the fixed ISO timestamp `1970-01-01T00:00:00.000Z`.
-
-## Unsupported expressions
-
-The following are rejected in Phase 1:
+Compilation emits a sorted field manifest, deterministic JSON Schema Draft 2020-12, starter data, source locations, inferred syntax, and formatter references. Loop child fields use canonical paths:
 
 ```text
-{{#items}} ... {{/items}}   // loops
-{{#if paid}} ... {{/if}}   // conditions
-{{@image logo}}            // image tags
-{{amount | currency}}      // helpers/formatters
+invoice.items
+invoice.items[].amount
+invoice.items[].description
+invoice.showDetails
 ```
 
-Nested or unclosed tags are also errors. The renderer does not execute JavaScript, call services, or fetch network resources while resolving values.
+The JSON Schema nests objects and array-item objects deterministically, marks discovered properties required, and disallows unspecified object properties. Starter arrays contain exactly one object so their nested fields are immediately visible:
 
-`engine.compile()` throws when DOCX validation or normalization fails. Template-language problems are different: compilation returns a `CompiledTemplate` whose `diagnostics` can contain errors such as malformed, nested, unclosed, unsafe, or conflicting tags. Applications should inspect those diagnostics before rendering. A later high-level render rejects compiled error diagnostics rather than returning a PDF.
+```json
+{
+  "invoice": {
+    "items": [{ "amount": 0, "description": "" }],
+    "showDetails": false
+  }
+}
+```
+
+Date starter values use the fixed offset-bearing timestamp `1970-01-01T00:00:00.000Z`.
+
+## Limits and unsupported tags
+
+Expression depth and object traversal are bounded. Input JSON nodes and text bytes, loop iterations, expanded nodes, and expanded text are cumulative across a render; every JSON array also has a per-array item bound. Nested loops share the same expansion budgets. Applications may deliberately review engine limit overrides, but templates cannot bypass them.
+
+Dynamic image tags remain unsupported everywhere, including headers, footers, and table cells:
+
+```text
+{{@image logo}}
+{{logo:image}}
+{{image logo}}
+```
+
+Static relationship-owned DOCX images are supported because they are existing immutable document content. They are not represented in the generated data manifest/schema and cannot be selected, replaced, resized, fetched, or conditionally sourced by an image tag.
+
+Malformed, nested-inline, unclosed, unbalanced, or unsafe tags are errors. `engine.compile()` throws when DOCX normalization or template compilation cannot produce an acceptable template; applications should preserve its diagnostics.

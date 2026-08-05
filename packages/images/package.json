@@ -1,0 +1,22 @@
+{
+  "name": "@apex-docx-pdf/images",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apex-docx-pdf/core": "workspace:*",
+    "fast-png": "8.0.0",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "typescript": "^6"
+  }
+}

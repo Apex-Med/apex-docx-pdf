@@ -17,8 +17,18 @@ export type {
   DocxInspection,
   DocxParseOptions,
   ParsedDocxDocument,
+  ParsedDocxHeaderFooter,
+  ParsedDocxImage,
+  ParsedDocxImageAsset,
+  ParsedDocxInline,
+  ParsedDocxPageField,
+  ParsedDocxSection,
+  ParsedDocxBlock,
   ParsedDocxParagraph,
   ParsedDocxRun,
+  ParsedDocxTable,
+  ParsedDocxTableCell,
+  ParsedDocxTableRow,
   ParsedDocxText,
 } from "./types"
 export { normaliseDocx } from "./normalise"

@@ -1,10 +1,14 @@
 import { DEFAULT_RESOURCE_LIMITS, throwIfAborted } from "@apex-docx-pdf/core"
 import { XMLParser, XMLValidator } from "fast-xml-parser"
+import { unzlibSync } from "fflate"
 
 import { diagnostic, source } from "./diagnostics"
 import type {
   DocxParseOptions,
   ParsedDocxDocument,
+  ParsedDocxHeaderFooter,
+  ParsedDocxImageAsset,
+  ParsedDocxInline,
   ParsedDocxNumberingDefinition,
   ParsedDocxNumberingLevelDefinition,
   ParsedDocxParagraph,
@@ -12,6 +16,9 @@ import type {
   ParsedDocxRun,
   ParsedDocxRunProperties,
   ParsedDocxSectionProperties,
+  ParsedDocxTable,
+  ParsedDocxTableBorder,
+  ParsedDocxTableBorders,
   ParsedDocxText,
 } from "./types"
 import type { ValidatedDocxPackage } from "./zip"
@@ -40,7 +47,38 @@ const DEFAULT_SECTION: ParsedDocxSectionProperties = Object.freeze({
   marginRight: 1_440,
   marginBottom: 1_440,
   marginLeft: 1_440,
+  orientation: "portrait",
+  headerDistance: 720,
+  footerDistance: 720,
 })
+
+type OwnerRelationship = Readonly<{
+  id: string
+  type: string
+  target: string
+  external: boolean
+  index: number
+}>
+
+type MediaContext = {
+  pkg: ValidatedDocxPackage
+  relationships: Map<string, ReadonlyMap<string, OwnerRelationship>>
+  contentTypes: ReadonlyMap<string, string>
+  assets: Map<string, ParsedDocxImageAsset>
+  imageBytes: number
+}
+
+type ComplexFieldState = {
+  instruction: string
+  phase: "instruction" | "result"
+  separatorSeen: boolean
+  field?: {
+    type: "docx-page-field"
+    source: ReturnType<typeof source>
+    field: "PAGE" | "NUMPAGES"
+    displayText: string
+  }
+}
 const DEFAULT_PARAGRAPH: ParsedDocxParagraphProperties = Object.freeze({
   alignment: "left",
   spacingBefore: 0,
@@ -174,6 +212,19 @@ function textContent(element: OrderedElement): string {
     }
   }
   return ""
+}
+
+function descendantText(element: OrderedElement, expectedName: string): string {
+  let value = ""
+  const pending = [...childElements(element)]
+  while (pending.length > 0) {
+    const current = pending.shift()
+    if (current === undefined) break
+    if (localName(current.name) === expectedName)
+      value += textContent(current.element)
+    pending.unshift(...childElements(current.element))
+  }
+  return value
 }
 
 function parseXml(
@@ -505,6 +556,712 @@ function resolveTarget(ownerPart: string, target: string): string | undefined {
   return resolved.length > 0 ? resolved : undefined
 }
 
+function parseContentTypeMap(
+  root: OrderedElement
+): ReadonlyMap<string, string> {
+  const defaults = new Map<string, string>()
+  const overrides = new Map<string, string>()
+  for (const current of childElements(root)) {
+    if (localName(current.name) === "Default") {
+      const extension = attr(current.element, "Extension")?.toLowerCase()
+      const mimeType = attr(current.element, "ContentType")
+      if (extension !== undefined && mimeType !== undefined)
+        defaults.set(extension, mimeType)
+    } else if (localName(current.name) === "Override") {
+      const partName = attr(current.element, "PartName")
+      const mimeType = attr(current.element, "ContentType")
+      if (partName !== undefined && mimeType !== undefined)
+        overrides.set(partName.replace(/^\//u, ""), mimeType)
+    }
+  }
+  const result = new Map(overrides)
+  result.set("*defaults*", JSON.stringify(Object.fromEntries(defaults)))
+  return result
+}
+
+function contentTypeFor(
+  contentTypes: ReadonlyMap<string, string>,
+  part: string
+): string | undefined {
+  const exact = contentTypes.get(part)
+  if (exact !== undefined) return exact
+  const encodedDefaults = contentTypes.get("*defaults*")
+  const extension = part.split(".").pop()?.toLowerCase()
+  if (encodedDefaults === undefined || extension === undefined) return undefined
+  const defaults = JSON.parse(encodedDefaults) as Record<string, string>
+  return defaults[extension]
+}
+
+function buildOwnerRelationships(
+  pkg: ValidatedDocxPackage,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): Map<string, ReadonlyMap<string, OwnerRelationship>> {
+  const result = new Map<string, ReadonlyMap<string, OwnerRelationship>>()
+  const maxDepth =
+    options.limits?.maxXmlDepth ?? DEFAULT_RESOURCE_LIMITS.maxXmlDepth
+  for (const [relationshipPart, bytes] of pkg.parts) {
+    if (!relationshipPart.endsWith(".rels")) continue
+    const owner = relationshipOwnerPart(relationshipPart)
+    const xml = decodeXml(bytes)
+    const relationships =
+      xml === undefined ? undefined : relationshipPartTargets(xml, maxDepth)
+    if (owner === undefined || relationships === undefined) continue
+    const byId = new Map<string, OwnerRelationship>()
+    for (const relationship of relationships) {
+      if (relationship.id.length === 0 || byId.has(relationship.id)) {
+        diagnostics.push(
+          diagnostic(
+            "DOCX_DUPLICATE_RELATIONSHIP_ID",
+            `Relationship owner '${owner || "/"}' has a missing or duplicate Id '${relationship.id}'.`,
+            "error",
+            source(
+              relationshipPart,
+              `/Relationships/Relationship[${relationship.index}]`
+            )
+          )
+        )
+        continue
+      }
+      byId.set(relationship.id, relationship)
+    }
+    result.set(owner, byId)
+  }
+  return result
+}
+
+function imageDimensions(
+  bytes: Uint8Array,
+  mimeType: "image/png" | "image/jpeg",
+  signal?: AbortSignal
+): Readonly<{ width: number; height: number }> | undefined {
+  throwIfAborted(signal)
+  if (mimeType === "image/png") {
+    if (
+      bytes.length < 24 ||
+      bytes[0] !== 0x89 ||
+      bytes[1] !== 0x50 ||
+      bytes[2] !== 0x4e ||
+      bytes[3] !== 0x47 ||
+      bytes[4] !== 0x0d ||
+      bytes[5] !== 0x0a ||
+      bytes[6] !== 0x1a ||
+      bytes[7] !== 0x0a ||
+      String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR"
+    )
+      return undefined
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    return { width: view.getUint32(16), height: view.getUint32(20) }
+  }
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8)
+    return undefined
+  let offset = 2
+  while (offset + 9 < bytes.length) {
+    throwIfAborted(signal)
+    if (bytes[offset] !== 0xff) {
+      offset += 1
+      continue
+    }
+    const marker = bytes[offset + 1]
+    if (marker === undefined) return undefined
+    if (marker === 0xd8 || marker === 0xd9) {
+      offset += 2
+      continue
+    }
+    const length = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0)
+    if (length < 2 || offset + 2 + length > bytes.length) return undefined
+    if (
+      [
+        0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce,
+        0xcf,
+      ].includes(marker)
+    ) {
+      return {
+        height: ((bytes[offset + 5] ?? 0) << 8) | (bytes[offset + 6] ?? 0),
+        width: ((bytes[offset + 7] ?? 0) << 8) | (bytes[offset + 8] ?? 0),
+      }
+    }
+    offset += 2 + length
+  }
+  return undefined
+}
+
+const PNG_CRC_TABLE = Uint32Array.from({ length: 256 }, (_, value) => {
+  let crc = value
+  for (let bit = 0; bit < 8; bit += 1)
+    crc = (crc & 1) !== 0 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+  return crc >>> 0
+})
+
+function pngCrc32(
+  type: Uint8Array,
+  data: Uint8Array,
+  signal?: AbortSignal
+): number {
+  let crc = 0xffffffff
+  let scanned = 0
+  for (const bytes of [type, data]) {
+    for (const byte of bytes) {
+      if ((scanned++ & 0xffff) === 0) throwIfAborted(signal)
+      crc = (PNG_CRC_TABLE[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function readImageU16(bytes: Uint8Array, offset: number): number {
+  return ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0)
+}
+
+function readImageU32(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset] ?? 0) * 0x1000000 +
+      ((bytes[offset + 1] ?? 0) << 16) +
+      ((bytes[offset + 2] ?? 0) << 8) +
+      (bytes[offset + 3] ?? 0)) >>>
+    0
+  )
+}
+
+function imageProfileError(
+  mimeType: "image/png" | "image/jpeg",
+  bytes: Uint8Array,
+  dimensions: Readonly<{ width: number; height: number }>,
+  maxBytes: number,
+  signal?: AbortSignal
+): string | undefined {
+  if (mimeType === "image/png") {
+    if (bytes.length < 33)
+      return "PNG is shorter than the supported image profile"
+    let offset = 8
+    let chunks = 0
+    let sawHeader = false
+    let sawData = false
+    let sawEnd = false
+    const compressed: Uint8Array[] = []
+    let rowBytes = 0
+    while (offset < bytes.length) {
+      throwIfAborted(signal)
+      if (++chunks > 10_000)
+        return "PNG chunk count exceeds the image preparation profile"
+      if (offset + 12 > bytes.length) return "PNG contains a truncated chunk"
+      const length = readImageU32(bytes, offset)
+      if (length > maxBytes || offset + 12 + length > bytes.length)
+        return "PNG contains an invalid chunk length"
+      const typeBytes = bytes.subarray(offset + 4, offset + 8)
+      const type = String.fromCharCode(...typeBytes)
+      if (!/^[A-Za-z]{4}$/u.test(type))
+        return "PNG contains an invalid chunk type"
+      const data = bytes.subarray(offset + 8, offset + 8 + length)
+      if (
+        pngCrc32(typeBytes, data, signal) !==
+        readImageU32(bytes, offset + 8 + length)
+      )
+        return `PNG ${type} chunk has an invalid CRC`
+      if (!sawHeader && type !== "IHDR")
+        return "PNG IHDR is not the first chunk"
+      if (type === "IHDR") {
+        if (sawHeader || length !== 13) return "PNG has an invalid IHDR chunk"
+        sawHeader = true
+        const depth = data[8] ?? -1
+        const color = data[9] ?? -1
+        const channels =
+          color === 0
+            ? 1
+            : color === 2
+              ? 3
+              : color === 3
+                ? 1
+                : color === 4
+                  ? 2
+                  : color === 6
+                    ? 4
+                    : 0
+        const legal =
+          (color === 0 && [1, 2, 4, 8, 16].includes(depth)) ||
+          (color === 2 && [8, 16].includes(depth)) ||
+          (color === 3 && [1, 2, 4, 8].includes(depth)) ||
+          (color === 4 && [8, 16].includes(depth)) ||
+          (color === 6 && [8, 16].includes(depth))
+        if (!legal || data[10] !== 0 || data[11] !== 0 || data[12] !== 0)
+          return "PNG IHDR uses an unsupported profile"
+        if (
+          readImageU32(data, 0) !== dimensions.width ||
+          readImageU32(data, 4) !== dimensions.height
+        )
+          return "PNG IHDR dimensions disagree with the image asset"
+        rowBytes = Math.ceil((dimensions.width * channels * depth) / 8)
+      } else if (["acTL", "fcTL", "fdAT"].includes(type)) {
+        return "Animated PNG is unsupported"
+      } else if (["iCCP", "zTXt", "iTXt"].includes(type)) {
+        return "Compressed PNG metadata is unsupported"
+      } else if (type === "IDAT") {
+        sawData = true
+        compressed.push(data)
+      } else if (type === "IEND") {
+        if (length !== 0 || !sawData)
+          return "PNG has an invalid IEND or no IDAT"
+        sawEnd = true
+        offset += 12
+        break
+      } else if (
+        (typeBytes[0] ?? 0) >= 65 &&
+        (typeBytes[0] ?? 0) <= 90 &&
+        type !== "PLTE"
+      ) {
+        return `PNG contains unsupported critical chunk ${type}`
+      }
+      offset += 12 + length
+    }
+    if (!sawEnd || offset !== bytes.length)
+      return "PNG must end exactly at IEND"
+    let compressedBytes = 0
+    for (const chunk of compressed) compressedBytes += chunk.length
+    const joined = new Uint8Array(compressedBytes)
+    let cursor = 0
+    for (const chunk of compressed) {
+      throwIfAborted(signal)
+      joined.set(chunk, cursor)
+      cursor += chunk.length
+    }
+    const expectedDecodedBytes = (rowBytes + 1) * dimensions.height
+    if (
+      !Number.isSafeInteger(expectedDecodedBytes) ||
+      expectedDecodedBytes > 400_000_000
+    ) {
+      return "PNG decoded scanlines exceed the image preparation byte limit"
+    }
+    try {
+      const decoded = unzlibSync(joined)
+      if (decoded.length !== expectedDecodedBytes)
+        return "PNG scanline byte count does not match its dimensions"
+      for (let row = 0; row < dimensions.height; row += 1) {
+        if ((row & 0x3ff) === 0) throwIfAborted(signal)
+        if ((decoded[row * (rowBytes + 1)] ?? 5) > 4)
+          return "PNG uses an invalid row filter"
+      }
+    } catch {
+      return "PNG IDAT data cannot be decoded"
+    }
+    return undefined
+  }
+
+  let offset = 2
+  let width = 0
+  let height = 0
+  let components = 0
+  let sawFrame = false
+  let sawScan = false
+  let jfif = false
+  let adobeTransform: number | undefined
+  let markers = 0
+  while (offset < bytes.length) {
+    throwIfAborted(signal)
+    if (++markers > 10_000)
+      return "JPEG marker count exceeds the image preparation profile"
+    if (bytes[offset] !== 0xff) return "JPEG marker is malformed"
+    while (bytes[offset] === 0xff) offset += 1
+    const marker = bytes[offset++]
+    if (marker === undefined) return "JPEG marker is truncated"
+    if (marker === 0xd9) {
+      if (!sawScan || offset !== bytes.length) return "JPEG EOI is invalid"
+      break
+    }
+    if (marker === 0xda) {
+      if (offset + 2 > bytes.length) return "JPEG SOS is truncated"
+      const length = readImageU16(bytes, offset)
+      if (length < 2 || offset + length > bytes.length)
+        return "JPEG SOS length is invalid"
+      sawScan = true
+      offset += length
+      while (offset + 1 < bytes.length) {
+        if ((offset & 0xffff) === 0) throwIfAborted(signal)
+        if (bytes[offset] !== 0xff) {
+          offset += 1
+          continue
+        }
+        const next = bytes[offset + 1]
+        if (
+          next === 0 ||
+          (next !== undefined && next >= 0xd0 && next <= 0xd7)
+        ) {
+          offset += 2
+          continue
+        }
+        break
+      }
+      continue
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue
+    if (offset + 2 > bytes.length) return "JPEG segment is truncated"
+    const length = readImageU16(bytes, offset)
+    if (length < 2 || length > maxBytes || offset + length > bytes.length)
+      return "JPEG segment length is invalid"
+    const data = bytes.subarray(offset + 2, offset + length)
+    const starts = (prefix: readonly number[]) =>
+      prefix.every((value, index) => data[index] === value)
+    if (marker === 0xe0 && starts([0x4a, 0x46, 0x49, 0x46, 0])) jfif = true
+    if (marker === 0xe1 && starts([0x45, 0x78, 0x69, 0x66, 0, 0])) {
+      const exifError = jpegExifProfileError(data.subarray(6))
+      if (exifError !== undefined) return exifError
+    }
+    if (
+      marker === 0xe2 &&
+      starts([
+        0x49, 0x43, 0x43, 0x5f, 0x50, 0x52, 0x4f, 0x46, 0x49, 0x4c, 0x45, 0,
+      ])
+    )
+      return "JPEG ICC profiles are unsupported"
+    if (marker === 0xee && starts([0x41, 0x64, 0x6f, 0x62, 0x65]))
+      adobeTransform = data[11]
+    if (marker === 0xc0 || marker === 0xc2) {
+      if (sawFrame || data.length < 6)
+        return "JPEG frame is invalid or duplicated"
+      sawFrame = true
+      if (data[0] !== 8) return "Only 8-bit JPEG is supported"
+      height = readImageU16(data, 1)
+      width = readImageU16(data, 3)
+      components = data[5] ?? 0
+      if (data.length !== 6 + components * 3)
+        return "JPEG component table is invalid"
+    } else if (
+      marker >= 0xc0 &&
+      marker <= 0xcf &&
+      ![0xc4, 0xc8, 0xcc].includes(marker)
+    ) {
+      return "JPEG frame type is unsupported"
+    }
+    offset += length
+  }
+  if (
+    !sawFrame ||
+    !sawScan ||
+    bytes[bytes.length - 2] !== 0xff ||
+    bytes[bytes.length - 1] !== 0xd9
+  )
+    return "JPEG is missing a supported frame, scan, or EOI"
+  if (width !== dimensions.width || height !== dimensions.height)
+    return "JPEG frame dimensions disagree with the image asset"
+  if (components !== 1 && components !== 3)
+    return "JPEG must be grayscale or three-component"
+  if (components === 3 && !jfif && adobeTransform === undefined)
+    return "JPEG color transform is ambiguous"
+  if (components === 3 && jfif && adobeTransform === 0)
+    return "JPEG color transforms conflict"
+  if (
+    adobeTransform !== undefined &&
+    adobeTransform !== 0 &&
+    adobeTransform !== 1
+  )
+    return "JPEG Adobe transform is unsupported"
+  return undefined
+}
+
+function jpegExifProfileError(bytes: Uint8Array): string | undefined {
+  if (bytes.length < 8) return "JPEG EXIF metadata is truncated"
+  const little =
+    bytes[0] === 0x49 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x2a &&
+    bytes[3] === 0
+  const big =
+    bytes[0] === 0x4d &&
+    bytes[1] === 0x4d &&
+    bytes[2] === 0 &&
+    bytes[3] === 0x2a
+  if (!little && !big) return "JPEG EXIF byte order is invalid"
+  const u16 = (at: number) =>
+    little
+      ? (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8)
+      : ((bytes[at] ?? 0) << 8) | (bytes[at + 1] ?? 0)
+  const u32 = (at: number) =>
+    little
+      ? ((bytes[at] ?? 0) |
+          ((bytes[at + 1] ?? 0) << 8) |
+          ((bytes[at + 2] ?? 0) << 16) |
+          ((bytes[at + 3] ?? 0) << 24)) >>>
+        0
+      : (((bytes[at] ?? 0) << 24) |
+          ((bytes[at + 1] ?? 0) << 16) |
+          ((bytes[at + 2] ?? 0) << 8) |
+          (bytes[at + 3] ?? 0)) >>>
+        0
+  const ifd = u32(4)
+  if (ifd + 2 > bytes.length) return "JPEG EXIF IFD offset is invalid"
+  const count = u16(ifd)
+  if (ifd + 2 + count * 12 > bytes.length) return "JPEG EXIF IFD is truncated"
+  for (let index = 0; index < count; index += 1) {
+    const entry = ifd + 2 + index * 12
+    if (u16(entry) !== 0x0112) continue
+    if (u16(entry + 2) !== 3 || u32(entry + 4) !== 1)
+      return "JPEG EXIF orientation is invalid"
+    const orientation = u16(entry + 8)
+    if (orientation !== 1)
+      return `JPEG EXIF orientation ${orientation} is unsupported`
+  }
+  return undefined
+}
+
+function frozenImageBytes(
+  bytes: Uint8Array,
+  signal?: AbortSignal
+): readonly number[] {
+  const copy = new Array<number>(bytes.length)
+  for (let index = 0; index < bytes.length; index += 1) {
+    if ((index & 0xffff) === 0) throwIfAborted(signal)
+    copy[index] = bytes[index] ?? 0
+  }
+  return Object.freeze(copy)
+}
+
+function mediaProblem(
+  diagnostics: ReturnType<typeof diagnostic>[],
+  code: string,
+  message: string,
+  location: ReturnType<typeof source>
+): void {
+  diagnostics.push(diagnostic(code, message, "error", location))
+  diagnostics.push(
+    diagnostic(
+      "DOCX_CONTENT_LOSS",
+      "Rendering cannot continue because image content would be omitted or ambiguous.",
+      "error",
+      location
+    )
+  )
+}
+
+function parseDrawing(
+  element: OrderedElement,
+  part: string,
+  xmlPath: string,
+  context: MediaContext,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): ParsedDocxInline | undefined {
+  const inlineElements = children(element, "inline")
+  if (children(element, "anchor").length > 0) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_FLOATING_IMAGE",
+      "Floating or anchored DrawingML images are not supported.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  if (inlineElements.length !== 1) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_MALFORMED_DRAWING",
+      "DrawingML must contain exactly one inline drawing.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  const inline = inlineElements[0]?.element
+  if (inline === undefined) return undefined
+  const extent = child(inline, "extent")?.element
+  const cx = integer(attr(extent, "cx"))
+  const cy = integer(attr(extent, "cy"))
+  const graphic = child(inline, "graphic")?.element
+  const graphicData =
+    graphic === undefined ? undefined : child(graphic, "graphicData")?.element
+  const picture =
+    graphicData === undefined ? undefined : child(graphicData, "pic")?.element
+  const blipFill =
+    picture === undefined ? undefined : child(picture, "blipFill")?.element
+  const blip =
+    blipFill === undefined ? undefined : child(blipFill, "blip")?.element
+  const relationshipId = attr(blip, "embed")
+  if (
+    cx === undefined ||
+    cy === undefined ||
+    cx <= 0 ||
+    cy <= 0 ||
+    relationshipId === undefined
+  ) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_MALFORMED_DRAWING",
+      "Inline DrawingML requires a relationship embed and explicit positive EMU extent.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  const relationship = context.relationships.get(part)?.get(relationshipId)
+  const imageTypes = new Set([
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    "http://purl.oclc.org/ooxml/officeDocument/relationships/image",
+  ])
+  if (relationship === undefined || !imageTypes.has(relationship.type)) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_MISSING_IMAGE_RELATIONSHIP",
+      `Image embed '${relationshipId}' is missing from the owning part's relationships.`,
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  if (relationship.external) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_EXTERNAL_IMAGE_RELATIONSHIP",
+      "External image relationships are forbidden.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  const target = resolveTarget(part, relationship.target)
+  const bytes = target === undefined ? undefined : context.pkg.parts.get(target)
+  if (target === undefined || bytes === undefined) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_MISSING_IMAGE_PART",
+      "The image relationship does not resolve to an internal package part.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  const declaredMime = contentTypeFor(context.contentTypes, target)
+  if (declaredMime !== "image/png" && declaredMime !== "image/jpeg") {
+    mediaProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_IMAGE_TYPE",
+      `Image part '${target}' does not declare PNG or JPEG content.`,
+      source(target, "/")
+    )
+    return undefined
+  }
+  const dimensions = imageDimensions(bytes, declaredMime, options.signal)
+  if (
+    dimensions === undefined ||
+    dimensions.width <= 0 ||
+    dimensions.height <= 0
+  ) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_INVALID_IMAGE_SIGNATURE",
+      `Image part '${target}' does not match its declared ${declaredMime} signature.`,
+      source(target, "/")
+    )
+    return undefined
+  }
+  const maxCount =
+    options.limits?.maxImageCount ?? DEFAULT_RESOURCE_LIMITS.maxImageCount
+  const maxBytes =
+    options.limits?.maxImageBytes ?? DEFAULT_RESOURCE_LIMITS.maxImageBytes
+  const maxDimension =
+    options.limits?.maxImageDimensionPixels ??
+    DEFAULT_RESOURCE_LIMITS.maxImageDimensionPixels
+  const maxPixels =
+    options.limits?.maxImagePixels ?? DEFAULT_RESOURCE_LIMITS.maxImagePixels
+  if (
+    dimensions.width > maxDimension ||
+    dimensions.height > maxDimension ||
+    dimensions.width > Math.floor(maxPixels / dimensions.height)
+  ) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_IMAGE_DIMENSION_LIMIT",
+      `Image dimensions ${dimensions.width}x${dimensions.height} exceed the ${maxDimension}-pixel side or ${maxPixels}-pixel area limit.`,
+      source(target, "/")
+    )
+    return undefined
+  }
+  const profileError = imageProfileError(
+    declaredMime,
+    bytes,
+    dimensions,
+    maxBytes,
+    options.signal
+  )
+  if (profileError !== undefined) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_IMAGE_PROFILE",
+      `Image part '${target}' is rejected by the bounded PDF image profile: ${profileError}.`,
+      source(target, "/")
+    )
+    return undefined
+  }
+  let asset = context.assets.get(target)
+  if (asset === undefined) {
+    if (
+      context.assets.size + 1 > maxCount ||
+      context.imageBytes + bytes.byteLength > maxBytes
+    ) {
+      mediaProblem(
+        diagnostics,
+        "DOCX_IMAGE_RESOURCE_LIMIT",
+        `Embedded images exceed the configured count (${maxCount}) or byte (${maxBytes}) limit.`,
+        source(target, "/")
+      )
+      return undefined
+    }
+    context.imageBytes += bytes.byteLength
+    asset = Object.freeze({
+      type: "docx-image-asset" as const,
+      id: `docx:asset:${target}`,
+      source: source(target, "/"),
+      packagePath: target,
+      mimeType: declaredMime,
+      bytes: frozenImageBytes(bytes, options.signal),
+      pixelWidth: dimensions.width,
+      pixelHeight: dimensions.height,
+    })
+    context.assets.set(target, asset)
+  }
+  const frameProperties = child(inline, "cNvGraphicFramePr")?.element
+  const aspectLocks =
+    frameProperties === undefined
+      ? undefined
+      : child(frameProperties, "graphicFrameLocks")?.element
+  const rawPreserveAspect = attr(aspectLocks, "noChangeAspect")?.toLowerCase()
+  const preserveAspect =
+    rawPreserveAspect === "1" ||
+    rawPreserveAspect === "true" ||
+    rawPreserveAspect === "on"
+  if (
+    rawPreserveAspect !== undefined &&
+    !["0", "1", "true", "false", "on", "off"].includes(rawPreserveAspect)
+  ) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_MALFORMED_DRAWING",
+      `DrawingML noChangeAspect value '${rawPreserveAspect}' is invalid.`,
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  const intrinsicRatio = dimensions.width / dimensions.height
+  const extentRatio = cx / cy
+  // OOXML extents are exact EMUs; allow only a small rounding tolerance.
+  const ratioTolerance = 0.001
+  if (
+    preserveAspect &&
+    Math.abs(extentRatio - intrinsicRatio) / intrinsicRatio > ratioTolerance
+  ) {
+    mediaProblem(
+      diagnostics,
+      "DOCX_IMAGE_ASPECT_MISMATCH",
+      "DrawingML locks image aspect ratio, but its extent conflicts with the intrinsic image ratio.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  return {
+    type: "docx-image",
+    source: source(part, xmlPath),
+    assetId: asset.id,
+    widthTwips: Math.max(1, Math.round(cx / 635)),
+    heightTwips: Math.max(1, Math.round(cy / 635)),
+    pixelWidth: dimensions.width,
+    pixelHeight: dimensions.height,
+    intrinsicRatio,
+    preserveAspect,
+  }
+}
+
 function resolveOfficeDocumentPart(
   pkg: ValidatedDocxPackage,
   options: DocxParseOptions
@@ -512,8 +1269,10 @@ function resolveOfficeDocumentPart(
   const diagnostics: ReturnType<typeof diagnostic>[] = []
   const maxXmlDepth =
     options.limits?.maxXmlDepth ?? DEFAULT_RESOURCE_LIMITS.maxXmlDepth
-  const OFFICE_DOCUMENT_RELATIONSHIP =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+  const OFFICE_DOCUMENT_RELATIONSHIPS = new Set([
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+    "http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument",
+  ])
   for (const [part, bytes] of pkg.parts) {
     if (!part.endsWith(".rels")) {
       continue
@@ -582,7 +1341,7 @@ function resolveOfficeDocumentPart(
         )
         if (
           part === "_rels/.rels" &&
-          relation.type === OFFICE_DOCUMENT_RELATIONSHIP
+          OFFICE_DOCUMENT_RELATIONSHIPS.has(relation.type)
         ) {
           diagnostics.push(
             diagnostic(
@@ -638,8 +1397,8 @@ function resolveOfficeDocumentPart(
       ],
     }
   }
-  const officeDocumentRelationships = rootRelationships.filter(
-    (relationship) => relationship.type === OFFICE_DOCUMENT_RELATIONSHIP
+  const officeDocumentRelationships = rootRelationships.filter((relationship) =>
+    OFFICE_DOCUMENT_RELATIONSHIPS.has(relationship.type)
   )
   if (officeDocumentRelationships.length !== 1) {
     return {
@@ -811,6 +1570,44 @@ function reportFormattingProblem(
   )
 }
 
+function reportTableProblem(
+  diagnostics: ReturnType<typeof diagnostic>[],
+  code:
+    | "DOCX_INVALID_TABLE"
+    | "DOCX_INVALID_TABLE_VALUE"
+    | "DOCX_AMBIGUOUS_TABLE"
+    | "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+  message: string,
+  location: ReturnType<typeof source>
+): void {
+  diagnostics.push(diagnostic(code, message, "error", location))
+  diagnostics.push(
+    diagnostic(
+      "DOCX_CONTENT_LOSS",
+      "Rendering cannot continue because table content or layout would be ambiguous or omitted.",
+      "error",
+      location
+    )
+  )
+}
+
+function reportSectionProblem(
+  diagnostics: ReturnType<typeof diagnostic>[],
+  code: "DOCX_INVALID_SECTION_STRUCTURE" | "DOCX_UNSUPPORTED_SECTION_BREAK",
+  message: string,
+  location: ReturnType<typeof source>
+): void {
+  diagnostics.push(diagnostic(code, message, "error", location))
+  diagnostics.push(
+    diagnostic(
+      "DOCX_CONTENT_LOSS",
+      "Rendering cannot continue because section pagination or content ownership would be ambiguous.",
+      "error",
+      location
+    )
+  )
+}
+
 function validatePropertyChildren(
   element: OrderedElement | undefined,
   allowed: ReadonlySet<string>,
@@ -873,6 +1670,7 @@ const PARAGRAPH_PROPERTY_NAMES = new Set([
   "widowControl",
   "pageBreakBefore",
   "numPr",
+  "sectPr",
 ])
 const RUN_PROPERTY_NAMES = new Set([
   "rStyle",
@@ -1021,11 +1819,20 @@ function parseParagraphProperties(
       diagnostics
     )
   }
-  const rawNumberingId = attr(child(numbering ?? element, "numId")?.element, "val")
+  const rawNumberingId = attr(
+    child(numbering ?? element, "numId")?.element,
+    "val"
+  )
   const numberingId = integer(rawNumberingId)
-  const rawNumberingLevel = attr(child(numbering ?? element, "ilvl")?.element, "val")
+  const rawNumberingLevel = attr(
+    child(numbering ?? element, "ilvl")?.element,
+    "val"
+  )
   const numberingLevel = integer(rawNumberingLevel)
-  if (rawNumberingId !== undefined && (numberingId === undefined || numberingId < 0)) {
+  if (
+    rawNumberingId !== undefined &&
+    (numberingId === undefined || numberingId < 0)
+  ) {
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
@@ -1066,7 +1873,11 @@ function parseParagraphProperties(
         }),
     ...(booleanProperty(child(element, "widowControl")?.element) === undefined
       ? {}
-      : { widowControl: booleanProperty(child(element, "widowControl")?.element) }),
+      : {
+          widowControl: booleanProperty(
+            child(element, "widowControl")?.element
+          ),
+        }),
     ...(booleanProperty(child(element, "pageBreakBefore")?.element) ===
     undefined
       ? {}
@@ -1273,7 +2084,9 @@ function resolveNumberingPart(
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering",
     "http://purl.oclc.org/ooxml/officeDocument/relationships/numbering",
   ])
-  const matches = relationships.filter(({ type }) => relationshipTypes.has(type))
+  const matches = relationships.filter(({ type }) =>
+    relationshipTypes.has(type)
+  )
   if (matches.length === 0) return { diagnostics: [] }
   if (matches.length !== 1) {
     return {
@@ -1430,7 +2243,10 @@ function parseNumberingLevel(
     )
     return undefined
   }
-  const indentation = child(child(element, "pPr")?.element ?? element, "ind")?.element
+  const indentation = child(
+    child(element, "pPr")?.element ?? element,
+    "ind"
+  )?.element
   const rawIndentStart = attr(indentation, "start")
   const rawIndentLeft = attr(indentation, "left")
   const rawFirstLine = attr(indentation, "firstLine")
@@ -1452,7 +2268,11 @@ function parseNumberingLevel(
     )
     return undefined
   }
-  if (indentStart !== undefined && indentLeft !== undefined && indentStart !== indentLeft) {
+  if (
+    indentStart !== undefined &&
+    indentLeft !== undefined &&
+    indentStart !== indentLeft
+  ) {
     diagnostics.push(
       diagnostic(
         "DOCX_INDENT_CONFLICT",
@@ -1488,7 +2308,10 @@ function parseNumberingLevel(
   }
   const legalElement = child(element, "isLgl")?.element
   const rawLegal = attr(legalElement, "val")?.toLowerCase()
-  if (rawLegal !== undefined && !["0", "1", "true", "false", "on", "off"].includes(rawLegal)) {
+  if (
+    rawLegal !== undefined &&
+    !["0", "1", "true", "false", "on", "off"].includes(rawLegal)
+  ) {
     reportNumberingProblem(
       diagnostics,
       "DOCX_INVALID_NUMBERING_VALUE",
@@ -1507,7 +2330,13 @@ function parseNumberingLevel(
     indentStart: indentStart ?? indentLeft ?? 0,
     firstLineIndent: firstLine ?? -(hanging ?? 0),
     restartAfterLevel:
-      restart === 0 ? null : restart === undefined ? (level === 0 ? null : level - 1) : restart - 1,
+      restart === 0
+        ? null
+        : restart === undefined
+          ? level === 0
+            ? null
+            : level - 1
+          : restart - 1,
     legal: booleanProperty(legalElement) ?? false,
   }
 }
@@ -1524,7 +2353,10 @@ function parseNumberingDefinitions(
   const root =
     xml === undefined
       ? undefined
-      : parseXml(xml, options.limits?.maxXmlDepth ?? DEFAULT_RESOURCE_LIMITS.maxXmlDepth)
+      : parseXml(
+          xml,
+          options.limits?.maxXmlDepth ?? DEFAULT_RESOURCE_LIMITS.maxXmlDepth
+        )
   if (root === undefined || localName(root.name) !== "numbering") {
     reportNumberingProblem(
       diagnostics,
@@ -1555,7 +2387,11 @@ function parseNumberingDefinitions(
       abstractIndex += 1
       const path = `/${root.name}[1]/${current.name}[${abstractIndex}]`
       const abstractId = integer(attr(current.element, "abstractNumId"))
-      if (abstractId === undefined || abstractId < 0 || abstracts.has(abstractId)) {
+      if (
+        abstractId === undefined ||
+        abstractId < 0 ||
+        abstracts.has(abstractId)
+      ) {
         reportNumberingProblem(
           diagnostics,
           abstractId !== undefined && abstracts.has(abstractId)
@@ -1601,7 +2437,9 @@ function parseNumberingDefinitions(
       numIndex += 1
       const path = `/${root.name}[1]/${current.name}[${numIndex}]`
       const numId = integer(attr(current.element, "numId"))
-      const abstractId = integer(attr(child(current.element, "abstractNumId")?.element, "val"))
+      const abstractId = integer(
+        attr(child(current.element, "abstractNumId")?.element, "val")
+      )
       if (
         numId === undefined ||
         numId <= 0 ||
@@ -1631,7 +2469,10 @@ function parseNumberingDefinitions(
         overrideIndex += 1
         const overridePath = `${path}/${overrideElement.name}[${overrideIndex}]`
         const overrideLevel = integer(attr(overrideElement.element, "ilvl"))
-        const startOverrideElement = child(overrideElement.element, "startOverride")?.element
+        const startOverrideElement = child(
+          overrideElement.element,
+          "startOverride"
+        )?.element
         const rawStartOverride = attr(startOverrideElement, "val")
         const startOverride = integer(rawStartOverride)
         const replacementElement = child(overrideElement.element, "lvl")
@@ -1695,28 +2536,30 @@ function parseNumberingDefinitions(
           )
         }
       }
-      return [{
-        id: `docx-num-${instance.numId}`,
-        levels: [
-          ...new Set([
-            ...abstract.levels.keys(),
-            ...instance.overrides.keys(),
-          ]),
-        ]
-          .sort((left, right) => left - right)
-          .flatMap((levelNumber) => {
-            const override = instance.overrides.get(levelNumber)
-            const level = override?.level ?? abstract.levels.get(levelNumber)
-            return level === undefined
-              ? []
-              : [
-                  {
-                    ...level,
-                    startAt: override?.startAt ?? level.startAt,
-                  },
-                ]
-          }),
-      }]
+      return [
+        {
+          id: `docx-num-${instance.numId}`,
+          levels: [
+            ...new Set([
+              ...abstract.levels.keys(),
+              ...instance.overrides.keys(),
+            ]),
+          ]
+            .sort((left, right) => left - right)
+            .flatMap((levelNumber) => {
+              const override = instance.overrides.get(levelNumber)
+              const level = override?.level ?? abstract.levels.get(levelNumber)
+              return level === undefined
+                ? []
+                : [
+                    {
+                      ...level,
+                      startAt: override?.startAt ?? level.startAt,
+                    },
+                  ]
+            }),
+        },
+      ]
     })
 }
 
@@ -2050,21 +2893,141 @@ function parseRun(
   options: DocxParseOptions,
   diagnostics: ReturnType<typeof diagnostic>[],
   sheet: StyleSheet,
-  paragraphRunProperties: PartialRunProperties
+  paragraphRunProperties: PartialRunProperties,
+  media: MediaContext,
+  fieldState: { current?: ComplexFieldState }
 ): ParsedDocxRun {
   const texts: ParsedDocxText[] = []
+  const inlines: ParsedDocxInline[] = []
+  let allRunText = ""
   const counts = new Map<string, number>()
   for (const current of childElements(element)) {
     const name = localName(current.name)
     const count = (counts.get(name) ?? 0) + 1
     counts.set(name, count)
     if (name === "t") {
-      texts.push({
+      const parsedText: ParsedDocxText = {
         type: "docx-text",
         text: textContent(current.element),
         preserveSpace: attr(current.element, "space") === "preserve",
         source: source(part, `${xmlPath}/${current.name}[${count}]`),
-      })
+      }
+      allRunText += parsedText.text
+      if (
+        fieldState.current?.phase === "result" &&
+        fieldState.current.field !== undefined
+      ) {
+        fieldState.current.field.displayText += parsedText.text
+      } else {
+        texts.push(parsedText)
+        inlines.push(parsedText)
+      }
+    } else if (name === "drawing") {
+      const image = parseDrawing(
+        current.element,
+        part,
+        `${xmlPath}/${current.name}[${count}]`,
+        media,
+        options,
+        diagnostics
+      )
+      if (image !== undefined) inlines.push(image)
+    } else if (name === "fldChar") {
+      const fieldType = attr(current.element, "fldCharType")
+      if (fieldType === "begin") {
+        if (fieldState.current !== undefined)
+          reportFormattingProblem(
+            diagnostics,
+            "DOCX_INVALID_STYLE_VALUE",
+            "Nested complex fields are not supported.",
+            source(part, `${xmlPath}/${current.name}[${count}]`)
+          )
+        fieldState.current = {
+          instruction: "",
+          phase: "instruction",
+          separatorSeen: false,
+        }
+      } else if (fieldType === "separate") {
+        if (fieldState.current === undefined) {
+          reportFormattingProblem(
+            diagnostics,
+            "DOCX_INVALID_STYLE_VALUE",
+            "A complex field separator has no matching begin.",
+            source(part, `${xmlPath}/${current.name}[${count}]`)
+          )
+        } else if (
+          fieldState.current.separatorSeen ||
+          fieldState.current.phase !== "instruction"
+        ) {
+          reportFormattingProblem(
+            diagnostics,
+            "DOCX_INVALID_STYLE_VALUE",
+            "A complex field must contain exactly one separator.",
+            source(part, `${xmlPath}/${current.name}[${count}]`)
+          )
+        } else {
+          const kind = parsePageFieldInstruction(fieldState.current.instruction)
+          if (kind === undefined) {
+            reportFormattingProblem(
+              diagnostics,
+              "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+              "Only PAGE and NUMPAGES fields with decimal or no-op switches are supported.",
+              source(part, `${xmlPath}/${current.name}[${count}]`)
+            )
+            fieldState.current.separatorSeen = true
+            fieldState.current.phase = "result"
+            continue
+          }
+          const parsedField = {
+            type: "docx-page-field" as const,
+            source: source(part, `${xmlPath}/${current.name}[${count}]`),
+            field: kind,
+            displayText: "",
+          }
+          fieldState.current.phase = "result"
+          fieldState.current.separatorSeen = true
+          fieldState.current.field = parsedField
+          inlines.push(parsedField)
+        }
+      } else if (fieldType === "end") {
+        if (fieldState.current === undefined) {
+          reportFormattingProblem(
+            diagnostics,
+            "DOCX_INVALID_STYLE_VALUE",
+            "A complex field end has no matching begin.",
+            source(part, `${xmlPath}/${current.name}[${count}]`)
+          )
+        } else if (
+          !fieldState.current.separatorSeen ||
+          fieldState.current.phase !== "result"
+        ) {
+          reportFormattingProblem(
+            diagnostics,
+            "DOCX_INVALID_STYLE_VALUE",
+            "A complex field end requires one preceding separator.",
+            source(part, `${xmlPath}/${current.name}[${count}]`)
+          )
+        }
+        fieldState.current = undefined
+      } else {
+        reportFormattingProblem(
+          diagnostics,
+          "DOCX_INVALID_STYLE_VALUE",
+          "Field character type must be begin, separate, or end.",
+          source(part, `${xmlPath}/${current.name}[${count}]`)
+        )
+      }
+    } else if (name === "instrText") {
+      if (fieldState.current?.phase !== "instruction") {
+        reportFormattingProblem(
+          diagnostics,
+          "DOCX_INVALID_STYLE_VALUE",
+          "Field instruction text must occur between begin and separate.",
+          source(part, `${xmlPath}/${current.name}[${count}]`)
+        )
+      } else {
+        fieldState.current.instruction += textContent(current.element)
+      }
     } else if (name !== "rPr") {
       reportUnsupported(
         diagnostics,
@@ -2096,28 +3059,1241 @@ function parseRun(
     )
   }
   effective = { ...effective, ...direct.formatting }
+  const cachedFieldText = allRunText || descendantText(element, "t")
+  if (cachedFieldText.length > 0) {
+    for (const inline of inlines) {
+      if (
+        inline.type === "docx-page-field" &&
+        inline.displayText.length === 0
+      ) {
+        ;(inline as { displayText: string }).displayText = cachedFieldText
+      }
+    }
+  }
   return {
     type: "docx-run",
     source: source(part, xmlPath),
     properties: completeRunProperties(effective),
+    inlines,
     texts,
   }
 }
 
+function parsePageFieldInstruction(
+  value: string | undefined
+): "PAGE" | "NUMPAGES" | undefined {
+  const tokens = value?.trim().match(/"[^"]*"|\S+/gu) ?? []
+  const command = tokens.shift()?.toUpperCase()
+  if (command !== "PAGE" && command !== "NUMPAGES") return undefined
+  for (let index = 0; index < tokens.length; index += 2) {
+    const switchName = tokens[index]?.toUpperCase()
+    const argument = tokens[index + 1]?.replace(/^"|"$/gu, "").toUpperCase()
+    if (!(
+      (switchName === "\\*" &&
+        (argument === "ARABIC" || argument === "MERGEFORMAT")) ||
+      (switchName === "\\#" && argument === "0")
+    )) {
+      return undefined
+    }
+  }
+  return command
+}
+
+function parseParagraph(
+  element: OrderedElement,
+  part: string,
+  xmlPath: string,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[],
+  sheet: StyleSheet,
+  numberingDefinitions: ReadonlyMap<string, ParsedDocxNumberingDefinition>,
+  hasNumberingPart: boolean,
+  media: MediaContext
+): ParsedDocxParagraph {
+  const paragraphPropertiesElement = child(element, "pPr")?.element
+  const paragraphPropertiesPath = `${xmlPath}/w:pPr[1]`
+  const directParagraphProperties = parseParagraphProperties(
+    paragraphPropertiesElement,
+    part,
+    paragraphPropertiesPath,
+    diagnostics
+  )
+  const paragraphStyleId =
+    attr(
+      paragraphPropertiesElement === undefined
+        ? undefined
+        : child(paragraphPropertiesElement, "pStyle")?.element,
+      "val"
+    ) ?? sheet.defaultParagraphStyleId
+  const paragraphStyleChain =
+    paragraphStyleId === undefined
+      ? []
+      : styleChain(
+          paragraphStyleId,
+          "paragraph",
+          sheet,
+          source(part, `${paragraphPropertiesPath}/w:pStyle[1]`),
+          diagnostics
+        )
+  const effectiveParagraphProperties = completeParagraphProperties(
+    {
+      ...mergeParagraphStyles(sheet.paragraphDefaults, paragraphStyleChain),
+      ...directParagraphProperties,
+    },
+    numberingDefinitions,
+    hasNumberingPart,
+    source(part, paragraphPropertiesPath),
+    diagnostics
+  )
+  const paragraphRunProperties = mergeRunStyles(
+    sheet.runDefaults,
+    paragraphStyleChain
+  )
+  const runs: ParsedDocxRun[] = []
+  const fieldState: { current?: ComplexFieldState } = {}
+  const paragraphCounts = new Map<string, number>()
+  for (const paragraphChild of childElements(element)) {
+    throwIfAborted(options.signal)
+    const childName = localName(paragraphChild.name)
+    const childCount = (paragraphCounts.get(childName) ?? 0) + 1
+    paragraphCounts.set(childName, childCount)
+    if (childName === "r") {
+      runs.push(
+        parseRun(
+          paragraphChild.element,
+          part,
+          `${xmlPath}/${paragraphChild.name}[${childCount}]`,
+          options,
+          diagnostics,
+          sheet,
+          paragraphRunProperties,
+          media,
+          fieldState
+        )
+      )
+    } else if (childName === "fldSimple") {
+      const kind = parsePageFieldInstruction(
+        attr(paragraphChild.element, "instr")
+      )
+      if (kind === undefined) {
+        reportFormattingProblem(
+          diagnostics,
+          "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+          "Only PAGE and NUMPAGES simple fields are supported.",
+          source(part, `${xmlPath}/${paragraphChild.name}[${childCount}]`)
+        )
+      } else {
+        const displayText = children(paragraphChild.element, "r")
+          .flatMap(({ element: run }) =>
+            children(run, "t").map(({ element: text }) => textContent(text))
+          )
+          .join("")
+        runs.push({
+          type: "docx-run",
+          source: source(
+            part,
+            `${xmlPath}/${paragraphChild.name}[${childCount}]`
+          ),
+          properties: completeRunProperties(paragraphRunProperties),
+          inlines: [
+            {
+              type: "docx-page-field",
+              field: kind,
+              displayText,
+              source: source(
+                part,
+                `${xmlPath}/${paragraphChild.name}[${childCount}]`
+              ),
+            },
+          ],
+          texts: [],
+        })
+      }
+    } else if (
+      childName !== "pPr" &&
+      childName !== "bookmarkStart" &&
+      childName !== "bookmarkEnd" &&
+      childName !== "proofErr"
+    ) {
+      reportUnsupported(
+        diagnostics,
+        "DOCX_UNSUPPORTED_INLINE",
+        `Paragraph child '${paragraphChild.name}' is not supported.`,
+        source(part, `${xmlPath}/${paragraphChild.name}[${childCount}]`),
+        options
+      )
+    }
+  }
+  if (fieldState.current !== undefined) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      "A complex field is missing its end marker.",
+      source(part, xmlPath)
+    )
+  }
+  return {
+    type: "docx-paragraph",
+    source: source(part, xmlPath),
+    properties: effectiveParagraphProperties,
+    runs,
+  }
+}
+
+const EMPTY_TABLE_BORDERS: ParsedDocxTableBorders = Object.freeze({
+  top: null,
+  right: null,
+  bottom: null,
+  left: null,
+  insideHorizontal: null,
+  insideVertical: null,
+})
+
+function singularTableChild(
+  element: OrderedElement | undefined,
+  name: string,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): OrderedElement | undefined {
+  if (element === undefined) return undefined
+  const matches = children(element, name)
+  if (matches.length > 1) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_AMBIGUOUS_TABLE",
+      `Table property '${name}' occurs more than once.`,
+      source(part, `${xmlPath}/w:${name}[2]`)
+    )
+  }
+  return matches[0]?.element
+}
+
+function validateTableChildren(
+  element: OrderedElement | undefined,
+  allowed: ReadonlySet<string>,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): void {
+  if (element === undefined) return
+  const counts = new Map<string, number>()
+  for (const current of childElements(element)) {
+    const name = localName(current.name)
+    const count = (counts.get(name) ?? 0) + 1
+    counts.set(name, count)
+    if (!allowed.has(name)) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        `Table property '${current.name}' is not supported.`,
+        source(part, `${xmlPath}/${current.name}[${count}]`)
+      )
+    }
+  }
+}
+
+function validateTableAttributes(
+  element: OrderedElement | undefined,
+  allowed: ReadonlySet<string>,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): void {
+  if (element === undefined) return
+  for (const name of Object.keys(attributes(element))) {
+    if (!allowed.has(localName(name))) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        `Table attribute '${name}' is not supported.`,
+        source(part, `${xmlPath}/@${name}`)
+      )
+    }
+  }
+}
+
+function parseTableWidth(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[],
+  allowAuto: boolean
+): number | null | undefined {
+  if (element === undefined) return undefined
+  validateTableAttributes(
+    element,
+    new Set(["w", "type"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const type = attr(element, "type") ?? "dxa"
+  const rawWidth = attr(element, "w")
+  if (
+    allowAuto &&
+    type === "auto" &&
+    (rawWidth === undefined || rawWidth === "0")
+  ) {
+    return null
+  }
+  const width = integer(rawWidth)
+  if (type !== "dxa") {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      `Table width type '${type}' is not supported; use integer twips ('dxa')${allowAuto ? " or auto" : ""}.`,
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  if (width === undefined || width < 0) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE_VALUE",
+      "Table width must be a non-negative safe integer twip value.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  return width
+}
+
+function parseTableBorder(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): ParsedDocxTableBorder | null {
+  if (element === undefined) return null
+  validateTableAttributes(
+    element,
+    new Set(["val", "sz", "space", "color"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const rawStyle = attr(element, "val") ?? "single"
+  const style = rawStyle === "nil" ? "none" : rawStyle
+  if (!["none", "single", "double", "dotted", "dashed"].includes(style)) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      `Table border style '${rawStyle}' is not supported.`,
+      source(part, xmlPath)
+    )
+    return null
+  }
+  const size = integer(attr(element, "sz") ?? "0")
+  const space = integer(attr(element, "space") ?? "0")
+  const rawColor = attr(element, "color") ?? "000000"
+  const color = rawColor.toLowerCase() === "auto" ? "000000" : rawColor
+  if (
+    size === undefined ||
+    size < 0 ||
+    space === undefined ||
+    space < 0 ||
+    !Number.isSafeInteger(Math.round((size * 20) / 8)) ||
+    !Number.isSafeInteger(space * 20) ||
+    !/^[0-9a-f]{6}$/iu.test(color)
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE_VALUE",
+      "Table border size, spacing, or color is malformed.",
+      source(part, xmlPath)
+    )
+    return null
+  }
+  return {
+    style: style as ParsedDocxTableBorder["style"],
+    color: color.toUpperCase(),
+    size,
+    space,
+  }
+}
+
+function safeTableWidthSum(
+  widths: readonly number[],
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): number | undefined {
+  let sum = 0
+  for (const width of widths) {
+    sum += width
+    if (!Number.isSafeInteger(sum)) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_INVALID_TABLE_VALUE",
+        "The combined table-grid width exceeds the safe integer twip range.",
+        source(part, xmlPath)
+      )
+      return undefined
+    }
+  }
+  return sum
+}
+
+function parseTableBorders(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): ParsedDocxTableBorders {
+  if (element === undefined) return EMPTY_TABLE_BORDERS
+  validateTableChildren(
+    element,
+    new Set(["top", "right", "bottom", "left", "insideH", "insideV"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const borderElement = (name: string) =>
+    singularTableChild(element, name, part, xmlPath, diagnostics)
+  return {
+    top: parseTableBorder(
+      borderElement("top"),
+      part,
+      `${xmlPath}/w:top[1]`,
+      diagnostics
+    ),
+    right: parseTableBorder(
+      borderElement("right"),
+      part,
+      `${xmlPath}/w:right[1]`,
+      diagnostics
+    ),
+    bottom: parseTableBorder(
+      borderElement("bottom"),
+      part,
+      `${xmlPath}/w:bottom[1]`,
+      diagnostics
+    ),
+    left: parseTableBorder(
+      borderElement("left"),
+      part,
+      `${xmlPath}/w:left[1]`,
+      diagnostics
+    ),
+    insideHorizontal: parseTableBorder(
+      borderElement("insideH"),
+      part,
+      `${xmlPath}/w:insideH[1]`,
+      diagnostics
+    ),
+    insideVertical: parseTableBorder(
+      borderElement("insideV"),
+      part,
+      `${xmlPath}/w:insideV[1]`,
+      diagnostics
+    ),
+  }
+}
+
+function parseCellPadding(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): { top: number; right: number; bottom: number; left: number } {
+  const side = (logical: string, legacy?: string): number => {
+    const logicalElement =
+      element === undefined
+        ? undefined
+        : singularTableChild(element, logical, part, xmlPath, diagnostics)
+    const legacyElement =
+      legacy === undefined || element === undefined
+        ? undefined
+        : singularTableChild(element, legacy, part, xmlPath, diagnostics)
+    if (logicalElement !== undefined && legacyElement !== undefined) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_AMBIGUOUS_TABLE",
+        `Cell padding defines both '${logical}' and legacy '${legacy}'.`,
+        source(part, xmlPath)
+      )
+    }
+    const selectedName =
+      logicalElement !== undefined
+        ? logical
+        : legacyElement !== undefined && legacy !== undefined
+          ? legacy
+          : logical
+    const defaultWidth = logical === "start" || logical === "end" ? 115 : 0
+    return (
+      parseTableWidth(
+        logicalElement ?? legacyElement,
+        part,
+        `${xmlPath}/w:${selectedName}[1]`,
+        diagnostics,
+        false
+      ) ?? defaultWidth
+    )
+  }
+  if (element !== undefined) {
+    validateTableChildren(
+      element,
+      new Set(["top", "start", "bottom", "end", "left", "right"]),
+      part,
+      xmlPath,
+      diagnostics
+    )
+  }
+  return {
+    top: side("top"),
+    right: side("end", "right"),
+    bottom: side("bottom"),
+    left: side("start", "left"),
+  }
+}
+
+function parseTableBoolean(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): boolean | undefined {
+  if (element === undefined) return undefined
+  const rawValue = attr(element, "val")
+  if (
+    rawValue !== undefined &&
+    !["0", "1", "true", "false", "on", "off"].includes(rawValue.toLowerCase())
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE_VALUE",
+      `Table boolean value '${rawValue}' is invalid.`,
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  return booleanProperty(element)
+}
+
+function parseRowHeight(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): Readonly<{ rule: "exact" | "atLeast"; value: number }> | null {
+  if (element === undefined) return null
+  validateTableAttributes(
+    element,
+    new Set(["val", "hRule"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const value = integer(attr(element, "val"))
+  const rawRule = attr(element, "hRule") ?? "auto"
+  if (
+    value === undefined ||
+    value < 0 ||
+    (rawRule !== "exact" && rawRule !== "atLeast")
+  ) {
+    reportTableProblem(
+      diagnostics,
+      rawRule === "auto"
+        ? "DOCX_UNSUPPORTED_TABLE_PROPERTY"
+        : "DOCX_INVALID_TABLE_VALUE",
+      "Row height must use a non-negative integer twip value with hRule 'exact' or 'atLeast'.",
+      source(part, xmlPath)
+    )
+    return null
+  }
+  return { rule: rawRule, value }
+}
+
+function parseCellFill(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): string | null {
+  if (element === undefined) return null
+  validateTableAttributes(
+    element,
+    new Set(["val", "fill", "color"]),
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const pattern = attr(element, "val") ?? "clear"
+  const foreground = attr(element, "color") ?? "auto"
+  const fill = attr(element, "fill")
+  if (pattern !== "clear" || foreground.toLowerCase() !== "auto") {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+      "Only clear-pattern cell shading with an automatic foreground color and explicit fill is supported.",
+      source(part, xmlPath)
+    )
+    return null
+  }
+  if (fill === undefined || !/^[0-9a-f]{6}$/iu.test(fill)) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE_VALUE",
+      "Cell shading fill must be a six-digit RGB color.",
+      source(part, xmlPath)
+    )
+    return null
+  }
+  return fill.toUpperCase()
+}
+
+function parseCellVerticalAlignment(
+  element: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): "top" | "center" | "bottom" {
+  if (element === undefined) return "top"
+  validateTableAttributes(element, new Set(["val"]), part, xmlPath, diagnostics)
+  const value = attr(element, "val")
+  if (value === "top" || value === "center" || value === "bottom") {
+    return value
+  }
+  reportTableProblem(
+    diagnostics,
+    "DOCX_INVALID_TABLE_VALUE",
+    `Cell vertical alignment '${value ?? "<missing>"}' is invalid.`,
+    source(part, xmlPath)
+  )
+  return "top"
+}
+
+function parseTable(
+  element: OrderedElement,
+  part: string,
+  xmlPath: string,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[],
+  sheet: StyleSheet,
+  numberingDefinitions: ReadonlyMap<string, ParsedDocxNumberingDefinition>,
+  hasNumberingPart: boolean,
+  media: MediaContext
+): ParsedDocxTable | undefined {
+  const tableProperties = singularTableChild(
+    element,
+    "tblPr",
+    part,
+    xmlPath,
+    diagnostics
+  )
+  const tableGrid = singularTableChild(
+    element,
+    "tblGrid",
+    part,
+    xmlPath,
+    diagnostics
+  )
+  if (tableGrid === undefined) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE",
+      "A table must provide tblGrid so column widths are deterministic.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  if (tableProperties !== undefined) {
+    validateTableChildren(
+      tableProperties,
+      new Set(["tblW", "tblLayout", "tblBorders", "tblCellMar"]),
+      part,
+      `${xmlPath}/w:tblPr[1]`,
+      diagnostics
+    )
+  }
+  const columnWidths: number[] = []
+  const gridCounts = new Map<string, number>()
+  for (const gridChild of childElements(tableGrid)) {
+    throwIfAborted(options.signal)
+    const name = localName(gridChild.name)
+    const count = (gridCounts.get(name) ?? 0) + 1
+    gridCounts.set(name, count)
+    if (name !== "gridCol") {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        `Table grid child '${gridChild.name}' is not supported.`,
+        source(part, `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`)
+      )
+      continue
+    }
+    validateTableAttributes(
+      gridChild.element,
+      new Set(["w"]),
+      part,
+      `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`,
+      diagnostics
+    )
+    const width = integer(attr(gridChild.element, "w"))
+    if (width === undefined || width <= 0) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_INVALID_TABLE_VALUE",
+        "Each gridCol width must be a positive safe integer twip value.",
+        source(part, `${xmlPath}/w:tblGrid[1]/${gridChild.name}[${count}]`)
+      )
+      continue
+    }
+    columnWidths.push(width)
+  }
+  if (columnWidths.length === 0) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE",
+      "A table grid must contain at least one valid gridCol.",
+      source(part, `${xmlPath}/w:tblGrid[1]`)
+    )
+    return undefined
+  }
+  const gridWidth = safeTableWidthSum(
+    columnWidths,
+    part,
+    `${xmlPath}/w:tblGrid[1]`,
+    diagnostics
+  )
+  if (gridWidth === undefined) return undefined
+  const propertiesPath = `${xmlPath}/w:tblPr[1]`
+  const preferredWidth = parseTableWidth(
+    singularTableChild(
+      tableProperties,
+      "tblW",
+      part,
+      propertiesPath,
+      diagnostics
+    ),
+    part,
+    `${propertiesPath}/w:tblW[1]`,
+    diagnostics,
+    true
+  )
+  if (
+    preferredWidth !== undefined &&
+    preferredWidth !== null &&
+    preferredWidth !== gridWidth
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_AMBIGUOUS_TABLE",
+      `Declared table width ${preferredWidth} does not match the deterministic table-grid width ${gridWidth}.`,
+      source(part, `${propertiesPath}/w:tblW[1]`)
+    )
+    return undefined
+  }
+  const layoutElement = singularTableChild(
+    tableProperties,
+    "tblLayout",
+    part,
+    propertiesPath,
+    diagnostics
+  )
+  const rawLayout = attr(layoutElement, "type") ?? "autofit"
+  validateTableAttributes(
+    layoutElement,
+    new Set(["type"]),
+    part,
+    `${propertiesPath}/w:tblLayout[1]`,
+    diagnostics
+  )
+  const layout =
+    rawLayout === "fixed" || rawLayout === "autofit" ? rawLayout : "autofit"
+  if (
+    layoutElement !== undefined &&
+    rawLayout !== "fixed" &&
+    rawLayout !== "autofit"
+  ) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE_VALUE",
+      `Table layout '${rawLayout}' is invalid.`,
+      source(part, `${propertiesPath}/w:tblLayout[1]`)
+    )
+  }
+  const borders = parseTableBorders(
+    singularTableChild(
+      tableProperties,
+      "tblBorders",
+      part,
+      propertiesPath,
+      diagnostics
+    ),
+    part,
+    `${propertiesPath}/w:tblBorders[1]`,
+    diagnostics
+  )
+  const cellPadding = parseCellPadding(
+    singularTableChild(
+      tableProperties,
+      "tblCellMar",
+      part,
+      propertiesPath,
+      diagnostics
+    ),
+    part,
+    `${propertiesPath}/w:tblCellMar[1]`,
+    diagnostics
+  )
+
+  const rows: ParsedDocxTable["rows"][number][] = []
+  const tableCounts = new Map<string, number>()
+  let sawNonHeader = false
+  const activeVerticalMerges = new Map<
+    number,
+    Readonly<{ span: number; repeatAsHeader: boolean }>
+  >()
+  for (const tableChild of childElements(element)) {
+    throwIfAborted(options.signal)
+    const childName = localName(tableChild.name)
+    const childCount = (tableCounts.get(childName) ?? 0) + 1
+    tableCounts.set(childName, childCount)
+    if (childName === "tblPr" || childName === "tblGrid") continue
+    const rowPath = `${xmlPath}/${tableChild.name}[${childCount}]`
+    if (childName !== "tr") {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        `Table child '${tableChild.name}' is not supported.`,
+        source(part, rowPath)
+      )
+      continue
+    }
+    const rowProperties = singularTableChild(
+      tableChild.element,
+      "trPr",
+      part,
+      rowPath,
+      diagnostics
+    )
+    if (rowProperties !== undefined) {
+      validateTableChildren(
+        rowProperties,
+        new Set(["tblHeader", "cantSplit", "trHeight"]),
+        part,
+        `${rowPath}/w:trPr[1]`,
+        diagnostics
+      )
+    }
+    const headerElement = singularTableChild(
+      rowProperties,
+      "tblHeader",
+      part,
+      `${rowPath}/w:trPr[1]`,
+      diagnostics
+    )
+    validateTableAttributes(
+      headerElement,
+      new Set(["val"]),
+      part,
+      `${rowPath}/w:trPr[1]/w:tblHeader[1]`,
+      diagnostics
+    )
+    const cantSplitElement = singularTableChild(
+      rowProperties,
+      "cantSplit",
+      part,
+      `${rowPath}/w:trPr[1]`,
+      diagnostics
+    )
+    const height = parseRowHeight(
+      singularTableChild(
+        rowProperties,
+        "trHeight",
+        part,
+        `${rowPath}/w:trPr[1]`,
+        diagnostics
+      ),
+      part,
+      `${rowPath}/w:trPr[1]/w:trHeight[1]`,
+      diagnostics
+    )
+    validateTableAttributes(
+      cantSplitElement,
+      new Set(["val"]),
+      part,
+      `${rowPath}/w:trPr[1]/w:cantSplit[1]`,
+      diagnostics
+    )
+    const repeatAsHeader =
+      parseTableBoolean(
+        headerElement,
+        part,
+        `${rowPath}/w:trPr[1]/w:tblHeader[1]`,
+        diagnostics
+      ) ?? false
+    if (repeatAsHeader && sawNonHeader) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_AMBIGUOUS_TABLE",
+        "Repeating table headers must be a contiguous set of leading rows.",
+        source(part, `${rowPath}/w:trPr[1]/w:tblHeader[1]`)
+      )
+    }
+    if (!repeatAsHeader) sawNonHeader = true
+    const cells: ParsedDocxTable["rows"][number]["cells"][number][] = []
+    const rowCounts = new Map<string, number>()
+    let columnIndex = 0
+    const continuedColumns = new Set<number>()
+    for (const rowChild of childElements(tableChild.element)) {
+      throwIfAborted(options.signal)
+      const rowChildName = localName(rowChild.name)
+      const rowChildCount = (rowCounts.get(rowChildName) ?? 0) + 1
+      rowCounts.set(rowChildName, rowChildCount)
+      if (rowChildName === "trPr") continue
+      const cellPath = `${rowPath}/${rowChild.name}[${rowChildCount}]`
+      if (rowChildName !== "tc") {
+        reportTableProblem(
+          diagnostics,
+          "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+          `Table row child '${rowChild.name}' is not supported.`,
+          source(part, cellPath)
+        )
+        continue
+      }
+      const cellProperties = singularTableChild(
+        rowChild.element,
+        "tcPr",
+        part,
+        cellPath,
+        diagnostics
+      )
+      if (cellProperties !== undefined) {
+        validateTableChildren(
+          cellProperties,
+          new Set(["tcW", "gridSpan", "vMerge", "shd", "vAlign"]),
+          part,
+          `${cellPath}/w:tcPr[1]`,
+          diagnostics
+        )
+      }
+      const spanElement = singularTableChild(
+        cellProperties,
+        "gridSpan",
+        part,
+        `${cellPath}/w:tcPr[1]`,
+        diagnostics
+      )
+      const rawSpan = attr(spanElement, "val")
+      validateTableAttributes(
+        spanElement,
+        new Set(["val"]),
+        part,
+        `${cellPath}/w:tcPr[1]/w:gridSpan[1]`,
+        diagnostics
+      )
+      const parsedSpan = rawSpan === undefined ? 1 : integer(rawSpan)
+      const columnSpan =
+        parsedSpan !== undefined && parsedSpan > 0 ? parsedSpan : 1
+      if (parsedSpan === undefined || parsedSpan <= 0) {
+        reportTableProblem(
+          diagnostics,
+          "DOCX_INVALID_TABLE_VALUE",
+          "gridSpan must be a positive safe integer.",
+          source(part, `${cellPath}/w:tcPr[1]/w:gridSpan[1]`)
+        )
+      }
+      if (columnIndex + columnSpan > columnWidths.length) {
+        reportTableProblem(
+          diagnostics,
+          "DOCX_INVALID_TABLE",
+          "A table cell spans beyond the declared table grid.",
+          source(part, cellPath)
+        )
+      }
+      const cellGridWidth =
+        safeTableWidthSum(
+          columnWidths.slice(columnIndex, columnIndex + columnSpan),
+          part,
+          cellPath,
+          diagnostics
+        ) ?? 0
+      const cellPreferredWidth = parseTableWidth(
+        singularTableChild(
+          cellProperties,
+          "tcW",
+          part,
+          `${cellPath}/w:tcPr[1]`,
+          diagnostics
+        ),
+        part,
+        `${cellPath}/w:tcPr[1]/w:tcW[1]`,
+        diagnostics,
+        true
+      )
+      const mergeElement = singularTableChild(
+        cellProperties,
+        "vMerge",
+        part,
+        `${cellPath}/w:tcPr[1]`,
+        diagnostics
+      )
+      const rawMerge = attr(mergeElement, "val")
+      validateTableAttributes(
+        mergeElement,
+        new Set(["val"]),
+        part,
+        `${cellPath}/w:tcPr[1]/w:vMerge[1]`,
+        diagnostics
+      )
+      let verticalMerge: "none" | "restart" | "continue" = "none"
+      if (mergeElement !== undefined) {
+        if (rawMerge === undefined || rawMerge === "continue")
+          verticalMerge = "continue"
+        else if (rawMerge === "restart") verticalMerge = "restart"
+        else {
+          reportTableProblem(
+            diagnostics,
+            "DOCX_INVALID_TABLE_VALUE",
+            `Vertical merge value '${rawMerge}' is invalid.`,
+            source(part, `${cellPath}/w:tcPr[1]/w:vMerge[1]`)
+          )
+        }
+      }
+      if (verticalMerge === "continue") {
+        const activeMerge = activeVerticalMerges.get(columnIndex)
+        if (activeMerge?.span !== columnSpan) {
+          reportTableProblem(
+            diagnostics,
+            "DOCX_AMBIGUOUS_TABLE",
+            "A vertical-merge continuation has no matching restart in the previous row.",
+            source(part, `${cellPath}/w:tcPr[1]/w:vMerge[1]`)
+          )
+        }
+        if (
+          activeMerge !== undefined &&
+          activeMerge.repeatAsHeader !== repeatAsHeader
+        ) {
+          reportTableProblem(
+            diagnostics,
+            "DOCX_AMBIGUOUS_TABLE",
+            "A vertical merge cannot cross the repeating-header and body-row boundary.",
+            source(part, `${cellPath}/w:tcPr[1]/w:vMerge[1]`)
+          )
+        }
+        for (
+          let column = columnIndex;
+          column < columnIndex + columnSpan;
+          column += 1
+        )
+          continuedColumns.add(column)
+      } else if (verticalMerge === "restart") {
+        activeVerticalMerges.set(columnIndex, {
+          span: columnSpan,
+          repeatAsHeader,
+        })
+        for (
+          let column = columnIndex;
+          column < columnIndex + columnSpan;
+          column += 1
+        )
+          continuedColumns.add(column)
+      }
+      const fillColor = parseCellFill(
+        singularTableChild(
+          cellProperties,
+          "shd",
+          part,
+          `${cellPath}/w:tcPr[1]`,
+          diagnostics
+        ),
+        part,
+        `${cellPath}/w:tcPr[1]/w:shd[1]`,
+        diagnostics
+      )
+      const verticalAlignment = parseCellVerticalAlignment(
+        singularTableChild(
+          cellProperties,
+          "vAlign",
+          part,
+          `${cellPath}/w:tcPr[1]`,
+          diagnostics
+        ),
+        part,
+        `${cellPath}/w:tcPr[1]/w:vAlign[1]`,
+        diagnostics
+      )
+      const paragraphs: ParsedDocxParagraph[] = []
+      const cellCounts = new Map<string, number>()
+      for (const cellChild of childElements(rowChild.element)) {
+        throwIfAborted(options.signal)
+        const cellChildName = localName(cellChild.name)
+        const cellChildCount = (cellCounts.get(cellChildName) ?? 0) + 1
+        cellCounts.set(cellChildName, cellChildCount)
+        if (cellChildName === "tcPr") continue
+        if (cellChildName === "p") {
+          paragraphs.push(
+            parseParagraph(
+              cellChild.element,
+              part,
+              `${cellPath}/${cellChild.name}[${cellChildCount}]`,
+              options,
+              diagnostics,
+              sheet,
+              numberingDefinitions,
+              hasNumberingPart,
+              media
+            )
+          )
+        } else {
+          reportUnsupported(
+            diagnostics,
+            "DOCX_UNSUPPORTED_BLOCK",
+            `Table cell child '${cellChild.name}' is not supported.`,
+            source(part, `${cellPath}/${cellChild.name}[${cellChildCount}]`),
+            options
+          )
+        }
+      }
+      if (paragraphs.length === 0) {
+        reportTableProblem(
+          diagnostics,
+          "DOCX_INVALID_TABLE",
+          "A table cell must contain at least one paragraph.",
+          source(part, cellPath)
+        )
+      }
+      cells.push({
+        type: "docx-table-cell",
+        source: source(part, cellPath),
+        columnIndex,
+        width: cellGridWidth,
+        preferredWidth: cellPreferredWidth ?? null,
+        columnSpan,
+        verticalMerge,
+        verticalAlignment,
+        fillColor,
+        paragraphs,
+      })
+      columnIndex += columnSpan
+    }
+    if (columnIndex !== columnWidths.length) {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_INVALID_TABLE",
+        `Table row covers ${columnIndex} grid columns but the table declares ${columnWidths.length}.`,
+        source(part, rowPath)
+      )
+    }
+    for (const [start, activeMerge] of activeVerticalMerges) {
+      let continued = true
+      for (let column = start; column < start + activeMerge.span; column += 1) {
+        if (!continuedColumns.has(column)) continued = false
+      }
+      if (!continued) activeVerticalMerges.delete(start)
+    }
+    rows.push({
+      type: "docx-table-row",
+      source: source(part, rowPath),
+      repeatAsHeader,
+      allowBreakAcrossPages: !(
+        parseTableBoolean(
+          cantSplitElement,
+          part,
+          `${rowPath}/w:trPr[1]/w:cantSplit[1]`,
+          diagnostics
+        ) ?? false
+      ),
+      height,
+      cells,
+    })
+  }
+  if (rows.length === 0) {
+    reportTableProblem(
+      diagnostics,
+      "DOCX_INVALID_TABLE",
+      "A table must contain at least one row.",
+      source(part, xmlPath)
+    )
+    return undefined
+  }
+  return {
+    type: "docx-table",
+    source: source(part, xmlPath),
+    width: preferredWidth ?? gridWidth,
+    preferredWidth: preferredWidth ?? null,
+    layout,
+    columnWidths,
+    borders,
+    cellPadding,
+    repeatHeaderRowCount:
+      rows.findIndex((row) => !row.repeatAsHeader) < 0
+        ? rows.length
+        : rows.findIndex((row) => !row.repeatAsHeader),
+    rows,
+  }
+}
+
 function parseSectionProperties(
-  element: OrderedElement
+  element: OrderedElement,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
 ): ParsedDocxSectionProperties {
   const pageSize = child(element, "pgSz")?.element
   const margins = child(element, "pgMar")?.element
+  const sectionType = attr(child(element, "type")?.element, "val")
+  if (sectionType !== undefined && sectionType !== "nextPage") {
+    reportSectionProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_SECTION_BREAK",
+      `Section break type '${sectionType}' is unsupported; only nextPage is deterministic.`,
+      source(part, `${xmlPath}/w:type[1]`)
+    )
+  }
+  const width = integer(attr(pageSize, "w"))
+  const height = integer(attr(pageSize, "h"))
+  if (
+    (width !== undefined && width <= 0) ||
+    (height !== undefined && height <= 0)
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      "Section page width and height must be positive integer twips.",
+      source(part, xmlPath)
+    )
+  }
+  const rawOrientation = attr(pageSize, "orient")
+  const effectiveWidth =
+    width !== undefined && width > 0 ? width : DEFAULT_SECTION.pageWidth
+  const effectiveHeight =
+    height !== undefined && height > 0 ? height : DEFAULT_SECTION.pageHeight
+  const orientation =
+    rawOrientation === "landscape" ||
+    (rawOrientation === undefined && effectiveWidth > effectiveHeight)
+      ? "landscape"
+      : "portrait"
+  if (
+    rawOrientation !== undefined &&
+    rawOrientation !== "portrait" &&
+    rawOrientation !== "landscape"
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Section orientation '${rawOrientation}' is invalid.`,
+      source(part, xmlPath)
+    )
+  }
+  if (
+    rawOrientation !== undefined &&
+    ((orientation === "landscape" && effectiveWidth <= effectiveHeight) ||
+      (orientation === "portrait" && effectiveWidth > effectiveHeight))
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Section ${orientation} orientation conflicts with page geometry ${effectiveWidth}x${effectiveHeight}.`,
+      source(part, xmlPath)
+    )
+  }
   return {
-    pageWidth: nonNegativeInteger(
-      attr(pageSize, "w"),
-      DEFAULT_SECTION.pageWidth
-    ),
-    pageHeight: nonNegativeInteger(
-      attr(pageSize, "h"),
-      DEFAULT_SECTION.pageHeight
-    ),
+    pageWidth: effectiveWidth,
+    pageHeight: effectiveHeight,
     marginTop: nonNegativeInteger(
       attr(margins, "top"),
       DEFAULT_SECTION.marginTop
@@ -2134,6 +4310,159 @@ function parseSectionProperties(
       attr(margins, "left"),
       DEFAULT_SECTION.marginLeft
     ),
+    orientation,
+    headerDistance: nonNegativeInteger(
+      attr(margins, "header"),
+      DEFAULT_SECTION.headerDistance
+    ),
+    footerDistance: nonNegativeInteger(
+      attr(margins, "footer"),
+      DEFAULT_SECTION.footerDistance
+    ),
+  }
+}
+
+function sectionReference(
+  element: OrderedElement,
+  kind: "header" | "footer",
+  ownerPart: string,
+  context: MediaContext,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): string | null | undefined {
+  const references = children(element, `${kind}Reference`)
+  const defaults = references.filter(
+    ({ element: reference }) =>
+      (attr(reference, "type") ?? "default") === "default"
+  )
+  const unsupported = references.filter(
+    ({ element: reference }) =>
+      (attr(reference, "type") ?? "default") !== "default"
+  )
+  for (const _reference of unsupported) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      `Only default ${kind} references are supported.`,
+      source(ownerPart, xmlPath)
+    )
+  }
+  if (defaults.length > 1) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `A section has duplicate default ${kind} references.`,
+      source(ownerPart, xmlPath)
+    )
+    return null
+  }
+  const reference = defaults[0]?.element
+  if (reference === undefined) return undefined
+  const relationshipId = attr(reference, "id")
+  const relationship =
+    relationshipId === undefined
+      ? undefined
+      : context.relationships.get(ownerPart)?.get(relationshipId)
+  const expectedTypes = new Set([
+    `http://schemas.openxmlformats.org/officeDocument/2006/relationships/${kind}`,
+    `http://purl.oclc.org/ooxml/officeDocument/relationships/${kind}`,
+  ])
+  if (
+    relationship === undefined ||
+    !expectedTypes.has(relationship.type) ||
+    relationship.external
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Default ${kind} reference does not resolve through an internal owner-relative ${kind} relationship.`,
+      source(ownerPart, xmlPath)
+    )
+    return null
+  }
+  const target = resolveTarget(ownerPart, relationship.target)
+  if (target === undefined || !context.pkg.parts.has(target)) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Default ${kind} relationship targets a missing or unsafe package part.`,
+      source(ownerPart, xmlPath)
+    )
+    return null
+  }
+  return `docx:${kind}:${target}`
+}
+
+function parseHeaderFooterPart(
+  id: string,
+  context: MediaContext,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[],
+  sheet: StyleSheet,
+  numberingDefinitions: ReadonlyMap<string, ParsedDocxNumberingDefinition>,
+  hasNumberingPart: boolean
+): ParsedDocxHeaderFooter | undefined {
+  const prefix = id.startsWith("docx:header:") ? "docx:header:" : "docx:footer:"
+  const kind = prefix === "docx:header:" ? "header" : "footer"
+  const part = id.slice(prefix.length)
+  const bytes = context.pkg.parts.get(part)
+  const xml = bytes === undefined ? undefined : decodeXml(bytes)
+  const root =
+    xml === undefined
+      ? undefined
+      : parseXml(
+          xml,
+          options.limits?.maxXmlDepth ?? DEFAULT_RESOURCE_LIMITS.maxXmlDepth
+        )
+  if (
+    root === undefined ||
+    localName(root.name) !== (kind === "header" ? "hdr" : "ftr")
+  ) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `The ${kind} part '${part}' has an invalid root element.`,
+      source(part, "/")
+    )
+    return undefined
+  }
+  const paragraphs: ParsedDocxParagraph[] = []
+  const counts = new Map<string, number>()
+  for (const current of childElements(root)) {
+    const name = localName(current.name)
+    const count = (counts.get(name) ?? 0) + 1
+    counts.set(name, count)
+    const path = `/${root.name}[1]/${current.name}[${count}]`
+    if (name === "p") {
+      paragraphs.push(
+        parseParagraph(
+          current.element,
+          part,
+          path,
+          options,
+          diagnostics,
+          sheet,
+          numberingDefinitions,
+          hasNumberingPart,
+          context
+        )
+      )
+    } else {
+      reportUnsupported(
+        diagnostics,
+        "DOCX_UNSUPPORTED_BLOCK",
+        `${kind} child '${current.name}' is not supported.`,
+        source(part, path),
+        options
+      )
+    }
+  }
+  return {
+    type: kind === "header" ? "docx-header" : "docx-footer",
+    id,
+    source: source(part, `/${root.name}[1]`),
+    part,
+    paragraphs,
   }
 }
 
@@ -2236,6 +4565,14 @@ export function parseValidatedDocx(
   }
 
   const diagnostics: ReturnType<typeof diagnostic>[] = []
+  const media: MediaContext = {
+    pkg,
+    relationships: new Map(),
+    contentTypes: parseContentTypeMap(contentTypes),
+    assets: new Map(),
+    imageBytes: 0,
+  }
+  media.relationships = buildOwnerRelationships(pkg, options, diagnostics)
   const stylesPart = resolveStylesPart(pkg, officeDocumentPart.value, options)
   diagnostics.push(...stylesPart.diagnostics)
   const sheet = parseStyleSheet(pkg, stylesPart.part, options, diagnostics)
@@ -2257,103 +4594,140 @@ export function parseValidatedDocx(
   for (const style of sheet.styles.values()) {
     styleChain(style.id, style.type, sheet, style.source, diagnostics)
   }
+  const blocks: ParsedDocxDocument["blocks"][number][] = []
   const paragraphs: ParsedDocxParagraph[] = []
+  const sections: ParsedDocxDocument["sections"][number][] = []
+  let sectionBlocks: ParsedDocxDocument["blocks"][number][] = []
+  let inheritedHeaderId: string | null = null
+  let inheritedFooterId: string | null = null
   let sectionProperties = DEFAULT_SECTION
   const bodyPath = `/${root.name}[1]/${body.name}[1]`
   const counts = new Map<string, number>()
+  let sawBodySectionProperties = false
   for (const current of childElements(body.element)) {
     throwIfAborted(options.signal)
     const name = localName(current.name)
     const count = (counts.get(name) ?? 0) + 1
     counts.set(name, count)
     const currentPath = `${bodyPath}/${current.name}[${count}]`
-    if (name === "p") {
-      const paragraphPropertiesElement = child(current.element, "pPr")?.element
-      const paragraphPropertiesPath = `${currentPath}/w:pPr[1]`
-      const directParagraphProperties = parseParagraphProperties(
-        paragraphPropertiesElement,
-        officeDocumentPart.value,
-        paragraphPropertiesPath,
-        diagnostics
+    if (sawBodySectionProperties) {
+      reportSectionProblem(
+        diagnostics,
+        "DOCX_INVALID_SECTION_STRUCTURE",
+        name === "sectPr"
+          ? "The document body must contain at most one body-level sectPr."
+          : "The body-level sectPr must be the final document-body child.",
+        source(officeDocumentPart.value, currentPath)
       )
-      const paragraphStyleId =
-        attr(
-          paragraphPropertiesElement === undefined
-            ? undefined
-            : child(paragraphPropertiesElement, "pStyle")?.element,
-          "val"
-        ) ?? sheet.defaultParagraphStyleId
-      const paragraphStyleChain =
-        paragraphStyleId === undefined
-          ? []
-          : styleChain(
-              paragraphStyleId,
-              "paragraph",
-              sheet,
-              source(
-                officeDocumentPart.value,
-                `${paragraphPropertiesPath}/w:pStyle[1]`
-              ),
-              diagnostics
-            )
-      const effectiveParagraphProperties = completeParagraphProperties(
-        {
-          ...mergeParagraphStyles(sheet.paragraphDefaults, paragraphStyleChain),
-          ...directParagraphProperties,
-        },
+    }
+    if (name === "p") {
+      const paragraph = parseParagraph(
+        current.element,
+        officeDocumentPart.value,
+        currentPath,
+        options,
+        diagnostics,
+        sheet,
         numberingDefinitionsById,
         numberingPart.part !== undefined,
-        source(officeDocumentPart.value, paragraphPropertiesPath),
+        media
+      )
+      paragraphs.push(paragraph)
+      blocks.push(paragraph)
+      sectionBlocks.push(paragraph)
+      const paragraphSectionProperties = child(
+        child(current.element, "pPr")?.element ?? current.element,
+        "sectPr"
+      )?.element
+      if (paragraphSectionProperties !== undefined) {
+        const headerReference = sectionReference(
+          paragraphSectionProperties,
+          "header",
+          officeDocumentPart.value,
+          media,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        const footerReference = sectionReference(
+          paragraphSectionProperties,
+          "footer",
+          officeDocumentPart.value,
+          media,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        if (headerReference !== undefined) inheritedHeaderId = headerReference
+        if (footerReference !== undefined) inheritedFooterId = footerReference
+        sectionProperties = parseSectionProperties(
+          paragraphSectionProperties,
+          officeDocumentPart.value,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        sections.push({
+          type: "docx-section",
+          source: source(
+            officeDocumentPart.value,
+            `${currentPath}/w:pPr[1]/w:sectPr[1]`
+          ),
+          properties: sectionProperties,
+          defaultHeaderId: inheritedHeaderId,
+          defaultFooterId: inheritedFooterId,
+          blocks: sectionBlocks,
+        })
+        sectionBlocks = []
+      }
+    } else if (name === "tbl") {
+      const table = parseTable(
+        current.element,
+        officeDocumentPart.value,
+        currentPath,
+        options,
+        diagnostics,
+        sheet,
+        numberingDefinitionsById,
+        numberingPart.part !== undefined,
+        media
+      )
+      if (table !== undefined) {
+        blocks.push(table)
+        sectionBlocks.push(table)
+      }
+    } else if (name === "sectPr") {
+      sawBodySectionProperties = true
+      const headerReference = sectionReference(
+        current.element,
+        "header",
+        officeDocumentPart.value,
+        media,
+        currentPath,
         diagnostics
       )
-      const paragraphRunProperties = mergeRunStyles(
-        sheet.runDefaults,
-        paragraphStyleChain
+      const footerReference = sectionReference(
+        current.element,
+        "footer",
+        officeDocumentPart.value,
+        media,
+        currentPath,
+        diagnostics
       )
-      const runs: ParsedDocxRun[] = []
-      const paragraphCounts = new Map<string, number>()
-      for (const paragraphChild of childElements(current.element)) {
-        const childName = localName(paragraphChild.name)
-        const childCount = (paragraphCounts.get(childName) ?? 0) + 1
-        paragraphCounts.set(childName, childCount)
-        if (childName === "r") {
-          runs.push(
-            parseRun(
-              paragraphChild.element,
-              officeDocumentPart.value,
-              `${currentPath}/${paragraphChild.name}[${childCount}]`,
-              options,
-              diagnostics,
-              sheet,
-              paragraphRunProperties
-            )
-          )
-        } else if (
-          childName !== "pPr" &&
-          childName !== "bookmarkStart" &&
-          childName !== "bookmarkEnd" &&
-          childName !== "proofErr"
-        ) {
-          reportUnsupported(
-            diagnostics,
-            "DOCX_UNSUPPORTED_INLINE",
-            `Paragraph child '${paragraphChild.name}' is not supported.`,
-            source(
-              officeDocumentPart.value,
-              `${currentPath}/${paragraphChild.name}[${childCount}]`
-            ),
-            options
-          )
-        }
-      }
-      paragraphs.push({
-        type: "docx-paragraph",
+      if (headerReference !== undefined) inheritedHeaderId = headerReference
+      if (footerReference !== undefined) inheritedFooterId = footerReference
+      sectionProperties = parseSectionProperties(
+        current.element,
+        officeDocumentPart.value,
+        currentPath,
+        diagnostics
+      )
+      sections.push({
+        type: "docx-section",
         source: source(officeDocumentPart.value, currentPath),
-        properties: effectiveParagraphProperties,
-        runs,
+        properties: sectionProperties,
+        defaultHeaderId: inheritedHeaderId,
+        defaultFooterId: inheritedFooterId,
+        blocks: sectionBlocks,
       })
-    } else if (name === "sectPr") {
-      sectionProperties = parseSectionProperties(current.element)
+      sectionBlocks = []
     } else {
       reportUnsupported(
         diagnostics,
@@ -2364,12 +4738,65 @@ export function parseValidatedDocx(
       )
     }
   }
+  if (sections.length === 0 || sectionBlocks.length > 0) {
+    sections.push({
+      type: "docx-section",
+      source: source(officeDocumentPart.value, bodyPath),
+      properties: sectionProperties,
+      defaultHeaderId: inheritedHeaderId,
+      defaultFooterId: inheritedFooterId,
+      blocks: sectionBlocks,
+    })
+  }
+  const referencedHeaderIds = [
+    ...new Set(
+      sections.flatMap((section) =>
+        section.defaultHeaderId === null ? [] : [section.defaultHeaderId]
+      )
+    ),
+  ]
+  const referencedFooterIds = [
+    ...new Set(
+      sections.flatMap((section) =>
+        section.defaultFooterId === null ? [] : [section.defaultFooterId]
+      )
+    ),
+  ]
+  const headers = referencedHeaderIds.flatMap((id) => {
+    const parsed = parseHeaderFooterPart(
+      id,
+      media,
+      options,
+      diagnostics,
+      sheet,
+      numberingDefinitionsById,
+      numberingPart.part !== undefined
+    )
+    return parsed === undefined ? [] : [parsed]
+  })
+  const footers = referencedFooterIds.flatMap((id) => {
+    const parsed = parseHeaderFooterPart(
+      id,
+      media,
+      options,
+      diagnostics,
+      sheet,
+      numberingDefinitionsById,
+      numberingPart.part !== undefined
+    )
+    return parsed === undefined ? [] : [parsed]
+  })
 
   const document: ParsedDocxDocument = {
     type: "docx-document",
     source: source(officeDocumentPart.value, `/${root.name}[1]`),
     documentPart: officeDocumentPart.value,
+    assets: [...media.assets.values()],
+    headers,
+    footers,
     numberingDefinitions,
+    sections,
+    blocks,
     paragraphs,
     sectionProperties,
   }

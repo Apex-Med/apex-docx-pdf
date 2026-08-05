@@ -1,6 +1,6 @@
 # Contributing to Apex DOCX PDF
 
-Thank you for helping improve Apex DOCX PDF. The project is an early prerelease: the Phase 1 core, Phase 2 browser, and Phase 3 paragraph/run/font vertical slices are implemented, but their hardening is ongoing and the broader DOCX profile is not complete.
+Thank you for helping improve Apex DOCX PDF. The project is an early prerelease: Phases 1–6 are implemented, but their hardening is ongoing and the broader DOCX profile is not complete.
 
 ## Before you start
 
@@ -55,6 +55,14 @@ Rendering behavior must depend on explicit inputs. Engine code and tests must no
 - LibreOffice, Microsoft Word, Chromium, or another office binary.
 
 If a capability needs a new input, make that input explicit and include it in the compatibility and reproducibility design before implementation.
+
+Phase 4 formatters may use only caller-supplied locale and time-zone context. Do not add formatters or template helpers that consult ambient locale, time zone, clock state, filesystem, or network services. Keep loop, expanded-node, and expanded-text budgets cumulative, and keep expression-depth and object-traversal bounds deterministic.
+
+Phase 5 tables use the declared positive-integer `tblGrid` column widths as their fixed geometry. An explicit `tblW` must equal the grid sum, and an explicit `tcW` must equal the sum of the cell's spanned columns. Preserve source locations through table/row/cell layout and PDF items; keep table-row template markers dedicated to rows; and retain deterministic fragmentation, `cantSplit` diagnostics, contiguous header repetition, and styled-stroke behavior. Do not broaden this into percentage widths, nested tables, Word table styles/themes, complex shading, or complete Word autofit without an explicit new compatibility and security design.
+
+Phase 6 images are static, package-owned inline PNG/JPEG resources with explicit positive DrawingML extents. Preserve the exact MIME/signature/profile checks, immutable bytes, count/byte/dimension/pixel/decoded-work bounds, cancellation checkpoints, source links, deterministic exact-byte deduplication, and alpha `/SMask` behavior. Do not add fetches, dynamic image tags, external relationships, anchors/floating placement, crop, rotation, SVG, ICC conversion, or other image-profile expansion without a reviewed threat and compatibility model. Synchronous PNG inflate cannot observe cancellation while the inflate call itself is executing; cancellation is checked immediately before and after it and throughout surrounding bounded work.
+
+Phase 6 sections support multiple `nextPage` sections, explicit portrait/landscape geometry, inherited default headers/footers, exact edge-relative distances, header/footer template values, and global decimal `PAGE`/`NUMPAGES` fields. Keep the maximum-page digit reservation and post-pagination materialization deterministic. Do not imply support for continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, or arbitrary Word fields.
 
 Caller-supplied font bytes are an explicit compatibility input. Keep font processing browser-safe and deterministic: no filesystem access, system discovery, network fetches, or `Buffer`-only APIs. Do not describe the default complete-program embedding path as true subsetting.
 

@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*"
+    "@apex-docx-pdf/core": "workspace:*",
+    "@apex-docx-pdf/images": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6"

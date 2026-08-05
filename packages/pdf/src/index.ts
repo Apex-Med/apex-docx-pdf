@@ -12,9 +12,14 @@ import {
   type RenderMetadata,
   type Twip,
 } from "@apex-docx-pdf/core"
+import type {
+  ImagePreparationProvider,
+  PreparedImage,
+} from "@apex-docx-pdf/images"
 
 export type PdfSerializeOptions = Readonly<{
   fonts?: FontEmbeddingProvider
+  images?: ImagePreparationProvider
   metadata?: RenderMetadata
   signal?: AbortSignal
 }>
@@ -35,18 +40,36 @@ export function serializePdf(
 ): PdfSerializeResult {
   throwIfAborted(options.signal)
   const diagnostics: Diagnostic[] = []
-  const embeddedFonts = prepareEmbeddedFonts(
+  const serializableDisplayList = validPageDisplayList(
     displayList,
+    diagnostics,
+    options.signal
+  )
+  const embeddedFonts = prepareEmbeddedFonts(
+    serializableDisplayList,
     options.fonts,
     diagnostics,
     options.signal
   )
-  const pageCount = displayList.pages.length
+  const preparedImages = preparePdfImages(
+    serializableDisplayList,
+    options.images,
+    diagnostics,
+    options.signal
+  )
+  const pageCount = serializableDisplayList.pages.length
   const embeddedObjectStart = 5
-  const pageObjectStart =
+  const imageObjectStart =
     embeddedObjectStart + embeddedFonts.length * EMBEDDED_FONT_OBJECT_COUNT
+  assignImageObjects(preparedImages.unique, imageObjectStart)
+  const pageObjectStart =
+    imageObjectStart +
+    preparedImages.unique.reduce(
+      (count, image) => count + (image.image.alphaBytes ? 2 : 1),
+      0
+    )
   const objects: Uint8Array[] = []
-  const pageReferences = displayList.pages
+  const pageReferences = serializableDisplayList.pages
     .map((_, index) => `${pageObjectStart + index * 2} 0 R`)
     .join(" ")
 
@@ -67,11 +90,17 @@ export function serializePdf(
     objects.push(...embeddedFontObjects(font, firstObject, options.signal))
   }
 
-  for (const [index, page] of displayList.pages.entries()) {
+  for (const image of preparedImages.unique) {
+    throwIfAborted(options.signal)
+    objects.push(...imageObjects(image))
+  }
+
+  for (const [index, page] of serializableDisplayList.pages.entries()) {
     throwIfAborted(options.signal)
     const content = pageContent(
       page,
       embeddedFonts,
+      preparedImages.byAsset,
       diagnostics,
       options.signal
     )
@@ -80,7 +109,7 @@ export function serializePdf(
     objects.push(
       ascii(
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${point(page.width)} ${point(page.height)}] ` +
-          `/Resources << /Font << ${fontResources(embeddedFonts, embeddedObjectStart)} >> >> /Contents ${contentObjectNumber} 0 R >>`
+          `/Resources << /Font << ${fontResources(embeddedFonts, embeddedObjectStart)} >>${pageImageResources(page, preparedImages.byAsset)} >> /Contents ${contentObjectNumber} 0 R >>`
       )
     )
     objects.push(
@@ -121,9 +150,37 @@ export function serializePdf(
   })
 }
 
+function validPageDisplayList(
+  displayList: PageDisplayList,
+  diagnostics: Diagnostic[],
+  signal?: AbortSignal
+): PageDisplayList {
+  const pages: PageDisplayList["pages"][number][] = []
+  for (const [index, page] of displayList.pages.entries()) {
+    throwIfAborted(signal)
+    if (
+      !Number.isSafeInteger(page.width) ||
+      page.width <= 0 ||
+      !Number.isSafeInteger(page.height) ||
+      page.height <= 0
+    ) {
+      diagnostics.push({
+        code: "pdf/page-geometry-invalid",
+        severity: "error",
+        message: `Page ${index + 1} width and height must be positive safe-integer twips; page was omitted`,
+        details: { pageIndex: index + 1 },
+      })
+      continue
+    }
+    pages.push(page)
+  }
+  return Object.freeze({ pages: Object.freeze(pages) })
+}
+
 function pageContent(
   page: PageDisplayList["pages"][number],
   embeddedFonts: readonly PreparedEmbeddedFont[],
+  imagesByAsset: ReadonlyMap<string, PreparedPdfImage>,
   diagnostics: Diagnostic[],
   signal?: AbortSignal
 ): Uint8Array {
@@ -131,6 +188,28 @@ function pageContent(
   const fontsByFace = new Map(embeddedFonts.map((font) => [font.faceId, font]))
   for (const item of page.items) {
     throwIfAborted(signal)
+    if (item.type === "image") {
+      const boundsError = validateImageBounds(item.bounds)
+      if (boundsError) {
+        diagnostics.push(
+          diagnostic(
+            "pdf/image-placement-invalid",
+            "error",
+            `${boundsError}; item was omitted`,
+            item.sourceNodeId
+          )
+        )
+        continue
+      }
+      const image = imagesByAsset.get(item.assetId)
+      if (!image) continue
+      writer.write(
+        ascii(
+          `q\n${point(item.bounds.width)} 0 0 ${point(item.bounds.height)} ${point(item.bounds.x)} ${point(twips(page.height - item.bounds.y - item.bounds.height))} cm\n/${image.resourceName} Do\nQ\n`
+        )
+      )
+      continue
+    }
     if (item.type === "glyph-run") {
       if (item.fontSource === "embedded") {
         const font = fontsByFace.get(item.faceId)
@@ -196,6 +275,18 @@ function pageContent(
       continue
     }
     if (item.type === "line") {
+      const lineError = validateLine(item)
+      if (lineError) {
+        diagnostics.push(
+          diagnostic(
+            "pdf/line-invalid",
+            "error",
+            `${lineError}; item was omitted`,
+            item.sourceNodeId
+          )
+        )
+        continue
+      }
       const color = parseColor(item.color)
       if (!color) {
         diagnostics.push(
@@ -209,12 +300,27 @@ function pageContent(
         continue
       }
       writer.write(ascii("q\n"))
+      const dashArray = item.dashArray ?? []
+      const dashPhase = item.dashPhase ?? (0 as Twip)
+      const lineCap = item.lineCap ?? "butt"
       writer.write(
         ascii(
-          `${color} RG\n${point(item.width)} w\n1 0 0 -1 0 ${point(page.height)} cm\n${point(item.x1)} ${point(item.y1)} m ${point(item.x2)} ${point(item.y2)} l S\n`
+          `${color} RG\n${point(item.width)} w\n[${dashArray.map(point).join(" ")}] ${point(dashPhase)} d\n${pdfLineCap(lineCap)} J\n1 0 0 -1 0 ${point(page.height)} cm\n${point(item.x1)} ${point(item.y1)} m ${point(item.x2)} ${point(item.y2)} l S\n`
         )
       )
     } else {
+      const rectangleError = validateRectangle(item)
+      if (rectangleError) {
+        diagnostics.push(
+          diagnostic(
+            "pdf/rectangle-invalid",
+            "error",
+            `${rectangleError}; item was omitted`,
+            item.sourceNodeId
+          )
+        )
+        continue
+      }
       const stroke = item.strokeColor ? parseColor(item.strokeColor) : undefined
       const fill = item.fillColor ? parseColor(item.fillColor) : undefined
       if ((item.strokeColor && !stroke) || (item.fillColor && !fill)) {
@@ -244,6 +350,312 @@ function pageContent(
     writer.write(ascii("Q\n"))
   }
   return writer.toBytes()
+}
+
+function validateImageBounds(
+  bounds: Extract<
+    PageDisplayList["pages"][number]["items"][number],
+    { type: "image" }
+  >["bounds"]
+): string | undefined {
+  if (
+    [bounds.x, bounds.y, bounds.width, bounds.height].some(
+      (value) => !Number.isSafeInteger(value)
+    )
+  )
+    return "Image bounds must be safe integer twips"
+  if (bounds.width <= 0 || bounds.height <= 0)
+    return "Image dimensions must be positive twip values"
+  return undefined
+}
+
+type PreparedPdfImage = {
+  resourceName: string
+  image: PreparedImage
+  objectNumber: number
+  smaskObjectNumber?: number
+}
+
+function preparePdfImages(
+  displayList: PageDisplayList,
+  provider: ImagePreparationProvider | undefined,
+  diagnostics: Diagnostic[],
+  signal?: AbortSignal
+): Readonly<{
+  unique: PreparedPdfImage[]
+  byAsset: ReadonlyMap<string, PreparedPdfImage>
+}> {
+  const placements = displayList.pages.flatMap((page) =>
+    page.items.filter(
+      (item): item is Extract<typeof item, { type: "image" }> =>
+        item.type === "image"
+    )
+  )
+  if (placements.length === 0) return { unique: [], byAsset: new Map() }
+  if (!provider) {
+    for (const placement of placements)
+      diagnostics.push(
+        diagnostic(
+          "pdf/image-unavailable",
+          "error",
+          `Image asset '${placement.assetId}' requires an image preparation provider; item was omitted`,
+          placement.sourceNodeId
+        )
+      )
+    return { unique: [], byAsset: new Map() }
+  }
+  const byAsset = new Map<string, PreparedPdfImage>()
+  const buckets = new Map<string, PreparedPdfImage[]>()
+  const unique: PreparedPdfImage[] = []
+  const ids = [
+    ...new Set(placements.map((placement) => placement.assetId)),
+  ].sort(compareStrings)
+  for (const assetId of ids) {
+    throwIfAborted(signal)
+    let image: PreparedImage | undefined
+    try {
+      image = provider.get(assetId)
+    } catch (error) {
+      throwIfAborted(signal)
+      for (const placement of placements.filter(
+        (item) => item.assetId === assetId
+      ))
+        diagnostics.push(
+          diagnostic(
+            "pdf/image-provider-failed",
+            "error",
+            `Image provider failed for asset '${assetId}': ${errorMessage(error)}; item was omitted`,
+            placement.sourceNodeId
+          )
+        )
+      continue
+    }
+    const problem = validatePreparedImage(image)
+    if (problem) {
+      for (const placement of placements.filter(
+        (item) => item.assetId === assetId
+      ))
+        diagnostics.push(
+          diagnostic(
+            image ? "pdf/image-invalid" : "pdf/image-unavailable",
+            "error",
+            `${problem}; image asset '${assetId}' was omitted`,
+            placement.sourceNodeId
+          )
+        )
+      continue
+    }
+    const valid = image as PreparedImage
+    let prepared = (buckets.get(valid.hash) ?? []).find((candidate) =>
+      equalPreparedImages(candidate.image, valid)
+    )
+    if (!prepared) {
+      prepared = {
+        resourceName: `Im${unique.length + 1}`,
+        image: valid,
+        objectNumber: 0,
+      }
+      unique.push(prepared)
+      const bucket = buckets.get(valid.hash) ?? []
+      bucket.push(prepared)
+      buckets.set(valid.hash, bucket)
+    }
+    byAsset.set(assetId, prepared)
+  }
+  return { unique, byAsset }
+}
+
+function validatePreparedImage(
+  image: PreparedImage | undefined
+): string | undefined {
+  if (!image || typeof image !== "object")
+    return "Prepared image is unavailable"
+  if (!/^[a-f0-9]{64}$/u.test(image.hash))
+    return "Prepared image hash must be lowercase SHA-256"
+  if (
+    !Number.isSafeInteger(image.width) ||
+    !Number.isSafeInteger(image.height) ||
+    image.width <= 0 ||
+    image.height <= 0
+  )
+    return "Prepared image dimensions must be positive safe integers"
+  if (image.colorSpace !== "DeviceGray" && image.colorSpace !== "DeviceRGB")
+    return "Prepared image color space is unsupported"
+  if (image.bitsPerComponent !== 8)
+    return "Prepared image must use 8 bits per component"
+  if (image.filter !== "FlateDecode" && image.filter !== "DCTDecode")
+    return "Prepared image filter is unsupported"
+  if (!validOctets(image.bytes) || image.bytes.length === 0)
+    return "Prepared image bytes are invalid"
+  if (
+    image.alphaBytes &&
+    (!validOctets(image.alphaBytes) ||
+      image.alphaBytes.length === 0 ||
+      image.filter !== "FlateDecode")
+  )
+    return "Prepared image alpha bytes are invalid"
+  return undefined
+}
+
+function validOctets(bytes: readonly number[]): boolean {
+  return (
+    Array.isArray(bytes) &&
+    bytes.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+  )
+}
+
+function equalPreparedImages(
+  left: PreparedImage,
+  right: PreparedImage
+): boolean {
+  return (
+    left.width === right.width &&
+    left.height === right.height &&
+    left.colorSpace === right.colorSpace &&
+    left.bitsPerComponent === right.bitsPerComponent &&
+    left.filter === right.filter &&
+    equalNumbers(left.bytes, right.bytes) &&
+    equalNumbers(left.alphaBytes ?? [], right.alphaBytes ?? [])
+  )
+}
+
+function equalNumbers(
+  left: readonly number[],
+  right: readonly number[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  )
+}
+
+function assignImageObjects(images: PreparedPdfImage[], start: number): void {
+  let objectNumber = start
+  for (const image of images) {
+    image.objectNumber = objectNumber++
+    if (image.image.alphaBytes) image.smaskObjectNumber = objectNumber++
+  }
+}
+
+function imageObjects(prepared: PreparedPdfImage): Uint8Array[] {
+  const { image } = prepared
+  const main = imageStream(
+    image.bytes,
+    image.width,
+    image.height,
+    image.colorSpace,
+    image.filter,
+    prepared.smaskObjectNumber
+  )
+  if (!image.alphaBytes) return [main]
+  return [
+    main,
+    imageStream(
+      image.alphaBytes,
+      image.width,
+      image.height,
+      "DeviceGray",
+      "FlateDecode"
+    ),
+  ]
+}
+
+function imageStream(
+  bytes: readonly number[],
+  width: number,
+  height: number,
+  colorSpace: "DeviceGray" | "DeviceRGB",
+  filter: "FlateDecode" | "DCTDecode",
+  smaskObject?: number
+): Uint8Array {
+  return concat([
+    ascii(
+      `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /${colorSpace} /BitsPerComponent 8 /Filter /${filter}${smaskObject ? ` /SMask ${smaskObject} 0 R` : ""} /Length ${bytes.length} >>\nstream\n`
+    ),
+    Uint8Array.from(bytes),
+    ascii("\nendstream"),
+  ])
+}
+
+function pageImageResources(
+  page: PageDisplayList["pages"][number],
+  imagesByAsset: ReadonlyMap<string, PreparedPdfImage>
+): string {
+  const images = new Map<string, PreparedPdfImage>()
+  for (const item of page.items) {
+    if (item.type !== "image") continue
+    const image = imagesByAsset.get(item.assetId)
+    if (image) images.set(image.resourceName, image)
+  }
+  if (images.size === 0) return ""
+  return ` /XObject << ${[...images.values()]
+    .sort((left, right) =>
+      compareStrings(left.resourceName, right.resourceName)
+    )
+    .map((image) => `/${image.resourceName} ${image.objectNumber} 0 R`)
+    .join(" ")} >>`
+}
+
+function validateLine(
+  line: Extract<
+    PageDisplayList["pages"][number]["items"][number],
+    { type: "line" }
+  >
+): string | undefined {
+  for (const value of [line.x1, line.y1, line.x2, line.y2]) {
+    if (!Number.isSafeInteger(value))
+      return "Line coordinates must be safe integer twips"
+  }
+  if (!Number.isSafeInteger(line.width) || line.width < 0)
+    return "Line width must be a non-negative safe integer twip value"
+  if (
+    line.dashPhase !== undefined &&
+    (!Number.isSafeInteger(line.dashPhase) || line.dashPhase < 0)
+  )
+    return "Line dash phase must be a non-negative safe integer twip value"
+  if (
+    line.dashArray?.some(
+      (component) => !Number.isSafeInteger(component) || component <= 0
+    )
+  )
+    return "Line dash components must be positive safe integer twip values"
+  if (
+    line.lineCap !== undefined &&
+    line.lineCap !== "butt" &&
+    line.lineCap !== "round" &&
+    line.lineCap !== "square"
+  )
+    return "Line cap must be 'butt', 'round', or 'square'"
+  return undefined
+}
+
+function validateRectangle(
+  rectangle: Extract<
+    PageDisplayList["pages"][number]["items"][number],
+    { type: "rectangle" }
+  >
+): string | undefined {
+  const { bounds } = rectangle
+  for (const value of [bounds.x, bounds.y, bounds.width, bounds.height]) {
+    if (!Number.isSafeInteger(value))
+      return "Rectangle bounds must be safe integer twips"
+  }
+  if (bounds.width < 0 || bounds.height < 0)
+    return "Rectangle dimensions must be non-negative twip values"
+  if (
+    rectangle.strokeWidth !== undefined &&
+    (!Number.isSafeInteger(rectangle.strokeWidth) || rectangle.strokeWidth < 0)
+  )
+    return "Rectangle stroke width must be a non-negative safe integer twip value"
+  if (rectangle.strokeColor === undefined && rectangle.fillColor === undefined)
+    return "Rectangle must define a stroke color, a fill color, or both"
+  return undefined
+}
+
+function pdfLineCap(lineCap: "butt" | "round" | "square"): 0 | 1 | 2 {
+  if (lineCap === "round") return 1
+  if (lineCap === "square") return 2
+  return 0
 }
 
 const EMBEDDED_FONT_OBJECT_COUNT = 6

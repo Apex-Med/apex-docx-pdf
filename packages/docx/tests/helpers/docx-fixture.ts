@@ -6,7 +6,7 @@ const OFFICE_DOCUMENT_RELATIONSHIP =
 export type OneParagraphDocxFixtureOptions = Readonly<{
   documentXml?: string
   rootRelationshipsXml?: string
-  extraParts?: Readonly<Record<string, string>>
+  extraParts?: Readonly<Record<string, string | Uint8Array>>
 }>
 
 /** A legal, tiny DOCX package assembled entirely in memory for deterministic tests. */
@@ -39,7 +39,7 @@ export function buildOneParagraphDocx(
     "word/document.xml": strToU8(documentXml),
   }
   for (const [name, value] of Object.entries(options.extraParts ?? {})) {
-    parts[name] = strToU8(value)
+    parts[name] = typeof value === "string" ? strToU8(value) : value
   }
   return zipSync(parts, {
     level: 6,

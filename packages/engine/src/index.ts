@@ -13,11 +13,16 @@ import {
 } from "@apex-docx-pdf/core"
 import { inspectDocx, normaliseDocxBytes } from "@apex-docx-pdf/docx"
 import { createFontRegistry } from "@apex-docx-pdf/fonts"
+import {
+  ImagePreparationError,
+  prepareImageAssets,
+  type ImagePreparationProvider,
+} from "@apex-docx-pdf/images"
 import { layoutDocument } from "@apex-docx-pdf/layout"
 import { serializePdf } from "@apex-docx-pdf/pdf"
 import { compileTemplate, resolveTemplate } from "@apex-docx-pdf/template"
 
-export const ENGINE_VERSION = "0.0.0-phase.3"
+export const ENGINE_VERSION = "0.0.0-phase.7"
 
 export class EngineOperationError extends Error {
   constructor(
@@ -47,8 +52,11 @@ export async function createDocxPdfEngine(
     : undefined
   const textShaper = options.textShaper ?? fontRegistry
   const compiledTemplates = new WeakSet<object>()
+  const staticImages = new WeakMap<object, ImagePreparationProvider>()
 
   const engine: DocxPdfEngine = {
+    version: ENGINE_VERSION,
+    ...(fontRegistry ? { fontRegistryHash: fontRegistry.registryHash } : {}),
     async inspect(templateBytes, inspectOptions = {}) {
       await yieldToAbort(inspectOptions.signal)
       const result = inspectDocx(templateBytes, {
@@ -75,6 +83,31 @@ export async function createDocxPdfEngine(
         )
       }
       throwForUnacceptableTemplateDiagnostics(normalised.diagnostics)
+      let images: ImagePreparationProvider
+      try {
+        images = prepareImageAssets(normalised.value.assets, {
+          limits: {
+            maxBytes: limits.maxImageBytes,
+            maxDimensionPixels: limits.maxImageDimensionPixels,
+            maxPixels: limits.maxImagePixels,
+            maxDecodedBytes: limits.maxDecodedImageBytes,
+          },
+          signal: compileOptions.signal,
+        })
+      } catch (error) {
+        if (!(error instanceof ImagePreparationError)) throw error
+        const diagnostic: Diagnostic = Object.freeze({
+          code: error.code,
+          severity: "error",
+          message: error.message,
+          details: { assetId: error.assetId },
+        })
+        throw new EngineOperationError(
+          "engine/image",
+          "An embedded image could not be prepared safely",
+          Object.freeze([...normalised.diagnostics, diagnostic])
+        )
+      }
       const compiled = await compileTemplate(normalised.value, {
         limits,
         signal: compileOptions.signal,
@@ -88,6 +121,7 @@ export async function createDocxPdfEngine(
         diagnostics,
       })
       compiledTemplates.add(result)
+      staticImages.set(result, images)
       return result
     },
 
@@ -108,6 +142,8 @@ export async function createDocxPdfEngine(
       const resolved = resolveTemplate(compiled, safeData, {
         limits,
         signal: renderOptions.signal,
+        locale: renderOptions.locale,
+        timeZone: renderOptions.timeZone,
       })
       const resolvedAt = now()
       if (!resolved.ok) {
@@ -133,16 +169,27 @@ export async function createDocxPdfEngine(
             })
           : layoutDocument(resolved.value, commonLayoutOptions)
       const layoutAt = now()
+      const preSerializationDiagnostics = Object.freeze([
+        ...resolved.diagnostics,
+        ...layout.diagnostics,
+      ])
+      if (hasErrors(preSerializationDiagnostics)) {
+        throw new EngineOperationError(
+          "engine/render",
+          "Rendering would omit or corrupt supported document content",
+          preSerializationDiagnostics
+        )
+      }
       const pdfStartedAt = now()
       const pdf = serializePdf(layout.displayList, {
         metadata: renderOptions.metadata,
         signal: renderOptions.signal,
+        images: staticImages.get(compiled),
         ...(fontRegistry ? { fonts: fontRegistry } : {}),
       })
       const completedAt = now()
       const diagnostics = Object.freeze([
-        ...resolved.diagnostics,
-        ...layout.diagnostics,
+        ...preSerializationDiagnostics,
         ...pdf.diagnostics,
       ])
       if (hasErrors(diagnostics)) {

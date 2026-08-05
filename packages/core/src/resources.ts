@@ -5,6 +5,12 @@ export type ResourceLimits = Readonly<{
   maxXmlDepth: number
   maxXmlNodes: number
   maxXmlTextBytes: number
+  maxImageCount: number
+  maxImageBytes: number
+  maxImageDimensionPixels: number
+  /** Maximum width x height accepted for one raster image. */
+  maxImagePixels: number
+  maxDecodedImageBytes: number
   maxExpressionDepth: number
   maxObjectTraversalDepth: number
   maxJsonNodes: number
@@ -23,6 +29,11 @@ export const DEFAULT_RESOURCE_LIMITS: ResourceLimits = Object.freeze({
   maxXmlDepth: 128,
   maxXmlNodes: 1_000_000,
   maxXmlTextBytes: 50_000_000,
+  maxImageCount: 100,
+  maxImageBytes: 20_000_000,
+  maxImageDimensionPixels: 100_000,
+  maxImagePixels: 100_000_000,
+  maxDecodedImageBytes: 400_000_000,
   maxExpressionDepth: 32,
   maxObjectTraversalDepth: 32,
   maxJsonNodes: 100_000,

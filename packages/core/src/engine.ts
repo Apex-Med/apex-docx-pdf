@@ -55,6 +55,8 @@ export type EngineOptions = Readonly<{
 }>
 
 export interface DocxPdfEngine {
+  readonly version: string
+  readonly fontRegistryHash?: DocumentHash
   inspect(
     templateBytes: Uint8Array,
     options?: InspectOptions
