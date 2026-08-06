@@ -75,7 +75,7 @@ const result = await engine.render(
 await Bun.write("invoice.pdf", result.pdf)
 ```
 
-`compiled.version` is `0.0.0-phase.7`. The compiled result exposes canonical manifest paths such as `invoice.items[].description`, a deterministic nested JSON Schema, one-item starter arrays, immutable package-owned image assets, and diagnostics. `result` contains searchable PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a source-linked layout trace. Tables can cross pages and repeat contiguous leading header rows; sections produce their declared portrait/landscape pages; default headers and footers repeat with current decimal page values.
+`compiled.version` is `0.0.0-phase.8`. The compiled result exposes canonical manifest paths such as `invoice.items[].description`, a deterministic nested JSON Schema, one-item starter arrays, immutable package-owned image assets, and diagnostics. `result` contains searchable PDF bytes, page count, a deterministic document hash, timings, diagnostics, and—when requested—a source-linked layout trace. Tables can cross pages and repeat contiguous leading header rows; sections produce their declared portrait/landscape pages; default headers and footers repeat with current decimal page values.
 
 For a table, author positive integer-twip columns in `tblGrid`. The renderer uses their sum as the fixed width; any explicit `tblW` must equal that sum, and any explicit cell `tcW` must equal the sum of its `gridSpan` columns. This rule also applies when the DOCX declares `autofit`: the renderer does not implement Word's content-driven autofit algorithm.
 

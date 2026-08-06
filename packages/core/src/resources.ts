@@ -46,11 +46,17 @@ export const DEFAULT_RESOURCE_LIMITS: ResourceLimits = Object.freeze({
 })
 
 export type ResourceUsage = Readonly<{
+  /** Exact compressed DOCX byte length supplied to compile. */
   templateBytes: number
+  /** Number of entries in the validated DOCX central directory. */
   archiveEntries: number
+  /** Sum of validated uncompressed ZIP part byte lengths. */
   decompressedBytes: number
+  /** Semantic nodes charged against the template expansion budget. */
   expandedNodes: number
+  /** UTF-8 bytes charged against the expanded-text budget. */
   expandedTextBytes: number
+  /** Final number of pages emitted by deterministic layout. */
   pages: number
 }>
 

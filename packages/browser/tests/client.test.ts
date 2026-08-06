@@ -56,6 +56,7 @@ describe("BrowserRendererClient", () => {
       displayList: { pages: [] },
       placeholderNodes: { "node-1": "patient.name" },
       assets: [],
+      layoutTrace: { pages: [], events: [] },
     }
 
     worker.reply({
@@ -183,6 +184,12 @@ describe("installRendererWorker", () => {
       throw new Error("Expected compile success")
     }
     const compileResult = compileResponse.result as BrowserCompileResult
+    expect(progressFor(responses, "compile-with-assets")).toEqual([
+      ["validating", 1, 4, "Inspect and validate DOCX"],
+      ["compiling", 2, 4, "Compile template contract"],
+      ["layout", 3, 4, "Lay out engine template preview"],
+      ["complete", 4, 4, "Template ready"],
+    ])
     const previewAssets = compileResult.templatePreview.assets
     expect(previewAssets).toHaveLength(2)
     expect(previewAssets.map(({ bytes }) => [...bytes])).toEqual([
@@ -222,10 +229,32 @@ describe("installRendererWorker", () => {
     ) {
       throw new Error("Expected render success")
     }
-    const renderResult = renderResponse.result as { pdf: ArrayBuffer }
+    const renderResult = renderResponse.result as {
+      pdf: ArrayBuffer
+      resourceUsage: {
+        templateBytes: number
+        archiveEntries: number
+        decompressedBytes: number
+        expandedNodes: number
+        expandedTextBytes: number
+        pages: number
+      }
+    }
+    expect(progressFor(responses, "render-from-cache")).toEqual([
+      ["resolving", 1, 2, "Resolve, lay out, and render PDF"],
+      ["complete", 2, 2, "PDF ready"],
+    ])
     expect(new Uint8Array(renderResult.pdf).slice(0, 5)).toEqual(
       new TextEncoder().encode("%PDF-")
     )
+    expect(renderResult.resourceUsage).toEqual({
+      templateBytes: templateBytes.byteLength,
+      archiveEntries: 10,
+      decompressedBytes: 5448,
+      expandedNodes: 37,
+      expandedTextBytes: 222,
+      pages: 3,
+    })
     cleanup()
   })
 
@@ -335,6 +364,24 @@ describe("installRendererWorker", () => {
     expect(removed).toBe(installed)
   })
 })
+
+function progressFor(
+  responses: readonly RendererWorkerResponse[],
+  requestId: string
+): readonly (readonly [string, number, number, string])[] {
+  return responses.flatMap((response) =>
+    response.type === "progress" && response.progress.requestId === requestId
+      ? [
+          [
+            response.progress.stage,
+            response.progress.completed,
+            response.progress.total,
+            response.progress.message,
+          ] as const,
+        ]
+      : []
+  )
+}
 
 async function waitForTerminalResponse(
   responses: readonly RendererWorkerResponse[],

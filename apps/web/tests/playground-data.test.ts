@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test"
 
 import {
+  dateFieldFormats,
+  dateFieldInputPrecision,
   fieldValidationMessages,
   inspectImageBytes,
   parseFiniteNumberInput,
+  playgroundDateInputToIso,
+  playgroundDateInputValue,
   readPlaygroundImage,
   validateTemplateData,
 } from "../src/lib/playground-data"
@@ -101,6 +105,52 @@ describe("validateTemplateData", () => {
     expect(parseFiniteNumberInput("")).toBe(0)
     expect(parseFiniteNumberInput("not-a-number")).toBeUndefined()
     expect(parseFiniteNumberInput("Infinity")).toBeUndefined()
+  })
+})
+
+describe("playground date inputs", () => {
+  test("derives date, minute, and second precision from manifest formats", () => {
+    const field = (formats: readonly string[]) => ({
+      path: "appointment.startsAt",
+      kind: "date" as const,
+      required: true,
+      formatters: formats.map((format) => ({
+        name: "date",
+        arguments: [format],
+      })),
+      sourceLocations: [],
+      inferredFrom: [],
+    })
+
+    expect(dateFieldFormats(field(["dd-MM-yyyy"]))).toEqual(["dd-MM-yyyy"])
+    expect(dateFieldInputPrecision(field(["dd-MM-yyyy"]))).toBe("date")
+    expect(dateFieldInputPrecision(field(["dd-MM-yyyy HH:mm"]))).toBe("minute")
+    expect(
+      dateFieldInputPrecision(field(["dd-MM-yyyy", "dd-MM-yyyy hh:mm:ss a"]))
+    ).toBe("second")
+  })
+
+  test("round-trips wall-clock inputs through the explicit playground time zone", () => {
+    expect(
+      playgroundDateInputValue(
+        "2026-08-05T07:30:15.000Z",
+        "second",
+        "Africa/Johannesburg"
+      )
+    ).toBe("2026-08-05T09:30:15")
+    expect(
+      playgroundDateInputToIso(
+        "2026-08-05T09:30",
+        "minute",
+        "Africa/Johannesburg"
+      )
+    ).toBe("2026-08-05T09:30:00.000+02:00")
+    expect(
+      playgroundDateInputToIso("2026-08-05", "date", "Africa/Johannesburg")
+    ).toBe("2026-08-05T00:00:00.000+02:00")
+    expect(
+      playgroundDateInputToIso("2026-02-30", "date", "Africa/Johannesburg")
+    ).toBeUndefined()
   })
 })
 

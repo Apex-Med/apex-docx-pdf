@@ -27,8 +27,14 @@ describe("layout trace serialization", () => {
         {
           pageNumber: 1,
           sourceNodeId: "b" as never,
-          kind: "line",
-          reason: "wrap",
+          kind: "glyph-run",
+          bounds: {
+            x: twips(10),
+            y: twips(20),
+            width: twips(30),
+            height: twips(40),
+          },
+          baselineY: twips(50),
         },
         {
           pageNumber: 1,
@@ -41,10 +47,32 @@ describe("layout trace serialization", () => {
             height: twips(4),
           },
         },
+        {
+          pageNumber: 1,
+          sourceNodeId: "row" as never,
+          kind: "table-row-fragment",
+          bounds: {
+            x: twips(5),
+            y: twips(6),
+            width: twips(7),
+            height: twips(8),
+          },
+          fragmentOffset: twips(9),
+          rowHeight: twips(17),
+          repeatedHeader: true,
+          reason: "fragmented",
+        },
+        {
+          pageNumber: 1,
+          sourceNodeId: "keep" as never,
+          kind: "keep-decision",
+          decision: "adjusted",
+          reason: "widow-orphan",
+        },
       ],
     }
     expect(serializeLayoutTrace(trace)).toBe(
-      '{"pages":[{"pageNumber":1,"pageBounds":{"x":0,"y":0,"width":600,"height":800},"contentBounds":{"x":20,"y":30,"width":560,"height":740}}],"events":[{"pageNumber":1,"sourceNodeId":"b","kind":"line","reason":"wrap"},{"pageNumber":1,"sourceNodeId":"a","kind":"block","bounds":{"x":1,"y":2,"width":3,"height":4}}]}'
+      '{"pages":[{"pageNumber":1,"pageBounds":{"x":0,"y":0,"width":600,"height":800},"contentBounds":{"x":20,"y":30,"width":560,"height":740}}],"events":[{"pageNumber":1,"sourceNodeId":"b","kind":"glyph-run","bounds":{"x":10,"y":20,"width":30,"height":40},"baselineY":50},{"pageNumber":1,"sourceNodeId":"a","kind":"block","bounds":{"x":1,"y":2,"width":3,"height":4}},{"pageNumber":1,"sourceNodeId":"row","kind":"table-row-fragment","bounds":{"x":5,"y":6,"width":7,"height":8},"reason":"fragmented","fragmentOffset":9,"rowHeight":17,"repeatedHeader":true},{"pageNumber":1,"sourceNodeId":"keep","kind":"keep-decision","reason":"widow-orphan","decision":"adjusted"}]}'
     )
   })
 })

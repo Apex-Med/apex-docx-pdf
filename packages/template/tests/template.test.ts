@@ -541,13 +541,91 @@ describe("Phase 4 formatters", () => {
     expect(second).toEqual(first)
   })
 
+  test("defaults to day-month-year and supports explicit date and time patterns", async () => {
+    const compiled = await compileTemplate(
+      documentWithRuns([
+        "{{defaulted:date | date}}|",
+        '{{numeric:date | date:"yyyy/MM/dd"}}|',
+        '{{long:date | date:"d MMMM yyyy"}}|',
+        '{{twentyFour:date | date:"dd-MM-yyyy HH:mm:ss"}}|',
+        '{{twelve:date | date:"dd-MM-yyyy hh:mm a"}}|',
+        '{{compact:date | date:"M/d/yyyy H:m:s"}}',
+      ])
+    )
+
+    expect(compiled.diagnostics).toEqual([])
+    expect(
+      compiled.manifest.fields.find((field) => field.path === "defaulted")
+        ?.formatters
+    ).toEqual([{ name: "date", arguments: ["dd-MM-yyyy"] }])
+
+    const value = "2024-01-02T23:04:05.000Z"
+    const data = {
+      compact: value,
+      defaulted: value,
+      numeric: value,
+      long: value,
+      twentyFour: value,
+      twelve: value,
+    }
+    const options = { locale: "en-US", timeZone: "Africa/Johannesburg" }
+    const first = resolveTemplate(compiled, data, options)
+    const second = resolveTemplate(compiled, data, options)
+
+    expect(resolvedText(first)).toBe(
+      "03-01-2024|2024/01/03|3 January 2024|03-01-2024 01:04:05|03-01-2024 01:04 AM|1/3/2024 1:4:5"
+    )
+    expect(second).toEqual(first)
+  })
+
+  test("formats supported currency locales without ambient ICU separators", async () => {
+    const compiled = await compileTemplate(
+      documentWithRuns(['{{amount:number | currency:"ZAR"}}'])
+    )
+
+    expect(
+      resolvedText(
+        resolveTemplate(compiled, { amount: 1234.5 }, { locale: "en-ZA" })
+      )
+    ).toBe("R\u00a01\u00a0234,50")
+    expect(
+      resolvedText(
+        resolveTemplate(compiled, { amount: -1234.5 }, { locale: "en-US" })
+      )
+    ).toBe("-ZAR\u00a01,234.50")
+    expect(
+      resolveTemplate(compiled, { amount: 1 }, { locale: "fr-FR" })
+        .diagnostics[0]
+    ).toMatchObject({
+      code: "TEMPLATE_FORMATTER_CONTEXT",
+      message:
+        "The currency formatter supports only the canonical en-US and en-ZA locale profiles",
+    })
+    expect(
+      resolveTemplate(
+        compiled,
+        { amount: Number.MAX_VALUE },
+        { locale: "en-ZA" }
+      ).diagnostics[0]
+    ).toMatchObject({
+      code: "TEMPLATE_VALUE_TYPE",
+      message:
+        "The currency formatter requires a finite value within the safe integer magnitude",
+    })
+  })
+
   test("rejects unknown, wrong-arity, incompatible, malformed, and executable-looking formatter expressions", async () => {
     const cases = [
       ["{{name | title}}", "TEMPLATE_UNKNOWN_FORMATTER"],
       ['{{name | upper:"x"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
       ['{{name:string | currency:"USD"}}', "TEMPLATE_FORMATTER_TYPE"],
       ['{{amount | currency:"usd"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
-      ['{{date | date:"yyyy-MM-dd"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
+      ['{{date | date:"yyyy"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
+      ['{{date | date:"dd-mm-yyyy"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
+      ['{{date | date:"dd-MM-yyyy mm"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
+      ['{{date | date:"dd-MM-yyyy HH:mm a"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
+      ['{{date | date:"dd-MM-yyyy hh:mm"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
+      ['{{date | date:"dd-QQ-yyyy"}}', "TEMPLATE_FORMATTER_ARGUMENT"],
       ['{{amount | currency:"USD}}', "TEMPLATE_MALFORMED_QUOTE"],
       ["{{name.toString() | upper}}", "TEMPLATE_INVALID_EXPRESSION"],
     ] as const
@@ -575,6 +653,17 @@ describe("Phase 4 formatters", () => {
         { locale: "en-US", timeZone: "UTC" }
       ).diagnostics[0]?.code
     ).toBe("TEMPLATE_VALUE_TYPE")
+    expect(
+      resolveTemplate(
+        date,
+        { when: "2024-01-02T00:00:00Z" },
+        { locale: "fr-FR", timeZone: "UTC" }
+      ).diagnostics[0]
+    ).toMatchObject({
+      code: "TEMPLATE_FORMATTER_CONTEXT",
+      message:
+        "The date formatter supports only the canonical en-US and en-ZA locale profiles",
+    })
   })
 })
 

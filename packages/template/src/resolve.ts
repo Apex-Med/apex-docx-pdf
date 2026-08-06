@@ -29,6 +29,11 @@ import {
   templateDiagnostic,
   type ParsedPlaceholder,
 } from "./internal"
+import { formatDateTime, parseDateTimeFormat } from "./date-format"
+import {
+  canonicalFormatterLocale,
+  formatCanonicalCurrency,
+} from "./locale-format"
 
 export type TemplateResolveOptions = Readonly<{
   /** Strict is the default. Permissive value resolution warns and substitutes empty text. */
@@ -48,6 +53,12 @@ export type TemplateResolveOptions = Readonly<{
     >
   >
   signal?: AbortSignal
+}>
+
+export type TemplateResolutionResult = Readonly<{
+  document: ResolvedDocument
+  expandedNodes: number
+  expandedTextBytes: number
 }>
 
 type ResolvedValue =
@@ -336,10 +347,27 @@ function applyFormatters(
             code: "TEMPLATE_FORMATTER_CONTEXT",
             message: "The currency formatter requires an explicit locale",
           }
-        text = new Intl.NumberFormat(options.locale, {
-          style: "currency",
-          currency: String(formatter.arguments[0]),
-        }).format(value as number)
+        const locale = canonicalFormatterLocale(options.locale)
+        if (locale === undefined)
+          return {
+            ok: false,
+            code: "TEMPLATE_FORMATTER_CONTEXT",
+            message:
+              "The currency formatter supports only the canonical en-US and en-ZA locale profiles",
+          }
+        const formatted = formatCanonicalCurrency(
+          value as number,
+          String(formatter.arguments[0]),
+          locale
+        )
+        if (formatted === undefined)
+          return {
+            ok: false,
+            code: "TEMPLATE_VALUE_TYPE",
+            message:
+              "The currency formatter requires a finite value within the safe integer magnitude",
+          }
+        text = formatted
       } else if (formatter.name === "date") {
         if (options.locale === undefined || options.timeZone === undefined)
           return {
@@ -347,6 +375,13 @@ function applyFormatters(
             code: "TEMPLATE_FORMATTER_CONTEXT",
             message:
               "The date formatter requires explicit locale and timeZone values",
+          }
+        if (canonicalFormatterLocale(options.locale) === undefined)
+          return {
+            ok: false,
+            code: "TEMPLATE_FORMATTER_CONTEXT",
+            message:
+              "The date formatter supports only the canonical en-US and en-ZA locale profiles",
           }
         if (
           typeof value !== "string" ||
@@ -367,15 +402,14 @@ function applyFormatters(
             code: "TEMPLATE_VALUE_TYPE",
             message: "The date formatter received an invalid date-time",
           }
-        const parts = new Intl.DateTimeFormat(options.locale, {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-          timeZone: options.timeZone,
-        }).formatToParts(date)
-        const part = (type: Intl.DateTimeFormatPartTypes): string =>
-          parts.find((candidate) => candidate.type === type)?.value ?? ""
-        text = `${part("day")} ${part("month")} ${part("year")}`
+        const pattern = parseDateTimeFormat(String(formatter.arguments[0]))
+        if (pattern === undefined)
+          return {
+            ok: false,
+            code: "TEMPLATE_FORMATTER_ARGUMENT",
+            message: "The date formatter received an invalid format pattern",
+          }
+        text = formatDateTime(date, pattern, options.timeZone)
       }
     }
   } catch {
@@ -1048,6 +1082,21 @@ export function resolveTemplate(
   data: Readonly<Record<string, unknown>>,
   options: TemplateResolveOptions = {}
 ): OperationResult<ResolvedDocument> {
+  const result = resolveTemplateWithUsage(compiled, data, options)
+  if (!result.ok) return result
+  return {
+    ok: true,
+    value: result.value.document,
+    diagnostics: result.diagnostics,
+  }
+}
+
+/** Resolves while exposing the exact deterministic expansion-budget counters. */
+export function resolveTemplateWithUsage(
+  compiled: CompiledTemplate,
+  data: Readonly<Record<string, unknown>>,
+  options: TemplateResolveOptions = {}
+): OperationResult<TemplateResolutionResult> {
   throwIfAborted(options.signal)
   const limits = limitsFor(options)
   const state: ExpansionState = {
@@ -1111,12 +1160,16 @@ export function resolveTemplate(
   return {
     ok: true,
     value: {
-      ...compiled.source,
-      assets: state.assets,
-      headers,
-      footers,
-      sections,
-    } as ResolvedDocument,
+      document: {
+        ...compiled.source,
+        assets: state.assets,
+        headers,
+        footers,
+        sections,
+      } as ResolvedDocument,
+      expandedNodes: state.nodes,
+      expandedTextBytes: state.textBytes,
+    },
     diagnostics: state.diagnostics,
   }
 }

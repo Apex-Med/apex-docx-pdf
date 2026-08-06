@@ -41,7 +41,8 @@ Invoice {{invoice.number:string | upper}}
 {{else}}
 No item details
 {{/if}}
-Issued {{invoice.issuedAt:date | date:"d MMMM yyyy"}}
+Issued {{invoice.issuedAt:date | date}}
+Appointment {{invoice.appointmentAt:date | date:"dd-MM-yyyy HH:mm"}}
 ```
 
 Render with an explicit locale and time zone, and provide an offset-bearing date-time:
@@ -52,10 +53,13 @@ Render with an explicit locale and time zone, and provide an offset-bearing date
     "number": "inv-1042",
     "showItems": true,
     "items": [{ "description": "Consultation", "amount": 1250 }],
-    "issuedAt": "2026-08-05T09:30:00+02:00"
+    "issuedAt": "2026-08-05T09:30:00+02:00",
+    "appointmentAt": "2026-08-06T14:45:00+02:00"
   }
 }
 ```
+
+The bare `date` formatter defaults to `dd-MM-yyyy`. Supply a bounded pattern to change the date order or include time; for example, `yyyy/MM/dd`, `dd-MM-yyyy HH:mm`, or `dd-MM-yyyy hh:mm a`. `MM` means month and `mm` means minutes.
 
 The compiled manifest records `invoice.items[].description` and `invoice.items[].amount`; its deterministic starter data contains a one-object `items` array.
 
@@ -114,6 +118,6 @@ Header/footer template values, formatters, and whole-paragraph blocks resolve fr
 
 ## Do not rely on these yet
 
-Non-canonical image tags, external/fetched images, anchors/floating placement, crop, rotation, SVG, unsupported image profiles/colors, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, arbitrary fields, percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex scripts, CFF embedding, true default subsetting, and production deployment are outside the current profile. See [template language](/template-language), [font handling](/font-handling), and the [support matrix](/supported-features).
+Non-canonical image tags, external/fetched images, anchors/floating placement, crop, rotation, SVG, unsupported image profiles/colors, continuous/odd/even section breaks, first/even header variants, automatic header/footer numbering, arbitrary fields, percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex scripts, CFF embedding, and variable-font axis instantiation are outside the current profile. See [template language](/template-language), [font handling](/font-handling), and the [support matrix](/supported-features).
 
 Continue with the [representative examples](/examples) for concrete, inspectable authoring patterns.

@@ -23,6 +23,11 @@ declare module "fontkit" {
     positions: readonly FontkitGlyphPosition[]
   }>
 
+  type FontkitSubset = {
+    includeGlyph(glyph: number | FontkitGlyph): number
+    encode(): Uint8Array
+  }
+
   export type FontkitFont = Readonly<{
     postscriptName: string | null
     unitsPerEm: number
@@ -33,6 +38,7 @@ declare module "fontkit" {
     underlineThickness: number
     bbox: FontkitBox
     hasGlyphForCodePoint(codePoint: number): boolean
+    createSubset(): FontkitSubset
     layout(
       text: string,
       features?: readonly string[] | Readonly<Record<string, boolean>>

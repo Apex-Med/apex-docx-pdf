@@ -62,27 +62,35 @@ export function installRendererWorker(
             "validating",
             1,
             4,
-            "Validating DOCX package"
+            "Inspect and validate DOCX"
           )
           const templateBytes = new Uint8Array(request.templateBytes)
           const inspection = await engine.inspect(templateBytes, {
-            signal: controller.signal,
-          })
-          const compiled = await engine.compile(templateBytes, {
-            unsupportedFeatures: "strict",
-            signal: controller.signal,
-          })
-          const preview = await engine.preview(compiled, {
             signal: controller.signal,
           })
           progress(
             scope,
             request.requestId,
             "compiling",
+            2,
+            4,
+            "Compile template contract"
+          )
+          const compiled = await engine.compile(templateBytes, {
+            unsupportedFeatures: "strict",
+            signal: controller.signal,
+          })
+          progress(
+            scope,
+            request.requestId,
+            "layout",
             3,
             4,
-            "Extracting typed fields"
+            "Lay out engine template preview"
           )
+          const preview = await engine.preview(compiled, {
+            signal: controller.signal,
+          })
           compiledTemplates.clear()
           compiledTemplates.set(compiled.templateHash, compiled)
           if (!engine.fontRegistryHash) {
@@ -106,6 +114,7 @@ export function installRendererWorker(
               displayList: preview.displayList,
               placeholderNodes: preview.placeholderNodes,
               assets: previewAssets,
+              layoutTrace: preview.layoutTrace,
             },
             inspection,
             diagnostics: Object.freeze([
@@ -140,23 +149,15 @@ export function installRendererWorker(
           request.requestId,
           "resolving",
           1,
-          3,
-          "Resolving template data"
+          2,
+          "Resolve, lay out, and render PDF"
         )
         const rendered = await engine.render(compiled, request.data, {
           ...request.options,
           signal: controller.signal,
         })
-        progress(
-          scope,
-          request.requestId,
-          "pdf",
-          2,
-          3,
-          "Writing deterministic PDF"
-        )
         const pdf = rendered.pdf.slice().buffer
-        progress(scope, request.requestId, "complete", 3, 3, "PDF ready")
+        progress(scope, request.requestId, "complete", 2, 2, "PDF ready")
         respond(
           scope,
           {
@@ -168,6 +169,7 @@ export function installRendererWorker(
               pageCount: rendered.pageCount,
               diagnostics: rendered.diagnostics,
               timings: rendered.timings,
+              resourceUsage: rendered.resourceUsage,
               ...(rendered.layoutTrace
                 ? { layoutTrace: rendered.layoutTrace }
                 : {}),

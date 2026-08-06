@@ -9,7 +9,7 @@
     "apex-docx-pdf": { "maxPackedBytes": 8000, "maxUnpackedBytes": 22000 },
     "browser": { "maxPackedBytes": 18000, "maxUnpackedBytes": 70000 },
     "core": { "maxPackedBytes": 17000, "maxUnpackedBytes": 65000 },
-    "devtools": { "maxPackedBytes": 14000, "maxUnpackedBytes": 45000 },
+    "devtools": { "maxPackedBytes": 21000, "maxUnpackedBytes": 80000 },
     "docx": { "maxPackedBytes": 140000, "maxUnpackedBytes": 720000 },
     "engine": { "maxPackedBytes": 26000, "maxUnpackedBytes": 105000 },
     "fonts": { "maxPackedBytes": 2300000, "maxUnpackedBytes": 4700000 },

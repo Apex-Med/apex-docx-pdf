@@ -7,7 +7,7 @@ export type SupportRow = Readonly<{
   behavior: string
 }>
 
-export const ENGINE_VERSION = "0.0.0-phase.7" as const
+export { ENGINE_VERSION } from "@apex-docx-pdf/engine"
 
 export const supportStatusLabel: Record<SupportStatus, string> = {
   supported: "Supported",
@@ -52,13 +52,13 @@ export const supportMatrix: readonly SupportRow[] = [
     area: "Registered fonts and embedded text",
     status: "limited",
     behavior:
-      "The library accepts explicit TrueType bytes for LTR Latin shaping. The playground self-hosts five application-owned, hash-pinned OFL TrueType families, maps familiar system names deterministically, and never executes uploaded embedded fonts. Output is searchable upright Type0/CIDFontType2 text; the default path embeds complete fonts rather than true subsets.",
+      "The library accepts explicit TrueType bytes for LTR Latin shaping and deterministically rewrites the used glyphs into mapped fontkit subsets. The playground self-hosts five application-owned, hash-pinned OFL TrueType families, maps familiar system names deterministically, and never executes uploaded embedded fonts. Output is searchable upright Type0/CIDFontType2 text.",
   },
   {
     area: "Template values and formatters",
     status: "limited",
     behavior:
-      'Typed dotted paths plus upper, lower, currency:"ISO", and date:"d MMMM yyyy" using explicit locale and time-zone context.',
+      'Typed dotted paths plus upper, lower, currency:"ISO", and bounded date/time patterns. Date defaults to dd-MM-yyyy; explicit time tokens include 24-hour or 12-hour time using explicit locale and time-zone context.',
   },
   {
     area: "Conditions and loops",
@@ -172,7 +172,7 @@ export const supportMatrix: readonly SupportRow[] = [
     area: "Other text and font features",
     status: "unsupported",
     behavior:
-      "Default or non-left tab behavior, tab leaders, complex scripts/bidi, CFF PDF embedding, and true default font subsetting are unavailable.",
+      "Default or non-left tab behavior, tab leaders, complex scripts/bidi, CFF PDF embedding, variable-axis instantiation, and interrupting synchronous subsetting mid-encode are unavailable.",
   },
   {
     area: "Opt-in Convex persistence",

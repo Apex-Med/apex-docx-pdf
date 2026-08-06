@@ -14,7 +14,11 @@ The unscoped umbrella deliberately exports the engine factory, operation error, 
 
 Workspace manifests continue to export TypeScript source so Bun tests, Vite, and editor typechecking retain the current local-resolution behavior. `bun run build` uses the shared `tsup.config.ts` to create ESM bundles, declarations, declaration maps where supported by the toolchain, JavaScript source maps, and tree-shaken output. The preparation script writes a publication-only manifest into each `dist` directory, replaces `workspace:*` ranges with the exact lockstep prerelease version, and copies the repository license and README. Only `dist` is packed or published.
 
-Run `bun run packages:check` to build and then validate every publication directory with Publint, Are the Types Wrong, and `npm pack --dry-run`. Validation also enforces packed/unpacked size budgets and required license, README, declaration, manifest, and font provenance/OFL assets. `npm pack` is used only to inspect the artifact; dependency installation remains Bun-only. Run `bun run packages:size:review` after a build to regenerate the checked-in measurement report.
+Run `bun run packages:check` to build and then validate every publication directory with Publint, Are the Types Wrong, and `npm pack --dry-run`. Validation also enforces packed/unpacked size budgets and required license, README, declaration, manifest, and font provenance/OFL assets. `npm pack` is used only to create or inspect artifacts; dependency installation remains Bun-only. Run `bun run packages:size:review` after a build to regenerate the checked-in measurement report.
+
+Run `bun run packages:consumer-smoke` after the build to pack all 11 artifacts and install them into isolated temporary Bun consumers. The gate rejects workspace resolution, type-checks the complete public declaration surface, imports every public package, and requires one repeat-identical render under both Bun and Node. Local `overrides` bind unpublished exact internal versions to their tarballs; a separate registry install remains mandatory after publication.
+
+Run `bun run fixtures:check` to validate any checked-in editor exports and their provenance. The manual publish workflow additionally runs `bun run fixtures:release`, which fails until the corpus contains licensed, redistributable Microsoft Word and Google Docs exports covering all 15 fixture scenarios in the project brief. A publicly downloadable sample, private template, or synthetic OOXML builder does not satisfy this gate.
 
 ## Version workflow
 
@@ -34,7 +38,7 @@ The publish workflow is manual, rejects any confirmation other than `publish-nex
 ## Release checklist
 
 - [ ] The release contains only reviewed changes and a Changeset; all public packages remain on one `0.x.y-next.n` version.
-- [ ] `bun install --frozen-lockfile`, format, lint, typecheck, tests, docs, build, Publint, ATTW, and pack dry-runs pass from a clean checkout.
+- [ ] `bun install --frozen-lockfile`, format, lint, typecheck, tests, docs, build, Publint, ATTW, pack dry-runs, and the isolated packed-consumer smoke pass from a clean checkout.
 - [ ] Packed manifests contain no `workspace:` ranges, private package references, source-only exports, credentials, fixtures, app code, or unexpected large files.
 - [ ] Public API and compatibility changes are documented; `ENGINE_VERSION` and cache migration implications were reviewed separately.
 - [ ] npm trusted-publisher mappings and the protected `npm` environment are exact; no long-lived npm token is configured.

@@ -29,7 +29,8 @@ export const Route = createFileRoute("/")({
       },
       {
         property: "og:title",
-        content: "Apex DOCX PDF — Word templates to deterministic PDFs",
+        content:
+          "Apex DOCX PDF — Word and Google Docs templates to deterministic PDFs",
       },
       {
         property: "og:description",
@@ -76,7 +77,7 @@ function App() {
                 className="landing-reveal mt-8 text-4xl leading-[0.96] font-semibold tracking-[-0.05em] text-balance sm:mt-10 sm:text-5xl md:text-6xl lg:text-[4.25rem]"
                 style={{ "--reveal-delay": "80ms" } as CSSProperties}
               >
-                Word templates.
+                Word or Google Docs.
                 <br />
                 Deterministic PDFs.
               </h1>
@@ -85,9 +86,9 @@ function App() {
                 className="landing-reveal mx-auto mt-6 max-w-xl text-base leading-7 text-muted-foreground sm:mt-7 sm:text-lg sm:leading-8"
                 style={{ "--reveal-delay": "140ms" } as CSSProperties}
               >
-                Compile DOCX templates, bind typed JSON, and produce searchable
-                PDFs in TypeScript—without LibreOffice, Chromium, or a
-                conversion service.
+                Create templates in Word or Google Docs, export DOCX, bind typed
+                JSON, and produce searchable PDFs in TypeScript—without
+                LibreOffice, Chromium, or a conversion service.
               </p>
 
               <div
@@ -503,9 +504,21 @@ const reasons = [
 const features = [
   {
     eyebrow: "Template",
+    title: "Placeholders and schema",
+    description:
+      "Extract nested typed placeholders into a manifest, Draft 2020-12 JSON Schema, and deterministic starter data.",
+  },
+  {
+    eyebrow: "Template",
     title: "Loops and conditions",
     description:
       "Nested whole-paragraph conditions, optional else branches, and bounded each loops bind typed data.",
+  },
+  {
+    eyebrow: "Tables",
+    title: "Fixed-layout tables",
+    description:
+      "Deterministic grids, borders, merges, repeating headers, template rows, and row fragmentation continue across pages.",
   },
   {
     eyebrow: "Numbering",
@@ -732,7 +745,7 @@ const productSamples = {
   letter: {
     label: "Letter",
     templatePrimary: "{{recipient.name:string}}",
-    templateSecondary: '{{issuedAt:date | date:"d MMMM yyyy"}}',
+    templateSecondary: '{{issuedAt:date | date:"dd-MM-yyyy HH:mm"}}',
     data: `{
   "recipient": { "name": "Dr N. Mokoena" },
   "issuedAt": "2026-08-05T09:30:00+02:00"

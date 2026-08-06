@@ -5,7 +5,7 @@ description: "A deterministic DOCX-profile renderer that produces searchable PDF
 
 Apex DOCX PDF renders a deliberately documented DOCX profile to searchable PDF. It is not a Word clone: unsupported or materially lossy source content is diagnosed with source location instead of being silently discarded.
 
-Phases 1–8 now form a working renderer, local-first reference application, and Mintlify documentation surface. Engine version `0.0.0-phase.7` carries bounded package-owned inline PNG/JPEG images, mixed sections, inherited headers/footers, page fields, tables, templates, numbering, and explicit fonts through the deterministic renderer; the reference app adds opt-in session-owned Convex storage and cache metadata without coupling Convex to the engine. Local Phase 9 hardening evidence and Phase 10 prerelease preparation are checked in, while live deployment and publication remain approval-gated.
+Phases 1–8 now form a working renderer, local-only reference application, and Mintlify documentation source. Engine compatibility version `0.0.0-phase.8` carries bounded package-owned inline PNG/JPEG images, mixed sections, inherited headers/footers, page fields, tables, templates, numbering, and explicit fonts through the deterministic renderer. Local Phase 9 hardening evidence and Phase 10 prerelease preparation are checked in. The playground is deployed on Vercel; Mintlify hosting and npm publication remain separate.
 
 <Warning>
   The supported profile remains intentionally bounded. Canonical dynamic image
@@ -15,8 +15,8 @@ Phases 1–8 now form a working renderer, local-first reference application, and
   header/footer numbering, nested tables, complete Word autofit, complex-script
   shaping, and CFF embedding are not implemented. Phase 7 is not a broad Word,
   cross-runtime, production-authentication, or production-readiness claim. The
-  repository has a locally verified production build, not a live hosted-service
-  claim.
+  hosted playground is verified, but it is not a persistent SaaS,
+  production-authentication, operational-SLO, or broad compatibility claim.
 </Warning>
 
 ## Start here
@@ -44,10 +44,10 @@ Phases 1–8 now form a working renderer, local-first reference application, and
 
 ## Product and playground links
 
-This documentation repository intentionally does not declare a public product or playground URL. The local web app includes a `/playground` route, but a Mintlify deployment may be hosted on a different origin. Configure any product or playground link at deployment time, once its canonical URL is known.
+The public local-only playground is [pdf-docx.apexmed.dev](https://pdf-docx.apexmed.dev), with the interactive workspace at [pdf-docx.apexmed.dev/playground](https://pdf-docx.apexmed.dev/playground). The Mintlify deployment remains independent and is not yet configured as the application's canonical documentation origin.
 
-The examples in these docs use Mintlify tabs and accordions to make template patterns easier to compare. They do not embed or claim a live renderer. Use the local playground inspector to compile a real DOCX, inspect its generated contract and diagnostics, and render representative data before production use.
+The examples in these docs use Mintlify tabs and accordions to make template patterns easier to compare. They do not embed the renderer. Use the local-only playground inspector to compile a real DOCX, inspect its generated contract and diagnostics, and render representative data before production use.
 
 ## Design contract
 
-The renderer treats template bytes, bounded JSON data, caller-supplied font configuration and bytes, engine version, locale, time zone, metadata, limits, and explicit render options as compatibility inputs. Formatter output uses only explicit `Intl` context and never consults ambient locale, time zone, or clock state. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.
+The renderer treats template bytes, bounded JSON data, caller-supplied font configuration and bytes, engine version, locale, time zone, metadata, limits, and explicit render options as compatibility inputs. Formatter output uses bounded engine-owned `en-US`/`en-ZA` locale profiles plus the explicit IANA time zone and never consults ambient locale data, time zone, or clock state. See [determinism](/determinism) and the [architecture](/architecture) for the full boundary.

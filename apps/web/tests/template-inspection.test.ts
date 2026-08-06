@@ -16,7 +16,7 @@ function compileResult(
   diagnostics: BrowserCompileResult["diagnostics"] = []
 ): BrowserCompileResult {
   return {
-    engineVersion: "0.0.0-phase.7",
+    engineVersion: "0.0.0-phase.8",
     fontRegistryHash: "fonts-123",
     templateHash: "template-123",
     manifest: { fields },
@@ -26,6 +26,7 @@ function compileResult(
       displayList: { pages: [] },
       placeholderNodes: {},
       assets: [],
+      layoutTrace: { pages: [], events: [] },
     },
     inspection: {
       documentModelAvailable: true,
@@ -90,6 +91,7 @@ describe("template inspection", () => {
 
     expect(result).toEqual({
       fieldCount: 4,
+      previewPageCount: 0,
       fieldCountsByKind: [
         { kind: "string", count: 1 },
         { kind: "number", count: 1 },
@@ -154,6 +156,8 @@ describe("template inspection", () => {
       message: "Laying out pages",
     }
 
-    expect(describeWorkerProgress(progress)).toBe("Lay out pages · Step 2 of 3")
+    expect(describeWorkerProgress(progress)).toBe(
+      "Laying out pages · Step 2 of 3"
+    )
   })
 })

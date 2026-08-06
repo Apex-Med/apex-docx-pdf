@@ -19,7 +19,7 @@ import { Spinner } from "@workspace/ui/components/spinner"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
 import { useSessionId, useSessionIdArg } from "convex-helpers/react/sessions"
-import { useConvex } from "convex/react"
+import { useAction, useConvex } from "convex/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { uploadToConvexStorage } from "@/lib/convex-upload"
@@ -110,9 +110,7 @@ export function ConvexPersistence({
   const recentQuery = useQuery(convexQuery(api.renders.recent, sessionArgs))
   const convex = useConvex()
   const generateUploadUrl = useConvexMutation(api.storage.generateUploadUrl)
-  const registerUploadedFile = useConvexMutation(
-    api.storage.registerUploadedFile
-  )
+  const registerUploadedFile = useAction(api.storage.registerUploadedFile)
   const createTemplate = useConvexMutation(api.templates.create)
   const removeTemplate = useConvexMutation(api.templates.remove)
   const beginRender = useConvexMutation(api.renders.begin)

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "changeset": "changeset",
-    "ci": "bun run format:check && bun run lint && bun run typecheck && bun test && bun run test:cross-runtime && bun run test:browser-determinism && bun run test:playground-smoke && bun run docs:check && bun run release:validate && bun run build && bun run packages:validate",
+    "ci": "bun run format:check && bun run lint && bun run typecheck && bun test && bun run test:fuzz && bun run test:cross-runtime && bun run test:browser-determinism && bun run test:playground-smoke && bun run docs:check && bun run fixtures:check && bun run release:validate && bun run build && bun run packages:validate && bun run packages:consumer-smoke",
     "dev": "turbo dev",
     "convex:codegen": "convex codegen",
     "convex:dev": "convex dev",
@@ -16,24 +16,30 @@
     "lint:fix": "biome lint --write --error-on-warnings .",
     "format": "turbo format",
     "format:check": "prettier --check .",
+    "fixtures:check": "bun scripts/check-fixture-corpus.ts",
+    "fixtures:release": "bun scripts/check-fixture-corpus.ts --release",
     "packages:check": "bun run build && bun run packages:validate",
+    "packages:consumer-smoke": "bun scripts/check-packed-consumer.ts",
     "packages:size:review": "bun scripts/review-package-size.ts",
     "performance:consumer-bundle": "bun scripts/review-consumer-bundle.ts",
     "packages:validate": "bun scripts/check-packages.ts",
     "release:version": "changeset version",
     "release:validate": "bun scripts/check-release-config.ts",
     "test": "bun test",
+    "test:fuzz": "bun test packages/engine/tests/property-fuzz.test.ts",
     "test:browser-determinism": "bun scripts/check-browser-determinism.ts",
     "test:cross-runtime": "bun scripts/check-cross-runtime.ts",
     "test:playground-smoke": "bun scripts/check-playground-smoke.ts",
     "typecheck": "turbo typecheck && bun run convex:typecheck && tsc -p scripts/tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.5.7",
     "@changesets/cli": "2.31.1",
     "@types/bun": "^1.3.14",
     "convex-test": "^0.0.55",
+    "fast-check": "4.9.0",
     "playwright": "1.61.1",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
@@ -44,9 +50,6 @@
     "vite": "8.2.0"
   },
   "packageManager": "bun@1.3.14",
-  "engines": {
-    "node": ">=20"
-  },
   "workspaces": [
     "apps/*",
     "docs",

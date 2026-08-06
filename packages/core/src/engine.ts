@@ -21,7 +21,7 @@ export type RenderResult = Readonly<{
   templateHash: DocumentHash
   diagnostics: readonly Diagnostic[]
   timings: RenderTimings
-  resourceUsage?: ResourceUsage
+  resourceUsage: ResourceUsage
   layoutTrace?: LayoutTrace
 }>
 
@@ -67,6 +67,8 @@ export type TemplatePreviewResult = Readonly<{
   /** Canonical engine-owned geometry for the unresolved template source. */
   displayList: PageDisplayList
   placeholderNodes: Readonly<Record<string, string>>
+  /** Deterministic source-linked geometry used by developer preview overlays. */
+  layoutTrace: LayoutTrace
   diagnostics: readonly Diagnostic[]
 }>
 

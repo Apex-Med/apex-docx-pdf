@@ -1,5 +1,6 @@
 import { join } from "node:path"
 
+import AxeBuilder from "@axe-core/playwright"
 import { chromium, type Locator, type Page } from "playwright"
 
 const repositoryRoot = join(import.meta.dir, "..")
@@ -37,30 +38,48 @@ await waitForServer(server)
 const browser = await chromium.launch({ headless: true })
 
 try {
-  const desktopPage = await browser.newPage({
+  const desktopContext = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   })
+  const landingPage = await desktopContext.newPage()
+  const landingErrors = monitorRuntimeErrors(landingPage)
+  await verifyLanding(landingPage)
+  assertNoRuntimeErrors("desktop landing smoke", landingErrors)
+  await landingPage.close()
+
+  const desktopPage = await desktopContext.newPage()
   await installOfflineViewerAsset(desktopPage)
   const desktopErrors = monitorRuntimeErrors(desktopPage)
-  await verifyLandingAndPlayground(desktopPage)
   const renderedPages = await verifyPlaygroundWorkflow(desktopPage)
   assertNoRuntimeErrors("desktop application smoke", desktopErrors)
 
-  const cancellationPage = await browser.newPage({
+  const cancellationContext = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   })
+  const cancellationPage = await cancellationContext.newPage()
   await installOfflineViewerAsset(cancellationPage)
   const cancellationErrors = monitorRuntimeErrors(cancellationPage)
   await verifyCancellationReset(cancellationPage)
   assertNoRuntimeErrors("cancellation smoke", cancellationErrors)
 
-  const mobilePage = await browser.newPage({
+  const mobileContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
+    colorScheme: "dark",
   })
+  const mobilePage = await mobileContext.newPage()
   await installOfflineViewerAsset(mobilePage)
   const mobileErrors = monitorRuntimeErrors(mobilePage)
   await verifyMobileTabs(mobilePage)
   assertNoRuntimeErrors("mobile application smoke", mobileErrors)
+
+  const reflowContext = await browser.newContext({
+    viewport: { width: 320, height: 800 },
+  })
+  const reflowPage = await reflowContext.newPage()
+  await installOfflineViewerAsset(reflowPage)
+  const reflowErrors = monitorRuntimeErrors(reflowPage)
+  await verifyNarrowReflow(reflowPage)
+  assertNoRuntimeErrors("narrow reflow smoke", reflowErrors)
 
   console.log(
     `Playground application smoke passed in Chromium: ${JSON.stringify({
@@ -73,7 +92,9 @@ try {
       invalidJson: "render-disabled",
       staleRender: "cleared",
       resetActions: ["cancel", "remove"],
-      mobileTabs: "keyboard-operable",
+      mobileTabs: "keyboard-operable-dark-theme",
+      reflow: "320-css-pixel-layout-without-root-overflow",
+      accessibilityViolations: 0,
       runtimeErrors: 0,
     })}`
   )
@@ -101,37 +122,48 @@ async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
   throw new Error("Timed out waiting for the local Vite application")
 }
 
-async function verifyLandingAndPlayground(page: Page): Promise<void> {
+async function verifyLanding(page: Page): Promise<void> {
   const response = await page.goto(baseUrl, { waitUntil: "load" })
   assert(response?.ok(), `Landing page returned HTTP ${response?.status()}`)
   await expectVisible(
     page.getByRole("heading", {
       level: 1,
-      name: "Word templates. Deterministic PDFs.",
+      name: "Word or Google Docs. Deterministic PDFs.",
     }),
     "landing heading"
   )
+  await expectVisible(
+    page.getByText("Placeholders and schema", { exact: true }),
+    "placeholder and schema feature"
+  )
+  await expectVisible(
+    page.getByText("Fixed-layout tables", { exact: true }),
+    "table feature"
+  )
+  await assertNoAccessibilityViolations(page, "landing page")
 
   const playgroundLink = page
     .getByRole("main")
     .getByRole("link", { name: "Open playground" })
   await expectVisible(playgroundLink, "landing playground link")
-  await playgroundLink.click()
-  await page.waitForURL(`${baseUrl}/playground`)
-  await page.waitForLoadState("load")
-  await expectVisible(
-    page.getByRole("heading", { level: 1, name: "Document playground" }),
-    "playground heading"
-  )
-  await expectVisible(page.getByText("Local-only", { exact: true }), "mode")
-  await expectVisible(
-    page.getByRole("status").filter({ hasText: "Waiting for a template" }),
-    "initial playground status"
+  assert(
+    (await playgroundLink.getAttribute("href")) === "/playground",
+    "Landing playground link does not target /playground"
   )
 }
 
 async function verifyPlaygroundWorkflow(page: Page): Promise<number> {
-  await page.getByRole("button", { name: "Use sample template" }).click()
+  const response = await page.goto(`${baseUrl}/playground`, {
+    waitUntil: "load",
+  })
+  assert(response?.ok(), `Playground returned HTTP ${response?.status()}`)
+  await expectVisible(
+    page.getByRole("status").filter({ hasText: "Waiting for a template" }),
+    "reloaded playground status"
+  )
+  const sampleButton = page.getByRole("button", { name: "Use sample template" })
+  await waitForEnabled(sampleButton, "hydrated sample button")
+  await sampleButton.click()
   const renderStatus = page
     .getByRole("status")
     .filter({ hasText: /Rendered \d+ pages?/u })
@@ -142,6 +174,28 @@ async function verifyPlaygroundWorkflow(page: Page): Promise<number> {
     Number.isInteger(renderedPages) && renderedPages > 0,
     `Unexpected render status: ${statusText}`
   )
+  const templatePanel = page.locator("#playground-panel-template")
+  await templatePanel.getByRole("tab", { name: "Document features" }).click()
+  await expectVisible(
+    templatePanel.getByText("Preview pages", { exact: true }),
+    "engine preview page count"
+  )
+  await expectVisible(
+    page.getByText("Resolve", { exact: true }),
+    "render resolve timing"
+  )
+  await expectVisible(
+    page.getByText("Layout", { exact: true }),
+    "render layout timing"
+  )
+  await expectVisible(
+    page.getByText("PDF", { exact: true }),
+    "render PDF timing"
+  )
+  await expectVisible(
+    page.getByText("Render diagnostics", { exact: true }),
+    "result-local render diagnostics"
+  )
 
   const firstPdfPage = page.locator('[data-pdf-viewer-page="1"]')
   await firstPdfPage.waitFor({ state: "visible", timeout: 30_000 })
@@ -150,9 +204,25 @@ async function verifyPlaygroundWorkflow(page: Page): Promise<number> {
     firstPageBox && firstPageBox.height > firstPageBox.width,
     "The first rendered PDF page was not visibly upright/portrait"
   )
+  await assertNoAccessibilityViolations(page, "rendered playground")
 
   const patientName = page.getByLabel(/patient\.fullName/u)
   await expectVisible(patientName, "generated patient name field")
+  const issuedDate = page.getByLabel(/invoice\.issuedDate/u)
+  const dueDate = page.getByLabel(/invoice\.dueDate/u)
+  await expectVisible(issuedDate, "generated issued date-time field")
+  await expectVisible(dueDate, "generated due date field")
+  assert(
+    (await issuedDate.getAttribute("type")) === "datetime-local" &&
+      (await issuedDate.inputValue()) === "2026-08-05T09:30",
+    "The time-inclusive date formatter did not produce a populated date-time input"
+  )
+  assert(
+    (await dueDate.getAttribute("type")) === "date" &&
+      (await dueDate.inputValue()) === "2026-08-19",
+    "The default date formatter did not produce a populated date input"
+  )
+  await issuedDate.fill("2026-08-05T10:45")
   await patientName.fill("Nandi Dlamini")
   await expectVisible(
     page.getByRole("status").filter({
@@ -173,6 +243,10 @@ async function verifyPlaygroundWorkflow(page: Page): Promise<number> {
     (await jsonEditor.textContent())?.includes("Nandi Dlamini"),
     "The generated form edit was not synchronized into JSON"
   )
+  assert(
+    (await jsonEditor.textContent())?.includes("2026-08-05T10:45:00.000+02:00"),
+    "The date-time form edit did not preserve wall-clock time with the explicit offset"
+  )
 
   await jsonEditor.click()
   await page.keyboard.press("ControlOrMeta+A")
@@ -190,8 +264,8 @@ async function verifyPlaygroundWorkflow(page: Page): Promise<number> {
       document: { reference: "AX-2026-001" },
       invoice: {
         title: "veterinary care invoice",
-        issuedDate: "5 August 2026",
-        dueDate: "19 August 2026",
+        issuedDate: "2026-08-05T09:30:00.000+02:00",
+        dueDate: "2026-08-19T00:00:00.000+02:00",
         items: [
           {
             description: "Clinical consultation",
@@ -322,6 +396,75 @@ async function verifyMobileTabs(page: Page): Promise<void> {
   assert(
     (await templateTab.getAttribute("aria-selected")) === "true",
     "Home did not return to the Template tab"
+  )
+  await assertNoAccessibilityViolations(page, "mobile playground")
+}
+
+async function verifyNarrowReflow(page: Page): Promise<void> {
+  await page.goto(`${baseUrl}/playground`, { waitUntil: "load" })
+  const sampleButton = page.getByRole("button", { name: "Use sample template" })
+  await waitForEnabled(sampleButton, "narrow-layout sample button")
+  await sampleButton.click()
+  await page
+    .getByRole("status")
+    .filter({ hasText: /Rendered \d+ pages?/u })
+    .waitFor({ state: "visible", timeout: 30_000 })
+
+  const tabs = page.getByRole("tablist", { name: "Playground panels" })
+  const dataTab = tabs.getByRole("tab", { name: /Data/u })
+  await dataTab.click()
+  const issuedDate = page.getByLabel(/invoice\.issuedDate/u)
+  const dueDate = page.getByLabel(/invoice\.dueDate/u)
+  await expectVisible(issuedDate, "narrow-layout issued date-time field")
+  await expectVisible(dueDate, "narrow-layout due date field")
+  assert(
+    (await issuedDate.getAttribute("type")) === "datetime-local" &&
+      (await dueDate.getAttribute("type")) === "date",
+    "Generated date controls lost their native input types in narrow reflow"
+  )
+  await expectVisible(
+    page.getByText("Output dd-MM-yyyy HH:mm · Africa/Johannesburg", {
+      exact: true,
+    }),
+    "narrow-layout date-time format description"
+  )
+  await expectVisible(
+    page.getByText("Output dd-MM-yyyy · Africa/Johannesburg", { exact: true }),
+    "narrow-layout date format description"
+  )
+
+  const geometry = await page.evaluate(() => {
+    const root = document.documentElement
+    const body = document.body
+    return {
+      clientWidth: root.clientWidth,
+      scrollWidth: Math.max(root.scrollWidth, body.scrollWidth),
+    }
+  })
+  assert(
+    geometry.clientWidth === 320 &&
+      geometry.scrollWidth <= geometry.clientWidth,
+    `Narrow layout has root horizontal overflow: ${JSON.stringify(geometry)}`
+  )
+  await assertNoAccessibilityViolations(page, "320 CSS pixel playground")
+}
+
+async function assertNoAccessibilityViolations(
+  page: Page,
+  label: string
+): Promise<void> {
+  const result = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze()
+  const details = result.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    help: violation.help,
+    nodes: violation.nodes.map(({ html, target }) => ({ html, target })),
+  }))
+  assert(
+    details.length === 0,
+    `${label} has automated WCAG violations:\n${JSON.stringify(details, null, 2)}`
   )
 }
 

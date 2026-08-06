@@ -3,10 +3,10 @@ import { createFileRoute } from "@tanstack/react-router"
 import { PlaygroundWorkspace } from "@/components/playground-workspace"
 
 export const Route = createFileRoute("/playground")({
+  ssr: false,
   component: PlaygroundRoute,
 })
 
 function PlaygroundRoute() {
-  const { convexEnabled } = Route.useRouteContext()
-  return <PlaygroundWorkspace convexEnabled={convexEnabled} />
+  return <PlaygroundWorkspace convexEnabled={false} />
 }

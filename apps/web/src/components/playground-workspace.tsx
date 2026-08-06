@@ -43,9 +43,13 @@ import { JsonEditor } from "@/components/json-editor"
 import { SiteHeader } from "@/components/site-header"
 import { formatJsonIssue, parseTemplateJson } from "@/lib/json-editor"
 import {
+  dateFieldFormats,
+  dateFieldInputPrecision,
   fieldValidationMessages,
   formatTemplateDataErrors,
   parseFiniteNumberInput,
+  playgroundDateInputToIso,
+  playgroundDateInputValue,
   readPlaygroundImage,
   validateTemplateData,
   type PlaygroundImageValue,
@@ -351,11 +355,26 @@ export function PlaygroundWorkspace({
       numberValue === undefined
     )
       return
+    const dateValue =
+      field.kind === "date" && typeof value === "string" && value !== ""
+        ? playgroundDateInputToIso(
+            value,
+            dateFieldInputPrecision(field),
+            PLAYGROUND_RENDER_OPTIONS.timeZone
+          )
+        : undefined
+    if (
+      field.kind === "date" &&
+      typeof value === "string" &&
+      value !== "" &&
+      dateValue === undefined
+    )
+      return
     const parsedValue =
       field.kind === "number" && typeof value === "string"
         ? numberValue
         : field.kind === "date" && typeof value === "string" && value !== ""
-          ? `${value}T00:00:00.000Z`
+          ? dateValue
           : value
     commitData(setPath(data, path, parsedValue))
   }
@@ -816,6 +835,10 @@ function TemplateInspectionPanel({
 
         <dl className="mt-4 grid grid-cols-2 border sm:grid-cols-3">
           <InspectionMetric label="Fields" value={inspection.fieldCount} />
+          <InspectionMetric
+            label="Preview pages"
+            value={inspection.previewPageCount}
+          />
           <InspectionMetric
             label="Required"
             value={inspection.requiredFields.length}
@@ -1303,6 +1326,28 @@ function ResultPanel({
                 {formatBytes(rendered.pdf.byteLength)}
               </Badge>
             </div>
+            <div className="mb-4 grid shrink-0 gap-px border bg-border sm:grid-cols-4">
+              <TimingMetric
+                label="Resolve"
+                value={rendered.timings.resolveMs}
+              />
+              <TimingMetric label="Layout" value={rendered.timings.layoutMs} />
+              <TimingMetric label="PDF" value={rendered.timings.pdfMs} />
+              <TimingMetric label="Total" value={rendered.timings.totalMs} />
+            </div>
+            <details className="group mb-4 shrink-0 border bg-background">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-semibold tracking-wide uppercase focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                <span>Render diagnostics</span>
+                <span className="text-muted-foreground">
+                  {rendered.diagnostics.length === 0
+                    ? "None"
+                    : rendered.diagnostics.length}
+                </span>
+              </summary>
+              <div className="border-t p-3">
+                <DiagnosticList diagnostics={rendered.diagnostics} />
+              </div>
+            </details>
             <PDFViewer
               key={pdfUrl}
               src={pdfUrl}
@@ -1332,6 +1377,22 @@ function ResultPanel({
         )}
       </div>
     </section>
+  )
+}
+
+function TimingMetric({
+  label,
+  value,
+}: Readonly<{ label: string; value: number }>) {
+  return (
+    <div className="min-w-0 bg-background px-3 py-2.5">
+      <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-xs tabular-nums">
+        {value.toFixed(1)} ms
+      </p>
+    </div>
   )
 }
 
@@ -1460,6 +1521,14 @@ function FieldInput({
   )
   const errorId = `${id}-validation-error`
   const invalid = errors.length > 0
+  const datePrecision =
+    field.kind === "date" ? dateFieldInputPrecision(field) : undefined
+  const dateFormats = field.kind === "date" ? dateFieldFormats(field) : []
+  const dateDescriptionId = `${id}-date-description`
+  const describedBy = [
+    ...(field.kind === "date" ? [dateDescriptionId] : []),
+    ...(invalid ? [errorId] : []),
+  ].join(" ")
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -1499,7 +1568,7 @@ function FieldInput({
             checked={value === true}
             required={field.required}
             aria-invalid={invalid || undefined}
-            aria-describedby={invalid ? errorId : undefined}
+            aria-describedby={describedBy || undefined}
             onChange={(event) => onChange(event.target.checked)}
           />
           {value === true ? "True" : "False"}
@@ -1511,20 +1580,40 @@ function FieldInput({
             field.kind === "number"
               ? "number"
               : field.kind === "date"
-                ? "date"
+                ? datePrecision === "date"
+                  ? "date"
+                  : "datetime-local"
                 : "text"
           }
           value={
-            typeof value === "string" || typeof value === "number"
-              ? String(value).slice(0, field.kind === "date" ? 10 : undefined)
-              : ""
+            field.kind === "date" && datePrecision !== undefined
+              ? playgroundDateInputValue(
+                  value,
+                  datePrecision,
+                  PLAYGROUND_RENDER_OPTIONS.timeZone
+                )
+              : typeof value === "string" || typeof value === "number"
+                ? String(value)
+                : ""
           }
+          step={datePrecision === "second" ? 1 : undefined}
           required={field.required}
           aria-invalid={invalid || undefined}
-          aria-describedby={invalid ? errorId : undefined}
+          aria-describedby={describedBy || undefined}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
+      {field.kind === "date" ? (
+        <p
+          id={dateDescriptionId}
+          className="mt-1.5 text-[10px] leading-4 text-muted-foreground"
+        >
+          {dateFormats.length > 0
+            ? `Output ${dateFormats.join(" · ")}`
+            : "Raw offset-bearing ISO value"}
+          {` · ${PLAYGROUND_RENDER_OPTIONS.timeZone}`}
+        </p>
+      ) : null}
       {field.kind !== "image" && invalid ? (
         <FieldErrors id={errorId} errors={errors} />
       ) : null}

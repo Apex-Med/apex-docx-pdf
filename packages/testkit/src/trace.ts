@@ -17,6 +17,15 @@ export function serializeLayoutTrace(trace: LayoutTrace): string {
       kind: event.kind,
       ...(event.bounds === undefined ? {} : { bounds: rect(event.bounds) }),
       ...(event.reason === undefined ? {} : { reason: event.reason }),
+      ...(event.kind === "glyph-run" ? { baselineY: event.baselineY } : {}),
+      ...(event.kind === "table-row-fragment"
+        ? {
+            fragmentOffset: event.fragmentOffset,
+            rowHeight: event.rowHeight,
+            repeatedHeader: event.repeatedHeader,
+          }
+        : {}),
+      ...(event.kind === "keep-decision" ? { decision: event.decision } : {}),
     })),
   })
 }

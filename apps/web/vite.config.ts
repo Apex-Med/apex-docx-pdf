@@ -43,6 +43,10 @@ const config = defineConfig(({ mode }) => {
     configuredSiteUrl && /^https?:\/\/[^\s]+$/u.test(configuredSiteUrl)
       ? configuredSiteUrl
       : undefined
+  const vercelOutput =
+    process.env.VERCEL === "1"
+      ? { dir: new URL("../../.vercel/output", import.meta.url).pathname }
+      : undefined
 
   return {
     resolve: { tsconfigPaths: true },
@@ -53,6 +57,7 @@ const config = defineConfig(({ mode }) => {
       tailwindcss(),
       tanstackStart(),
       nitro({
+        output: vercelOutput,
         vercel: {
           functions: {
             maxDuration: 30,

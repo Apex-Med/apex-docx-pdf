@@ -5,8 +5,8 @@
     "pageCount": 1,
     "searchableText": "Golden Cross-runtime proofDeterministic trace evidence.",
     "pdfValid": true,
-    "pdfSha256": "60c180f29495e1ab35ac53cd04cabd0e41a6e4c79a6075cbb4010814ada3d4db",
-    "traceSha256": "bbdaf68e12d9533503ce64c7e740afd2ed99b86dc8faf59f3b36e556b29e58b0"
+    "pdfSha256": "00303180425604d450d5181b49c38ed112a6fe78111109e90cf4c260f582c39e",
+    "traceSha256": "621d473055671e72c1c3596510f5aa7e375c5640dc3e1b4a9d6c32d5ca74f9df"
   },
   "table-row-expansion": {
     "status": "rendered",
@@ -14,8 +14,8 @@
     "pageCount": 4,
     "searchableText": "ITEMQTYItem 011Item 022Item 033Item 044Item 055Item 066\nITEMQTYItem 077Item 088Item 099Item 1010Item 1111\nITEMQTYItem 1212Item 1313Item 1414Item 1515Item 1616Item 1717\nITEMQTYItem 1818Template tail",
     "pdfValid": true,
-    "pdfSha256": "a7c42d10103915a36f2aaa980480a85a001240f7611a42ae23dc5f70323d2af4",
-    "traceSha256": "d34364efd429da9284ad808317689cd44a62d930a6d9d08453a77e2c9dd73112"
+    "pdfSha256": "613b52855f57f7dd05912f036c425fd8bb6ee8a4aec59ac6aa13a128f5119425",
+    "traceSha256": "49b1cff2a41df85f847b652a642f459b86a9330d09360af7a7bb659908d95dae"
   },
   "static-images-sections": {
     "status": "rendered",
@@ -23,8 +23,8 @@
     "pageCount": 3,
     "searchableText": "Header Amara Mokoena Before PNG  between JPEG  after images1.First numbered body itemTable leftTable right2.Second numbered body itemFooter Amara Mokoena — Page 1 of 3\nHeader Amara Mokoena Landscape section for Amara MokoenaFooter Amara Mokoena — Page 2 of 3\nHeader Amara Mokoena Portrait closing sectionFooter Amara Mokoena — Page 3 of 3",
     "pdfValid": true,
-    "pdfSha256": "624a280a8f0b36aa94695f5f3e370aaff5d735af4c8933636758543a6fd7c6d1",
-    "traceSha256": "cdd5ab23d1268836b3704f6238b5c8e5d92518adf34c35f226648d773a041237"
+    "pdfSha256": "dcfb60d91d38105e4ea169989901d8b223269bd17deae779b781ab065cf2db97",
+    "traceSha256": "ccbb900c487126447140840281baacc3ef6e9c7cf5591cf6277c7feabcd02611"
   },
   "missing-required-template-data": {
     "status": "rejected",

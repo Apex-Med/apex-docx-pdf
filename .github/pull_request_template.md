@@ -10,12 +10,7 @@
 
 <!-- List focused tests, fixtures, traces, screenshots, or repeatability evidence. Fixtures must be redistributable and free of confidential data. -->
 
-- [ ] `bun run format:check`
-- [ ] `bun run lint`
-- [ ] `bun run typecheck`
-- [ ] `bun test`
-- [ ] `bun run docs:check` (Mintlify)
-- [ ] `bun run build`
+- [ ] `bun run ci` (format, Biome, types, unit/property/runtime/browser tests, Mintlify, build, and packed consumers)
 
 ## Contribution checks
 

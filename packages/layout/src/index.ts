@@ -48,6 +48,29 @@ type CommonLayoutOptions = Readonly<{
   includeTrace?: boolean
 }>
 
+const FONT_FALLBACK_TRACE_CODES = new Set([
+  "layout/font-fallback",
+  "layout/font-match-fallback",
+  "layout/numbering-label-style-fallback",
+])
+
+const UNSUPPORTED_APPROXIMATION_TRACE_CODES = new Set([
+  "layout/standard-font-style-unsupported",
+])
+
+function traceDiagnosticCodesByNode(
+  diagnostics: readonly Diagnostic[]
+): ReadonlyMap<NodeId, readonly string[]> {
+  const result = new Map<NodeId, string[]>()
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.nodeId === undefined) continue
+    const codes = result.get(diagnostic.nodeId) ?? []
+    if (!codes.includes(diagnostic.code)) codes.push(diagnostic.code)
+    result.set(diagnostic.nodeId, codes)
+  }
+  return result
+}
+
 /** `fonts` and `shaper` are an inseparable deterministic typography input. */
 export type LayoutOptions = CommonLayoutOptions &
   (
@@ -593,6 +616,14 @@ export function layoutDocument(
               : "horizontal-rule-overflow",
             rule.id
           )
+          if (rule.properties.keepWithNext)
+            events.push({
+              pageNumber: current.page.pageNumber,
+              sourceNodeId: rule.id,
+              kind: "keep-decision",
+              decision: "moved",
+              reason: "keep-with-next",
+            })
         }
         current.y = twips(current.y + rule.properties.spacingBefore)
         const centerY = twips(current.y + Math.floor(rule.height / 2))
@@ -676,6 +707,13 @@ export function layoutDocument(
             current.y + chainHeight > contentBottom
           ) {
             current = createPage(section, "keep-with-next", paragraph.id)
+            events.push({
+              pageNumber: current.page.pageNumber,
+              sourceNodeId: paragraph.id,
+              kind: "keep-decision",
+              decision: "moved",
+              reason: "keep-with-next",
+            })
             contentBottom = twips(
               current.page.contentBounds.y + current.page.contentBounds.height
             )
@@ -699,6 +737,13 @@ export function layoutDocument(
             kind: "overflow",
             reason: "keep-with-next-chain-too-tall",
           })
+          events.push({
+            pageNumber: current.page.pageNumber,
+            sourceNodeId: paragraph.id,
+            kind: "keep-decision",
+            decision: "degraded",
+            reason: "keep-with-next-chain-too-tall",
+          })
         }
       }
 
@@ -708,6 +753,13 @@ export function layoutDocument(
         current.y + item.height > contentBottom
       ) {
         current = createPage(section, "keep-lines-together", paragraph.id)
+        events.push({
+          pageNumber: current.page.pageNumber,
+          sourceNodeId: paragraph.id,
+          kind: "keep-decision",
+          decision: "moved",
+          reason: "keep-lines-together",
+        })
         contentBottom = twips(
           current.page.contentBounds.y + current.page.contentBounds.height
         )
@@ -723,6 +775,13 @@ export function layoutDocument(
           source: paragraph.source,
           nodeId: paragraph.id,
           details: { paragraphHeight: item.height },
+        })
+        events.push({
+          pageNumber: current.page.pageNumber,
+          sourceNodeId: paragraph.id,
+          kind: "keep-decision",
+          decision: "degraded",
+          reason: "keep-lines-together-too-tall",
         })
       }
 
@@ -766,6 +825,13 @@ export function layoutDocument(
             current.y !== current.page.contentBounds.y
           ) {
             current = createPage(section, "widow-orphan", paragraph.id)
+            events.push({
+              pageNumber: current.page.pageNumber,
+              sourceNodeId: paragraph.id,
+              kind: "keep-decision",
+              decision: "moved",
+              reason: "widow-orphan",
+            })
             contentBottom = twips(
               current.page.contentBounds.y + current.page.contentBounds.height
             )
@@ -778,6 +844,13 @@ export function layoutDocument(
           ) {
             capacity -= 1
             breakReason = "widow-orphan"
+            events.push({
+              pageNumber: current.page.pageNumber,
+              sourceNodeId: paragraph.id,
+              kind: "keep-decision",
+              decision: "adjusted",
+              reason: "widow-orphan",
+            })
           }
           if (
             capacity === 1 &&
@@ -793,6 +866,13 @@ export function layoutDocument(
                 "Page geometry permits only a one-line paragraph fragment; widow control was degraded",
               source: paragraph.source,
               nodeId: paragraph.id,
+            })
+            events.push({
+              pageNumber: current.page.pageNumber,
+              sourceNodeId: paragraph.id,
+              kind: "keep-decision",
+              decision: "degraded",
+              reason: "widow-orphan-impossible",
             })
           }
         }
@@ -896,6 +976,7 @@ export function layoutDocument(
   }
 
   const totalPages = pages.length
+  const diagnosticCodesByNode = traceDiagnosticCodesByNode(diagnostics)
   const displayList: PageDisplayList = Object.freeze({
     pages: pages.map((page) => {
       throwIfAborted(options.signal)
@@ -919,8 +1000,11 @@ export function layoutDocument(
           page.pageNumber,
           totalPages
         )
+      const materialized = decorated.flatMap((item) =>
+        materializeItem(item, page.pageNumber, totalPages)
+      )
       if (options.includeTrace) {
-        for (const item of decorated) {
+        for (const item of materialized) {
           if (item.type === "image") {
             events.push({
               pageNumber: page.pageNumber,
@@ -929,19 +1013,38 @@ export function layoutDocument(
               bounds: item.bounds,
               reason: "inline-image",
             })
-          } else if (item.type === "pending-page-field") {
+          } else if (item.type === "glyph-run") {
+            const bounds: Rect = {
+              x: item.x,
+              y: twips(item.baselineY - item.fontSize),
+              width: item.width,
+              height: item.fontSize,
+            }
             events.push({
               pageNumber: page.pageNumber,
               sourceNodeId: item.sourceNodeId,
-              kind: "line",
-              bounds: {
-                x: item.x,
-                y: twips(item.baselineY - item.style.fontSize),
-                width: item.width,
-                height: item.style.fontSize,
-              },
-              reason: `page-field:${item.field.toLowerCase()}`,
+              kind: "glyph-run",
+              bounds,
+              baselineY: item.baselineY,
             })
+            for (const code of diagnosticCodesByNode.get(item.sourceNodeId) ??
+              [])
+              if (FONT_FALLBACK_TRACE_CODES.has(code))
+                events.push({
+                  pageNumber: page.pageNumber,
+                  sourceNodeId: item.sourceNodeId,
+                  kind: "font-fallback",
+                  bounds,
+                  reason: code,
+                })
+              else if (UNSUPPORTED_APPROXIMATION_TRACE_CODES.has(code))
+                events.push({
+                  pageNumber: page.pageNumber,
+                  sourceNodeId: item.sourceNodeId,
+                  kind: "unsupported-approximation",
+                  bounds,
+                  reason: code,
+                })
           }
         }
       }
@@ -950,14 +1053,24 @@ export function layoutDocument(
         width: page.width,
         height: page.height,
         contentBounds: page.contentBounds,
-        items: Object.freeze(
-          decorated.flatMap((item) =>
-            materializeItem(item, page.pageNumber, totalPages)
-          )
-        ),
+        items: Object.freeze(materialized),
       }) as PageDisplayListPage
     }),
   })
+  if (options.includeTrace) {
+    for (const event of events.slice()) {
+      if (event.kind !== "table-row-fragment") continue
+      const codes = diagnosticCodesByNode.get(event.sourceNodeId) ?? []
+      if (codes.includes("layout/table-vertical-merge-expanded-exact-row"))
+        events.push({
+          pageNumber: event.pageNumber,
+          sourceNodeId: event.sourceNodeId,
+          kind: "clipping",
+          bounds: event.bounds,
+          reason: "avoided-by-vertical-merge-row-expansion",
+        })
+    }
+  }
   const trace: LayoutTrace | undefined = options.includeTrace
     ? Object.freeze({
         pages: Object.freeze(tracePages),
@@ -1402,6 +1515,7 @@ function paginateTable(
   events: LayoutTraceEvent[],
   signal?: AbortSignal
 ): PageState {
+  const firstTableEvent = events.length
   let current = initial
   const { table, rows } = prepared
   const bodyStart = table.repeatHeaderRowCount
@@ -1431,6 +1545,12 @@ function paginateTable(
             nodeId: table.id,
             details: { headerHeight: prepared.headerHeight },
           })
+          events.push({
+            pageNumber: current.page.pageNumber,
+            sourceNodeId: table.id,
+            kind: "unsupported-approximation",
+            reason: "table-header-too-tall",
+          })
         }
       } else {
         for (const header of rows.slice(0, bodyStart)) {
@@ -1440,7 +1560,8 @@ function paginateTable(
             twips(0),
             header.height,
             current,
-            events
+            events,
+            true
           )
           current.y = safeTwipSum(
             [current.y, header.height],
@@ -1479,6 +1600,13 @@ function paginateTable(
         current.y !== current.page.contentBounds.y
       ) {
         freshPage(row.row.id)
+        events.push({
+          pageNumber: current.page.pageNumber,
+          sourceNodeId: row.row.id,
+          kind: "keep-decision",
+          decision: "moved",
+          reason: "table-cant-split",
+        })
         continue
       }
       if (
@@ -1498,6 +1626,19 @@ function paginateTable(
           source: row.row.source,
           nodeId: row.row.id,
           details: { rowHeight: row.height },
+        })
+        events.push({
+          pageNumber: current.page.pageNumber,
+          sourceNodeId: row.row.id,
+          kind: "keep-decision",
+          decision: "degraded",
+          reason: "table-cant-split-too-tall",
+        })
+        events.push({
+          pageNumber: current.page.pageNumber,
+          sourceNodeId: row.row.id,
+          kind: "unsupported-approximation",
+          reason: "table-cant-split-too-tall",
         })
       }
       capacity = bottom() - current.y
@@ -1522,6 +1663,12 @@ function paginateTable(
                 "Repeating headers were omitted from one or more continuation pages so an atomic table line could fit",
               source: row.row.source,
               nodeId: row.row.id,
+            })
+            events.push({
+              pageNumber: current.page.pageNumber,
+              sourceNodeId: row.row.id,
+              kind: "unsupported-approximation",
+              reason: "table-header-repeat-degraded-for-atomic-line",
             })
           }
           freshPage(row.row.id, false)
@@ -1555,6 +1702,41 @@ function paginateTable(
     }
     if (row.index === bodyStart - 1) originalHeadersComplete = true
   }
+  const rowFragments = events
+    .slice(firstTableEvent)
+    .filter(
+      (
+        event
+      ): event is Extract<LayoutTraceEvent, { kind: "table-row-fragment" }> =>
+        event.kind === "table-row-fragment"
+    )
+  for (const pageNumber of [
+    ...new Set(rowFragments.map((event) => event.pageNumber)),
+  ].sort((left, right) => left - right)) {
+    const fragments = rowFragments.filter(
+      (event) => event.pageNumber === pageNumber
+    )
+    const left = Math.min(...fragments.map((event) => event.bounds.x))
+    const top = Math.min(...fragments.map((event) => event.bounds.y))
+    const right = Math.max(
+      ...fragments.map((event) => event.bounds.x + event.bounds.width)
+    )
+    const bottom = Math.max(
+      ...fragments.map((event) => event.bounds.y + event.bounds.height)
+    )
+    events.push({
+      pageNumber,
+      sourceNodeId: table.id,
+      kind: "table",
+      bounds: {
+        x: twips(left),
+        y: twips(top),
+        width: twips(right - left),
+        height: twips(bottom - top),
+      },
+      reason: "page-fragment",
+    })
+  }
   return current
 }
 
@@ -1564,7 +1746,8 @@ function emitTableRowFragment(
   offset: Twip,
   height: Twip,
   current: PageState,
-  events: LayoutTraceEvent[]
+  events: LayoutTraceEvent[],
+  repeatedHeader = false
 ): void {
   const { table } = prepared
   const rowY = current.y
@@ -1682,16 +1865,17 @@ function emitTableRowFragment(
   events.push({
     pageNumber: current.page.pageNumber,
     sourceNodeId: row.row.id,
-    kind: "block",
+    kind: "table-row-fragment",
     bounds: {
       x: current.page.contentBounds.x,
       y: rowY,
       width: table.width,
       height,
     },
-    ...(offset > 0 || height < row.height
-      ? { reason: "table-row-fragment" }
-      : {}),
+    fragmentOffset: offset,
+    rowHeight: row.height,
+    repeatedHeader,
+    ...(offset > 0 || height < row.height ? { reason: "fragmented" } : {}),
   })
 }
 

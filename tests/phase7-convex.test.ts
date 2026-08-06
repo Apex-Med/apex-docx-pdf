@@ -10,6 +10,7 @@ const modules = {
   "../convex/renders.ts": () => import("../convex/renders"),
   "../convex/storage.ts": () => import("../convex/storage"),
   "../convex/storageAccess.ts": () => import("../convex/storageAccess"),
+  "../convex/storageValidation.ts": () => import("../convex/storageValidation"),
   "../convex/templates.ts": () => import("../convex/templates"),
   "../convex/validation.ts": () => import("../convex/validation"),
 }
@@ -68,6 +69,126 @@ function renderInput(templateId: Id<"templates">, templateHash = HASH_A) {
 
 function testBackend() {
   return convexTest({ schema, modules })
+}
+
+function validDocxBytes(
+  extraParts: Readonly<Record<string, string>> = {}
+): Uint8Array {
+  return storedZip({
+    "[Content_Types].xml": "<Types/>",
+    "_rels/.rels": "<Relationships/>",
+    "word/document.xml": "<w:document/>",
+    ...extraParts,
+  })
+}
+
+function storedZip(parts: Readonly<Record<string, string>>): Uint8Array {
+  const encoder = new TextEncoder()
+  const localParts: Uint8Array[] = []
+  const directoryParts: Uint8Array[] = []
+  let localOffset = 0
+
+  for (const [name, value] of Object.entries(parts)) {
+    const nameBytes = encoder.encode(name)
+    const valueBytes = encoder.encode(value)
+    const local = new Uint8Array(30 + nameBytes.length + valueBytes.length)
+    const localView = new DataView(local.buffer)
+    localView.setUint32(0, 0x04034b50, true)
+    localView.setUint16(4, 20, true)
+    localView.setUint32(18, valueBytes.length, true)
+    localView.setUint32(22, valueBytes.length, true)
+    localView.setUint16(26, nameBytes.length, true)
+    local.set(nameBytes, 30)
+    local.set(valueBytes, 30 + nameBytes.length)
+    localParts.push(local)
+
+    const directory = new Uint8Array(46 + nameBytes.length)
+    const directoryView = new DataView(directory.buffer)
+    directoryView.setUint32(0, 0x02014b50, true)
+    directoryView.setUint16(4, 20, true)
+    directoryView.setUint16(6, 20, true)
+    directoryView.setUint32(20, valueBytes.length, true)
+    directoryView.setUint32(24, valueBytes.length, true)
+    directoryView.setUint16(28, nameBytes.length, true)
+    directoryView.setUint32(42, localOffset, true)
+    directory.set(nameBytes, 46)
+    directoryParts.push(directory)
+    localOffset += local.length
+  }
+
+  const directorySize = directoryParts.reduce(
+    (total, part) => total + part.length,
+    0
+  )
+  const end = new Uint8Array(22)
+  const endView = new DataView(end.buffer)
+  endView.setUint32(0, 0x06054b50, true)
+  endView.setUint16(8, directoryParts.length, true)
+  endView.setUint16(10, directoryParts.length, true)
+  endView.setUint32(12, directorySize, true)
+  endView.setUint32(16, localOffset, true)
+
+  const archive = new Uint8Array(localOffset + directorySize + end.length)
+  let offset = 0
+  for (const part of [...localParts, ...directoryParts, end]) {
+    archive.set(part, offset)
+    offset += part.length
+  }
+  return archive
+}
+
+function withDeclaredUncompressedSize(
+  archive: Uint8Array,
+  size: number
+): Uint8Array {
+  const bytes = archive.slice()
+  const view = new DataView(bytes.buffer)
+  for (let offset = 0; offset + 46 <= bytes.length; offset += 1) {
+    if (view.getUint32(offset, true) === 0x02014b50) {
+      view.setUint32(offset + 24, size, true)
+      return bytes
+    }
+  }
+  throw new Error("Test ZIP central directory is missing")
+}
+
+async function storeGeneratedUpload(
+  t: ReturnType<typeof testBackend>,
+  kind: "docx" | "pdf",
+  bytes: BlobPart,
+  contentType?: string
+) {
+  const generated = await t.mutation(api.storage.generateUploadUrl, {
+    sessionId: SESSION_A,
+    kind,
+  })
+  const storageId = await t.run(async (ctx) =>
+    ctx.storage.store(
+      new Blob([bytes], {
+        type: contentType ?? generated.uploadContentType,
+      })
+    )
+  )
+  return { ...generated, storageId }
+}
+
+async function storeTestUpload(
+  t: ReturnType<typeof testBackend>,
+  kind: "docx" | "pdf",
+  bytes: BlobPart
+) {
+  return await t.run(async (ctx) => {
+    const now = Date.now()
+    const uploadIntentId = await ctx.db.insert("uploadIntents", {
+      sessionId: SESSION_A,
+      kind,
+      status: "awaitingUpload",
+      createdAt: now,
+      expiresAt: now + 60_000,
+    })
+    const storageId = await ctx.storage.store(new Blob([bytes]))
+    return { uploadIntentId, storageId }
+  })
 }
 
 async function createTemplate(
@@ -445,112 +566,219 @@ describe("Phase 7 Convex persistence", () => {
     }
   })
 
-  test("binds direct uploads to expiring session-owned intents and cleans unclaimed blobs", async () => {
+  test("validates DOCX and PDF bytes before one-time upload-intent consumption", async () => {
     const t = testBackend()
     const now = Date.now()
-    const generated = await t.mutation(api.storage.generateUploadUrl, {
-      sessionId: SESSION_A,
-      kind: "docx",
-    })
-    expect(generated.uploadUrl).toStartWith("https://")
-    expect(generated.uploadContentType).toBe(
-      `application/vnd.openxmlformats-officedocument.wordprocessingml.document; apex-upload-intent=${generated.uploadIntentId}`
+    const markedUpload = await storeGeneratedUpload(t, "docx", validDocxBytes())
+    expect(markedUpload.uploadUrl).toStartWith("https://")
+    expect(markedUpload.uploadContentType).toBe(
+      `application/vnd.openxmlformats-officedocument.wordprocessingml.document; apex-upload-intent=${markedUpload.uploadIntentId}`
     )
-    expect(generated.expiresAt).toBeGreaterThan(now)
+    expect(markedUpload.expiresAt).toBeGreaterThan(now)
     expect(
-      await t.run(async (ctx) => await ctx.db.get(generated.uploadIntentId))
+      await t.run(async (ctx) => await ctx.db.get(markedUpload.uploadIntentId))
+    ).toMatchObject({ uploadContentType: markedUpload.uploadContentType })
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: markedUpload.uploadIntentId,
+        storageId: markedUpload.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact is missing or invalid")
+
+    const docxUpload = await storeTestUpload(t, "docx", validDocxBytes())
+    expect(
+      await t.run(async (ctx) => await ctx.db.get(docxUpload.uploadIntentId))
     ).toMatchObject({
       sessionId: SESSION_A,
       kind: "docx",
       status: "awaitingUpload",
-      uploadContentType: generated.uploadContentType,
-    })
-    const unmarkedStorageId = await t.run(async (ctx) =>
-      ctx.storage.store(
-        new Blob(["unmarked-docx"], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        })
-      )
-    )
-    await expect(
-      t.mutation(api.storage.registerUploadedFile, {
-        sessionId: SESSION_A,
-        uploadIntentId: generated.uploadIntentId,
-        storageId: unmarkedStorageId,
-      })
-    ).rejects.toThrow("Uploaded artifact is missing or invalid")
-    const { docxStorageId, docxIntentId } = await t.run(async (ctx) => {
-      const docxIntentId = await ctx.db.insert("uploadIntents", {
-        sessionId: SESSION_A,
-        kind: "docx",
-        status: "awaitingUpload",
-        createdAt: now,
-        expiresAt: now + 60_000,
-      })
-      const docxStorageId = await ctx.storage.store(
-        new Blob(["docx-bytes"], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        })
-      )
-      return { docxStorageId, docxIntentId }
     })
 
     await expect(
-      t.mutation(api.storage.registerUploadedFile, {
+      t.action(api.storage.registerUploadedFile, {
         sessionId: SESSION_B,
-        uploadIntentId: docxIntentId,
-        storageId: docxStorageId,
+        uploadIntentId: docxUpload.uploadIntentId,
+        storageId: docxUpload.storageId,
       })
-    ).rejects.toThrow("Active upload intent not found")
-    await t.mutation(api.storage.registerUploadedFile, {
+    ).rejects.toThrow("Uploaded artifact is missing or invalid")
+    await t.action(api.storage.registerUploadedFile, {
       sessionId: SESSION_A,
-      uploadIntentId: docxIntentId,
-      storageId: docxStorageId,
+      uploadIntentId: docxUpload.uploadIntentId,
+      storageId: docxUpload.storageId,
     })
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: docxUpload.uploadIntentId,
+        storageId: docxUpload.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact is missing or invalid")
+
     const templateId = await t.mutation(api.templates.create, {
       sessionId: SESSION_A,
-      originalFileUploadIntentId: docxIntentId,
+      originalFileUploadIntentId: docxUpload.uploadIntentId,
       ...templateMetadata(),
     })
     expect(
-      await t.run(async (ctx) => await ctx.db.get(docxIntentId))
-    ).toMatchObject({ status: "consumed", storageId: docxStorageId })
+      await t.run(async (ctx) => await ctx.db.get(docxUpload.uploadIntentId))
+    ).toMatchObject({ status: "consumed", storageId: docxUpload.storageId })
     expect(
       await t.run(async (ctx) => await ctx.db.get(templateId))
-    ).toMatchObject({ originalFileStorageId: docxStorageId })
+    ).toMatchObject({ originalFileStorageId: docxUpload.storageId })
     await expect(
       t.mutation(api.templates.create, {
         sessionId: SESSION_A,
-        originalFileUploadIntentId: docxIntentId,
+        originalFileUploadIntentId: docxUpload.uploadIntentId,
         ...templateMetadata({ sourceHash: HASH_B }),
       })
     ).rejects.toThrow("Registered upload intent not found")
 
-    const { expiredStorageId, expiredIntentId } = await t.run(async (ctx) => {
-      const expiredStorageId = await ctx.storage.store(
-        new Blob(["%PDF-1.7\n"], { type: "application/pdf" })
-      )
-      const expiredIntentId = await ctx.db.insert("uploadIntents", {
-        sessionId: SESSION_A,
-        kind: "pdf",
-        status: "registered",
-        storageId: expiredStorageId,
-        createdAt: now - 2_000,
-        expiresAt: now - 1_000,
-      })
-      return { expiredStorageId, expiredIntentId }
+    const pdfUpload = await storeTestUpload(
+      t,
+      "pdf",
+      "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
+    )
+    await t.action(api.storage.registerUploadedFile, {
+      sessionId: SESSION_A,
+      uploadIntentId: pdfUpload.uploadIntentId,
+      storageId: pdfUpload.storageId,
     })
+    expect(
+      await t.run(async (ctx) => await ctx.db.get(pdfUpload.uploadIntentId))
+    ).toMatchObject({ status: "registered", storageId: pdfUpload.storageId })
+  })
+
+  test("rejects mislabeled, arbitrary, incomplete, and oversized stored artifacts", async () => {
+    const t = testBackend()
+    const unmarked = await storeGeneratedUpload(
+      t,
+      "docx",
+      validDocxBytes(),
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: unmarked.uploadIntentId,
+        storageId: unmarked.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact is missing or invalid")
+
+    const arbitraryDocx = await storeTestUpload(t, "docx", "not-a-zip")
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: arbitraryDocx.uploadIntentId,
+        storageId: arbitraryDocx.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact content is invalid")
+
+    const incompleteDocx = await storeTestUpload(
+      t,
+      "docx",
+      storedZip({ "[Content_Types].xml": "<Types/>" })
+    )
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: incompleteDocx.uploadIntentId,
+        storageId: incompleteDocx.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact content is invalid")
+
+    const expansionBomb = await storeTestUpload(
+      t,
+      "docx",
+      withDeclaredUncompressedSize(validDocxBytes(), 100_000_001)
+    )
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: expansionBomb.uploadIntentId,
+        storageId: expansionBomb.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact content is invalid")
+
+    const arbitraryPdf = await storeTestUpload(t, "pdf", "not-a-pdf")
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: arbitraryPdf.uploadIntentId,
+        storageId: arbitraryPdf.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact content is invalid")
+
+    const mislabeledPdf = await storeTestUpload(t, "pdf", validDocxBytes())
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: mislabeledPdf.uploadIntentId,
+        storageId: mislabeledPdf.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact content is invalid")
+
+    const oversizedDocx = await storeTestUpload(
+      t,
+      "docx",
+      new Uint8Array(20_000_001)
+    )
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: oversizedDocx.uploadIntentId,
+        storageId: oversizedDocx.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact is missing or invalid")
+  })
+
+  test("cleanup reclaims content-invalid and registered-but-unconsumed uploads", async () => {
+    const t = testBackend()
+    const now = Date.now()
+    const invalidUpload = await storeTestUpload(t, "pdf", "not-a-pdf")
+    await expect(
+      t.action(api.storage.registerUploadedFile, {
+        sessionId: SESSION_A,
+        uploadIntentId: invalidUpload.uploadIntentId,
+        storageId: invalidUpload.storageId,
+      })
+    ).rejects.toThrow("Uploaded artifact content is invalid")
+
+    const registeredUpload = await storeTestUpload(
+      t,
+      "pdf",
+      "%PDF-2.0\n%%EOF\n"
+    )
+    await t.action(api.storage.registerUploadedFile, {
+      sessionId: SESSION_A,
+      uploadIntentId: registeredUpload.uploadIntentId,
+      storageId: registeredUpload.storageId,
+    })
+    await t.run(async (ctx) => {
+      for (const uploadIntentId of [
+        invalidUpload.uploadIntentId,
+        registeredUpload.uploadIntentId,
+      ]) {
+        await ctx.db.patch(uploadIntentId, { expiresAt: now - 1 })
+      }
+      await ctx.db.patch(invalidUpload.uploadIntentId, {
+        storageId: invalidUpload.storageId,
+      })
+    })
+
     await t.mutation(internal.storage.cleanupExpiredUploadIntents, {
       cutoff: now,
     })
-    expect(
-      await t.run(async (ctx) => await ctx.db.get(expiredIntentId))
-    ).toBeNull()
-    expect(
-      await t.run(async (ctx) =>
-        ctx.db.system.get("_storage", expiredStorageId)
-      )
-    ).toBeNull()
+    for (const upload of [invalidUpload, registeredUpload]) {
+      expect(
+        await t.run(async (ctx) => await ctx.db.get(upload.uploadIntentId))
+      ).toBeNull()
+      expect(
+        await t.run(async (ctx) =>
+          ctx.db.system.get("_storage", upload.storageId)
+        )
+      ).toBeNull()
+    }
   })
 
   test("template removal drains bounded cascade batches and stored files", async () => {

@@ -3,7 +3,7 @@ title: "Roadmap"
 description: "Implemented phases, local hardening evidence, and approval-gated release work."
 ---
 
-Phases 1–8 form the current implemented renderer, local-first reference application, and Mintlify documentation surface. Engine version `0.0.0-phase.7` carries the bounded image/section/header/footer/page-field profile forward and partitions render caches by exact compatibility inputs. The reference app adds anonymous-session Convex metadata and direct storage uploads while keeping persistence off by default. Local Phase 9 hardening evidence and Phase 10 prerelease preparation are present, including exact agreement across a compact pinned Bun/Node 24/Chromium core suite; this is not a claim of broad Word compatibility, complete cross-runtime or browser-matrix proof, production authentication, live deployment, or published npm artifacts.
+Phases 1–8 form the current implemented renderer, local-only reference application, and Mintlify documentation source. Engine compatibility version `0.0.0-phase.8` carries the bounded image/section/header/footer/page-field profile forward and partitions render caches by exact compatibility inputs. Convex foundations remain tested but are not mounted in the public playground. Local Phase 9 hardening evidence, a verified Vercel deployment, and Phase 10 prerelease preparation are present; this is not a claim of broad Word compatibility, complete browser-matrix proof, production authentication, persistent SaaS operation, or published npm artifacts.
 
 ## Phase 4 — Implemented; hardening ongoing
 
@@ -35,7 +35,7 @@ Phases 1–8 form the current implemented renderer, local-first reference applic
 - Anonymous browser sessions through `convex-helpers`, with every template, render, cache read, and delete scoped to the session.
 - Direct generated upload URLs for browser-to-Convex DOCX/PDF storage; storage IDs, bounded metadata, diagnostics summaries, and deterministic hashes remain in database documents.
 - Cursor-paginated history, bounded realtime recent status, completed-PDF cache reuse, owned bearer-URL reads, and scheduled cascading deletion of rows plus storage objects.
-- Explicitly excluded: production authentication/tenant policy, perfect abandoned-upload reclamation, rate limiting, retention compliance, live deployment proof, and treating storage URLs as fine-grained authorization.
+- Explicitly excluded: mounting persistence in the public playground, production authentication/tenant policy, perfect abandoned-upload reclamation, rate limiting, retention compliance, and treating storage URLs as fine-grained authorization.
 
 ## Later-phase status
 
@@ -45,10 +45,10 @@ Implemented and locally browser-verified: polished Geist Mono landing page, Mint
 
 ### Phase 9 — Hardening
 
-Local evidence is implemented: hostile-input and fixed-seed fragmentation tests, resource-limit and cancellation coverage, exact golden PDF/trace parity across separate Bun processes, Node 24, and a real Chromium module worker, real-browser accessibility checks, performance benchmarks, enforced publication-tarball size budgets, public API review, and a Nitro production preview. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
+Local evidence is implemented: hostile-input tests, a reproducible fast-check property gate plus fixed-seed structural corpora, resource-limit and cancellation coverage, exact golden PDF/trace parity across separate Bun processes, Node 24, and a real Chromium module worker, zero-violation automated axe scans for covered light/dark desktop/mobile states, performance benchmarks, enforced publication-tarball size budgets, public API review, and pull-request dependency review. A Vercel Bun deployment now has hosted landing/sample/K3/axe evidence. Broader licensed Microsoft Word and Google Docs-exported fixtures remain open.
 
 ### Phase 10 — Release preparation
 
 Preparation is implemented: Changesets, publishable ESM package builds, prerelease versioning, provenance configuration, release documentation, contribution materials, and a reconciled roadmap. The initial npm prerelease and post-publication consumer/provenance verification remain approval-gated.
 
-Each feature must enter through the staged architecture. Current focused tests establish the local Phase 7 Convex boundary but do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, production authentication, deployment proof, or production readiness.
+Each feature must enter through the staged architecture. Current focused tests and hosted smoke do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, production authentication, persistent SaaS operation, or production readiness.

@@ -91,7 +91,7 @@ describe("playground sample DOCX", () => {
       (block) => block.type === "table"
     )
 
-    expect(compiled.version).toBe("0.0.0-phase.7")
+    expect(compiled.version).toBe("0.0.0-phase.8")
     expect(compiled.diagnostics).toEqual([])
     expect(
       compiled.source.assets.map((asset) => [
@@ -138,6 +138,15 @@ describe("playground sample DOCX", () => {
       "invoice.total",
       "patient.fullName",
     ])
+    expect(
+      compiled.manifest.fields.find(
+        (field) => field.path === "invoice.issuedDate"
+      )?.formatters
+    ).toEqual([{ name: "date", arguments: ["dd-MM-yyyy HH:mm"] }])
+    expect(
+      compiled.manifest.fields.find((field) => field.path === "invoice.dueDate")
+        ?.formatters
+    ).toEqual([{ name: "date", arguments: ["dd-MM-yyyy"] }])
     expect(table?.type).toBe("table")
     if (table?.type !== "table") throw new Error("Expected a sample table")
     expect(table.layout).toBe("fixed")
@@ -170,6 +179,8 @@ describe("playground sample DOCX", () => {
     expect(rendered.pageCount).toBe(3)
     expect(rendered.pdf.byteLength).toBeGreaterThan(0)
     expect(rendered.diagnostics).toEqual([])
+    expect(pdfSource).toContain("(Issued: ) Tj")
+    expect(pdfSource).toContain("(05-08-2026 09:30) Tj")
     expect(mediaBoxes).toEqual([
       "0 0 595.35 841.95",
       "0 0 841.95 595.35",

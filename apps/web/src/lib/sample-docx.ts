@@ -199,7 +199,7 @@ const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:rPr><w:sz w:val="32"/></w:rPr><w:t>{{invoice.title:string | upper}}</w:t></w:r></w:p>
     <w:p><w:r><w:t xml:space="preserve">Invoice: </w:t></w:r><w:r><w:t>{{document.reference:string}}</w:t></w:r></w:p>
     <w:p><w:r><w:t xml:space="preserve">Prepared for: </w:t></w:r><w:r><w:t>{{patient.fullName:string}}</w:t></w:r></w:p>
-    <w:p><w:r><w:t xml:space="preserve">Issued: {{invoice.issuedDate:string}}  ·  Due: {{invoice.dueDate:string}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Issued: {{invoice.issuedDate:date | date:"dd-MM-yyyy HH:mm"}}  ·  Due: {{invoice.dueDate:date | date}}</w:t></w:r></w:p>
     <w:p><w:r><w:t/></w:r></w:p>
     <w:tbl>
       <w:tblPr>
@@ -283,8 +283,8 @@ export const SAMPLE_DATA = Object.freeze({
   document: { reference: "AX-2026-001" },
   invoice: {
     title: "veterinary care invoice",
-    issuedDate: "5 August 2026",
-    dueDate: "19 August 2026",
+    issuedDate: "2026-08-05T09:30:00.000+02:00",
+    dueDate: "2026-08-19T00:00:00.000+02:00",
     items: [
       {
         description: "Clinical consultation",

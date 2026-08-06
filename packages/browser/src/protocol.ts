@@ -4,6 +4,7 @@ import type {
   LayoutTrace,
   PageDisplayList,
   RenderOptions,
+  ResourceUsage,
   RenderTimings,
   TemplateManifest,
   TemplateInspectionResult,
@@ -42,6 +43,7 @@ export type BrowserTemplatePreview = Readonly<{
   displayList: PageDisplayList
   placeholderNodes: Readonly<Record<string, string>>
   assets: readonly BrowserPreviewAsset[]
+  layoutTrace: LayoutTrace
 }>
 
 export type BrowserPreviewAsset = Readonly<{
@@ -55,6 +57,7 @@ export type BrowserRenderResult = Readonly<{
   pageCount: number
   diagnostics: readonly Diagnostic[]
   timings: RenderTimings
+  resourceUsage: ResourceUsage
   layoutTrace?: LayoutTrace
 }>
 

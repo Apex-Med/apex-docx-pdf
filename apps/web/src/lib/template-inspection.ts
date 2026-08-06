@@ -17,7 +17,7 @@ const FIELD_KIND_ORDER = [
   "unknown",
 ] as const satisfies readonly TemplateFieldKind[]
 
-export const BROWSER_PROFILE_LABEL = "Phase 7 browser profile"
+export const BROWSER_PROFILE_LABEL = "Phase 8 browser profile"
 
 export const BUNDLED_FONT_PROFILE = Object.freeze({
   families: REFERENCE_FONT_POLICY.families,
@@ -57,6 +57,7 @@ export const PROFILE_CAPABILITIES = Object.freeze([
 
 export type TemplateInspection = Readonly<{
   fieldCount: number
+  previewPageCount: number
   fieldCountsByKind: readonly Readonly<{
     kind: TemplateFieldKind
     count: number
@@ -85,6 +86,7 @@ export function inspectTemplate(
 
   return {
     fieldCount: fields.length,
+    previewPageCount: compiled.templatePreview.displayList.pages.length,
     fieldCountsByKind: FIELD_KIND_ORDER.flatMap((kind) => {
       const count = counts.get(kind) ?? 0
       return count === 0 ? [] : [{ kind, count }]
@@ -133,7 +135,7 @@ export function describeWorkerProgress(progress: WorkerProgress): string {
     progress.total > 0
       ? `Step ${Math.min(progress.completed, progress.total)} of ${progress.total}`
       : "In progress"
-  return `${STAGE_LABELS[progress.stage]} · ${step}`
+  return `${progress.message || STAGE_LABELS[progress.stage]} · ${step}`
 }
 
 function compareText(left: string, right: string): number {

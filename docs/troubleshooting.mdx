@@ -11,7 +11,9 @@ Every high-level render requires both fields:
 { locale: "en-ZA", timeZone: "Africa/Johannesburg" }
 ```
 
-Currency formatting requires locale. Date formatting requires locale and time zone, and its value must be an ISO 8601 date-time with `Z` or a numeric offset, for example `2026-08-05T09:30:00+02:00`. The engine refuses ambient runtime defaults.
+Currency formatting requires the canonical `en-US` or `en-ZA` locale profile. Date formatting requires one of those locales plus a time zone, and its value must be an ISO 8601 date-time with `Z` or a numeric offset, for example `2026-08-05T09:30:00+02:00`. Other locales fail explicitly; the engine refuses ambient runtime defaults and runtime-specific ICU separator data.
+
+The bare `date` formatter defaults to `dd-MM-yyyy`. In an explicit pattern, `MM` means month while lowercase `mm` means minutes. A 12-hour `h`/`hh` pattern requires `a`; a 24-hour `H`/`HH` pattern must not use `a`. Seconds require minutes.
 
 ## A value is missing or has the wrong type
 
@@ -61,7 +63,7 @@ The engine was created without `FontConfiguration`, so it is using the historica
 
 ## Font shaping or embedding fails
 
-Confirm that text is well-formed LTR Latin, the selected face contains required glyphs, and the fallback family includes a 400 normal face. CFF embedding and true default subsetting are unsupported.
+Confirm that text is well-formed LTR Latin, the selected face contains required glyphs, and the fallback family includes a 400 normal face. The default fontkit path subsets TrueType only; CFF embedding is unsupported, and a custom parser needs an explicit compatible subsetter or will safely full-embed.
 
 ## Compilation fails with diagnostics
 

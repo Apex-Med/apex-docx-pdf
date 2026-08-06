@@ -6,5 +6,7 @@ export {
 export {
   resolve,
   resolveTemplate,
+  resolveTemplateWithUsage,
+  type TemplateResolutionResult,
   type TemplateResolveOptions,
 } from "./resolve"

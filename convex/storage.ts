@@ -4,11 +4,14 @@ import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import {
+  action,
+  internalQuery,
   internalMutation,
-  mutation,
   type MutationCtx,
+  mutation,
 } from "./_generated/server"
 import { createUploadUrl, deleteStoredFile } from "./storageAccess"
+import { validateStoredArtifactContent } from "./storageValidation"
 import { assertSessionId } from "./validation"
 
 export type UploadKind = "docx" | "pdf"
@@ -60,12 +63,65 @@ export const generateUploadUrl = mutation({
   },
 })
 
-export const registerUploadedFile = mutation({
-  args: {
-    ...SessionIdArg,
-    uploadIntentId: v.id("uploadIntents"),
-    storageId: v.id("_storage"),
+const registrationArgs = {
+  ...SessionIdArg,
+  uploadIntentId: v.id("uploadIntents"),
+  storageId: v.id("_storage"),
+}
+
+export const registerUploadedFile = action({
+  args: registrationArgs,
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    assertSessionId(args.sessionId)
+    const candidate = await ctx.runQuery(
+      internal.storage.getUploadRegistrationCandidate,
+      args
+    )
+    if (!candidate) throw new Error("Uploaded artifact is missing or invalid")
+
+    const blob = await ctx.storage.get(args.storageId)
+    if (
+      !blob ||
+      blob.size !== candidate.size ||
+      !(await validateStoredArtifactContent(blob, candidate.kind))
+    ) {
+      throw new Error("Uploaded artifact content is invalid")
+    }
+    await ctx.runMutation(internal.storage.commitRegisteredUpload, args)
+    return null
   },
+})
+
+export const getUploadRegistrationCandidate = internalQuery({
+  args: registrationArgs,
+  returns: v.union(
+    v.object({
+      kind: v.union(v.literal("docx"), v.literal("pdf")),
+      size: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    assertSessionId(args.sessionId)
+    const intent = await ctx.db.get(args.uploadIntentId)
+    const storedFile = await ctx.db.system.get("_storage", args.storageId)
+    if (
+      !intent ||
+      intent.sessionId !== args.sessionId ||
+      intent.status !== "awaitingUpload" ||
+      intent.expiresAt < Date.now() ||
+      !storedFile ||
+      !validStoredArtifact(intent.kind, intent.uploadContentType, storedFile)
+    ) {
+      return null
+    }
+    return { kind: intent.kind, size: storedFile.size }
+  },
+})
+
+export const commitRegisteredUpload = internalMutation({
+  args: registrationArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
     assertSessionId(args.sessionId)

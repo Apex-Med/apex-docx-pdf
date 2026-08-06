@@ -17,6 +17,7 @@
     "browser-determinism/**/*.mts",
     "check-browser-determinism.ts",
     "check-cross-runtime.ts",
+    "check-packed-consumer.ts",
     "check-playground-smoke.ts",
     "offline-font-configuration.ts",
     "runtime-core-suite.ts",

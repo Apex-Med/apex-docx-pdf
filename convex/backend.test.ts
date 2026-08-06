@@ -10,6 +10,7 @@ const modules = {
   "./_generated/server.js": () => import("./_generated/server.js"),
   "./renders.ts": () => import("./renders"),
   "./storage.ts": () => import("./storage"),
+  "./storageValidation.ts": () => import("./storageValidation"),
   "./templates.ts": () => import("./templates"),
 }
 
@@ -32,7 +33,7 @@ function createTemplateArgs() {
     sessionId: sessionA,
     name: "invoice.docx",
     sourceHash,
-    engineVersion: "0.0.0-phase.7",
+    engineVersion: "0.0.0-phase.8",
     manifestJson: '{"fields":[]}',
     jsonSchemaJson: '{"type":"object"}',
     starterDataJson: "{}",

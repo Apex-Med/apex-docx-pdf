@@ -36,11 +36,37 @@ type SizeBudgets = Readonly<{
   >
 }>
 
+type SizeMeasurements = Readonly<{
+  schemaVersion: number
+  packages: Readonly<
+    Record<
+      string,
+      Readonly<{
+        directory: string
+        version: string
+        packedBytes: number
+        unpackedBytes: number
+        entryCount: number
+      }>
+    >
+  >
+  aggregate: Readonly<{
+    packedBytes: number
+    unpackedBytes: number
+  }>
+}>
+
 const budgets = JSON.parse(
   await readFile("reports/package-size-budgets.json", "utf8")
 ) as SizeBudgets
+const measurements = JSON.parse(
+  await readFile("reports/package-size-measurements.json", "utf8")
+) as SizeMeasurements
 if (budgets.schemaVersion !== 1) {
   throw new Error("Unsupported package-size budget schema")
+}
+if (measurements.schemaVersion !== 2) {
+  throw new Error("Unsupported package-size measurement schema")
 }
 
 let aggregatePackedBytes = 0
@@ -51,6 +77,10 @@ for (const name of packages) {
   // base. A relative nested path makes that cleanup resolve the path twice.
   const directory = `${process.cwd()}/packages/${name}/dist`
   const manifestText = await readFile(join(directory, "package.json"), "utf8")
+  const manifest = JSON.parse(manifestText) as {
+    name: string
+    version: string
+  }
   if (manifestText.includes("workspace:")) {
     throw new Error(`${name}: publication manifest contains a workspace range`)
   }
@@ -133,6 +163,19 @@ for (const name of packages) {
 
   const budget = budgets.packages[name]
   if (!budget) throw new Error(`${name}: package-size budget is missing`)
+  const measurement = measurements.packages[manifest.name]
+  if (
+    measurement === undefined ||
+    measurement.directory !== `packages/${name}/dist` ||
+    measurement.version !== manifest.version ||
+    measurement.packedBytes !== result.size ||
+    measurement.unpackedBytes !== result.unpackedSize ||
+    measurement.entryCount !== result.entryCount
+  ) {
+    throw new Error(
+      `${name}: checked-in package-size evidence is stale; run bun run packages:size:review after building`
+    )
+  }
   enforceBudget(name, "packed", result.size, budget.maxPackedBytes)
   enforceBudget(name, "unpacked", result.unpackedSize, budget.maxUnpackedBytes)
   aggregatePackedBytes += result.size
@@ -154,6 +197,14 @@ enforceBudget(
   aggregateUnpackedBytes,
   budgets.aggregate.maxUnpackedBytes
 )
+if (
+  measurements.aggregate.packedBytes !== aggregatePackedBytes ||
+  measurements.aggregate.unpackedBytes !== aggregateUnpackedBytes
+) {
+  throw new Error(
+    "Checked-in aggregate package-size evidence is stale; run bun run packages:size:review after building"
+  )
+}
 console.log(
   `\nPublic package set: ${aggregatePackedBytes} packed bytes, ${aggregateUnpackedBytes} unpacked bytes; all artifact and size-budget checks passed`
 )

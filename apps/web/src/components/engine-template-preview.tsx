@@ -1,5 +1,5 @@
 import type { BrowserTemplatePreview } from "@apex-docx-pdf/browser"
-import { DisplayListPreview } from "@apex-docx-pdf/devtools"
+import { LayoutTraceViewer } from "@apex-docx-pdf/devtools"
 
 import { browserCatalogFontCss } from "@/lib/font-assets"
 
@@ -11,7 +11,7 @@ export function EngineTemplatePreview({
   return (
     <>
       <style>{browserCatalogFontCss}</style>
-      <DisplayListPreview preview={preview} />
+      <LayoutTraceViewer preview={preview} />
     </>
   )
 }

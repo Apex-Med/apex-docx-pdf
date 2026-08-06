@@ -15,7 +15,7 @@ bun run ci
 git status --short
 ```
 
-`bun run ci` includes formatting, Biome linting, TypeScript checks, the Bun test suite, exact Bun/Node/Chromium render parity, the real-application Chromium playground smoke, Mintlify validation, release-configuration validation, the production build, and package validation. Review the worktree after the gate; a green build does not authorize deployment or publication.
+`bun run ci` includes formatting, Biome linting, TypeScript checks, the Bun test suite, the explicit seeded property/fuzz gate, exact Bun/Node/Chromium render parity, the real-application Chromium playground and automated axe smoke, Mintlify validation, release-configuration validation, the production build, and package validation. Review the worktree after the gate; a green build does not authorize deployment or publication.
 
 ## 2. Required public configuration
 
@@ -66,13 +66,13 @@ Test the immutable Preview URL, not only a branch alias:
 
 1. Load `/` and confirm the landing page renders in Geist Mono with no console or server errors.
 2. Load `/playground` at desktop and mobile widths.
-3. Confirm the configured Convex client connects. Leave persistence disabled for the first render.
+3. Confirm the playground is labelled `Local-only` and exposes no cloud-persistence controls.
 4. Load the sample template and compile it in the browser worker.
 5. Confirm the engine-owned template preview, manifest, generated schema, and starter data appear.
 6. Render the sample and confirm upright, searchable PDF text and the expected page count.
 7. Download the PDF and validate that the downloaded bytes begin with `%PDF-` and open successfully.
-8. Enable persistence, explicitly save once, observe the realtime render record, then delete the saved artifacts.
-9. Confirm ordinary DOCX/PDF bytes travel directly between the browser and Convex storage, not through a Vercel function.
+8. Upload the migrated K3 compatibility template when it is available locally and confirm an upright four-page render with zero diagnostics.
+9. Confirm no document or data requests leave the browser during compilation and rendering.
 10. Inspect deployment and runtime logs for uncaught errors:
 
 ```bash
@@ -103,7 +103,7 @@ bunx vercel@latest rollback
 bunx vercel@latest rollback status
 ```
 
-Re-run the landing-page, playground, download, and persistence smoke against the restored production domain. A rollback restores an earlier deployment configuration; separately audit any environment-variable changes made during the incident.
+Re-run the landing-page, local-only playground, download, and no-external-request smoke against the restored production domain. A rollback restores an earlier deployment configuration; separately audit any environment-variable changes made during the incident.
 
 ## 8. Mintlify deployment
 

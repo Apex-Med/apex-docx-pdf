@@ -1,4 +1,4 @@
-import type { JsonSchema } from "@apex-docx-pdf/core"
+import type { JsonSchema, TemplateField } from "@apex-docx-pdf/core"
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020"
 import addFormats from "ajv-formats"
 
@@ -25,6 +25,8 @@ export type PlaygroundImageValue = Readonly<{
   preserveAspectRatio: boolean
   altText: string
 }>
+
+export type DateInputPrecision = "date" | "minute" | "second"
 
 const DEFAULT_IMAGE_WIDTH_TWIPS = 2_880
 const validators = new WeakMap<object, ReturnType<Ajv2020["compile"]>>()
@@ -71,6 +73,108 @@ export function fieldValidationMessages(
 export function parseFiniteNumberInput(value: string): number | undefined {
   const parsed = value === "" ? 0 : Number(value)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+export function dateFieldFormats(field: TemplateField): readonly string[] {
+  return field.formatters.flatMap((formatter) => {
+    const pattern =
+      formatter.name === "date" ? formatter.arguments[0] : undefined
+    return typeof pattern === "string" ? [pattern] : []
+  })
+}
+
+export function dateFieldInputPrecision(
+  field: TemplateField
+): DateInputPrecision {
+  const formats = dateFieldFormats(field)
+  if (formats.some((format) => /(?:ss|s)/u.test(format))) return "second"
+  if (formats.some((format) => /(?:HH|H|hh|h|mm|m|a)/u.test(format)))
+    return "minute"
+  return "date"
+}
+
+export function playgroundDateInputValue(
+  value: unknown,
+  precision: DateInputPrecision,
+  timeZone: string
+): string {
+  if (typeof value !== "string") return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const parts = zonedDateTimeParts(date.getTime(), timeZone)
+  const dateValue = `${parts.year}-${parts.month}-${parts.day}`
+  if (precision === "date") return dateValue
+  const minuteValue = `${dateValue}T${parts.hour}:${parts.minute}`
+  return precision === "second" ? `${minuteValue}:${parts.second}` : minuteValue
+}
+
+export function playgroundDateInputToIso(
+  value: string,
+  precision: DateInputPrecision,
+  timeZone: string
+): string | undefined {
+  const match =
+    precision === "date"
+      ? /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u.exec(value)
+      : precision === "minute"
+        ? /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2})$/u.exec(
+            value
+          )
+        : /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})$/u.exec(
+            value
+          )
+  if (!match?.groups) return undefined
+
+  const requested = {
+    year: Number(match.groups.year),
+    month: Number(match.groups.month),
+    day: Number(match.groups.day),
+    hour: Number(match.groups.hour ?? 0),
+    minute: Number(match.groups.minute ?? 0),
+    second: Number(match.groups.second ?? 0),
+  }
+  const wallClock = Date.UTC(
+    requested.year,
+    requested.month - 1,
+    requested.day,
+    requested.hour,
+    requested.minute,
+    requested.second
+  )
+  const canonical = new Date(wallClock)
+  if (
+    canonical.getUTCFullYear() !== requested.year ||
+    canonical.getUTCMonth() + 1 !== requested.month ||
+    canonical.getUTCDate() !== requested.day ||
+    canonical.getUTCHours() !== requested.hour ||
+    canonical.getUTCMinutes() !== requested.minute ||
+    canonical.getUTCSeconds() !== requested.second
+  ) {
+    return undefined
+  }
+
+  let offsetMinutes = timeZoneOffsetMinutes(wallClock, timeZone)
+  let instant = wallClock - offsetMinutes * 60_000
+  offsetMinutes = timeZoneOffsetMinutes(instant, timeZone)
+  instant = wallClock - offsetMinutes * 60_000
+  const resolved = zonedDateTimeParts(instant, timeZone)
+  if (
+    Number(resolved.year) !== requested.year ||
+    Number(resolved.month) !== requested.month ||
+    Number(resolved.day) !== requested.day ||
+    Number(resolved.hour) !== requested.hour ||
+    Number(resolved.minute) !== requested.minute ||
+    Number(resolved.second) !== requested.second
+  ) {
+    return undefined
+  }
+
+  const sign = offsetMinutes < 0 ? "-" : "+"
+  const absoluteOffset = Math.abs(offsetMinutes)
+  const offset = `${sign}${String(Math.floor(absoluteOffset / 60)).padStart(2, "0")}:${String(absoluteOffset % 60).padStart(2, "0")}`
+  const date = `${match.groups.year}-${match.groups.month}-${match.groups.day}`
+  const time = `${String(requested.hour).padStart(2, "0")}:${String(requested.minute).padStart(2, "0")}:${String(requested.second).padStart(2, "0")}`
+  return `${date}T${time}.000${offset}`
 }
 
 export function formatTemplateDataErrors(errors: readonly string[]): string {
@@ -217,4 +321,44 @@ function isJpegStartOfFrame(marker: number): boolean {
     marker !== 0xc8 &&
     marker !== 0xcc
   )
+}
+
+function zonedDateTimeParts(epochMilliseconds: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA-u-ca-gregory-nu-latn", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(epochMilliseconds))
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((candidate) => candidate.type === type)?.value ?? ""
+  return {
+    year: part("year"),
+    month: part("month"),
+    day: part("day"),
+    hour: part("hour"),
+    minute: part("minute"),
+    second: part("second"),
+  }
+}
+
+function timeZoneOffsetMinutes(
+  epochMilliseconds: number,
+  timeZone: string
+): number {
+  const instant = Math.floor(epochMilliseconds / 1_000) * 1_000
+  const parts = zonedDateTimeParts(instant, timeZone)
+  const wallClock = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  )
+  return Math.round((wallClock - instant) / 60_000)
 }

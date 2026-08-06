@@ -53,10 +53,10 @@ Exact-pinned `fontkit` 2.0.4 parses font metrics and shapes well-formed left-to-
 
 For TrueType, the PDF serializer emits a Type0 font with a CIDFontType2 descendant, FontDescriptor, FontFile2 stream, CIDToGIDMap, and ToUnicode CMap. Each shaped glyph receives an absolute PDF position, preserving fontkit advances and offsets while keeping text searchable.
 
-By default, the registry embeds the complete immutable TrueType program and returns `subsetted: false`. There is an injectable deterministic subsetting seam with an explicit source-to-subset glyph mapping, but the repository does not provide true font subsetting today. OpenType/CFF is diagnosed as unsupported for PDF embedding.
+The default fontkit path deterministically rewrites each TrueType program to the sorted unique glyph set used by the PDF, includes `.notdef`, returns the exact source-to-subset glyph mapping, and marks the result `subsetted: true`. Repeated encodes produce identical bytes in Bun, Node 24, and Chromium. A custom parser without an explicit compatible subsetter safely retains complete immutable embedding with `subsetted: false`. OpenType/CFF remains explicitly unsupported for PDF embedding. Subsetting checks cancellation before and after fontkit's synchronous encoder, but cannot interrupt that call mid-encode.
 
 ## Historical fallback
 
 Without `FontConfiguration`, the Phase 1 path still measures and serializes built-in Helvetica with WinAnsi encoding. Non-Helvetica family and style requests produce compatibility warnings. Characters outside WinAnsi produce an error, and the high-level engine returns no render result rather than exposing an incomplete PDF.
 
-Read [ADR 0004](/adr/0004-fontkit-full-font-embedding) for the dependency, licensing, determinism, and full-embedding decision.
+Read [ADR 0004](/adr/0004-fontkit-full-font-embedding) for the dependency, licensing, determinism, subsetting, and embedding decision.

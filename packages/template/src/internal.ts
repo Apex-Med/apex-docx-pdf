@@ -9,6 +9,8 @@ import type {
   TemplateFieldKind,
 } from "@apex-docx-pdf/core"
 
+import { DEFAULT_DATE_FORMAT, parseDateTimeFormat } from "./date-format"
+
 export const RESERVED_PATH_SEGMENTS = new Set([
   "__proto__",
   "prototype",
@@ -186,6 +188,12 @@ function parseFormatter(
     }
     return { reference: { name, arguments: [] }, kind: "string" }
   }
+  if (argument === undefined && name === "date") {
+    return {
+      reference: { name, arguments: [DEFAULT_DATE_FORMAT] },
+      kind: "date",
+    }
+  }
   if (argument === undefined) {
     return templateDiagnostic(
       "TEMPLATE_FORMATTER_ARGUMENT",
@@ -212,10 +220,10 @@ function parseFormatter(
       node
     )
   }
-  if (name === "date" && value !== "d MMMM yyyy") {
+  if (name === "date" && parseDateTimeFormat(value) === undefined) {
     return templateDiagnostic(
       "TEMPLATE_FORMATTER_ARGUMENT",
-      'The date formatter supports only the exact pattern "d MMMM yyyy"',
+      "The date formatter requires one date pattern with year, month, and day tokens plus an optional valid time pattern",
       source,
       node
     )

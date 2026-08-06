@@ -30,6 +30,19 @@ type PrereleaseState = Readonly<{
 
 const config = await readJson<ChangesetsConfig>(".changeset/config.json")
 const prerelease = await readJson<PrereleaseState>(".changeset/pre.json")
+const publishWorkflow = await readFile(
+  ".github/workflows/publish-next.yml",
+  "utf8"
+)
+const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8")
+const engineSource = await readFile("packages/engine/src/index.ts", "utf8")
+const browserInspectionSource = await readFile(
+  "apps/web/src/lib/template-inspection.ts",
+  "utf8"
+)
+const rootManifest = await readJson<{
+  scripts?: Readonly<Record<string, string>>
+}>("package.json")
 const expectedNames = PUBLIC_PACKAGES.map(([, name]) => name).sort()
 const fixedNames = [...(config.fixed[0] ?? [])].sort()
 
@@ -46,6 +59,53 @@ if (expectedNames.some((name) => config.ignore.includes(name))) {
 }
 if (prerelease.mode !== "pre" || prerelease.tag !== "next") {
   throw new Error("Changesets must remain in next prerelease mode")
+}
+if (!publishWorkflow.includes("run: bun run fixtures:release")) {
+  throw new Error(
+    "The npm prerelease workflow must enforce the licensed editor-fixture release gate"
+  )
+}
+if (
+  !rootManifest.scripts?.ci?.includes("bun run packages:consumer-smoke") ||
+  !ciWorkflow.includes("run: bun run packages:consumer-smoke")
+) {
+  throw new Error(
+    "CI and the release gate must execute the isolated packed-consumer smoke test"
+  )
+}
+
+const engineVersion = engineSource.match(
+  /export const ENGINE_VERSION = "(?<version>0\.0\.0-phase\.\d+)"/u
+)?.groups?.version
+if (engineVersion === undefined) {
+  throw new Error("ENGINE_VERSION must be an explicit phase compatibility ID")
+}
+const enginePhase = engineVersion.match(/phase\.(?<phase>\d+)$/u)?.groups?.phase
+if (
+  enginePhase === undefined ||
+  !browserInspectionSource.includes(`Phase ${enginePhase} browser profile`)
+) {
+  throw new Error(
+    "The browser profile label must match the current engine compatibility phase"
+  )
+}
+for (const path of [
+  "CHANGELOG.md",
+  "README.md",
+  "docs/architecture.md",
+  "docs/determinism.mdx",
+  "docs/getting-started.mdx",
+  "docs/index.mdx",
+  "docs/roadmap.mdx",
+  "docs/supported-features.mdx",
+  "docs/template-language.mdx",
+]) {
+  const source = await readFile(path, "utf8")
+  if (!source.includes(`\`${engineVersion}\``)) {
+    throw new Error(
+      `${path}: current engine compatibility version ${engineVersion} is not documented`
+    )
+  }
 }
 
 let lockstepVersion: string | undefined

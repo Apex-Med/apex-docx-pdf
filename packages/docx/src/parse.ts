@@ -1492,10 +1492,14 @@ function reportUnsupportedFallback(
 
 function reportUnsupported(
   diagnostics: ReturnType<typeof diagnostic>[],
-  code: "DOCX_UNSUPPORTED_BLOCK" | "DOCX_UNSUPPORTED_INLINE",
+  code:
+    | "DOCX_UNSUPPORTED_BLOCK"
+    | "DOCX_UNSUPPORTED_INLINE"
+    | "DOCX_UNSUPPORTED_STYLE_PROPERTY",
   message: string,
   location: ReturnType<typeof source>,
-  options: DocxParseOptions
+  options: DocxParseOptions,
+  feature?: string
 ): void {
   diagnostics.push({
     code,
@@ -1505,6 +1509,7 @@ function reportUnsupported(
     details: {
       mode: unsupportedFeatureMode(options),
       fallback: "none",
+      ...(feature === undefined ? {} : { feature }),
     },
   })
   diagnostics.push(
@@ -1515,6 +1520,89 @@ function reportUnsupported(
       location
     )
   )
+}
+
+const UNSUPPORTED_CONTENT_FEATURES = Object.freeze([
+  Object.freeze({
+    feature: "textBoxes",
+    names: Object.freeze(["textbox", "txbx", "txbxContent"]),
+  }),
+  Object.freeze({
+    feature: "wordArt",
+    names: Object.freeze(["textpath"]),
+  }),
+  Object.freeze({
+    feature: "smartArt",
+    names: Object.freeze(["relIds"]),
+  }),
+  Object.freeze({
+    feature: "charts",
+    names: Object.freeze(["chart"]),
+  }),
+  Object.freeze({
+    feature: "equations",
+    names: Object.freeze(["oMath", "oMathPara"]),
+  }),
+  Object.freeze({
+    feature: "embeddedObjects",
+    names: Object.freeze(["object", "OLEObject", "oleObject"]),
+  }),
+  Object.freeze({
+    feature: "trackedChanges",
+    names: Object.freeze([
+      "ins",
+      "del",
+      "moveFrom",
+      "moveTo",
+      "moveFromRangeStart",
+      "moveFromRangeEnd",
+      "moveToRangeStart",
+      "moveToRangeEnd",
+      "pPrChange",
+      "rPrChange",
+      "sectPrChange",
+      "tblPrChange",
+      "trPrChange",
+      "tcPrChange",
+    ]),
+  }),
+  Object.freeze({
+    feature: "comments",
+    names: Object.freeze([
+      "commentRangeStart",
+      "commentRangeEnd",
+      "commentReference",
+    ]),
+  }),
+  Object.freeze({
+    feature: "footnotes",
+    names: Object.freeze(["footnoteReference"]),
+  }),
+  Object.freeze({
+    feature: "endnotes",
+    names: Object.freeze(["endnoteReference"]),
+  }),
+] as const)
+
+function descendantLocalNames(element: OrderedElement): ReadonlySet<string> {
+  const names = new Set<string>([localName(element.name)])
+  const pending = [...childElements(element).map(({ element: child }) => child)]
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (current === undefined) continue
+    names.add(localName(current.name))
+    pending.push(...childElements(current).map(({ element: child }) => child))
+  }
+  return names
+}
+
+function unsupportedContentFeature(
+  element: OrderedElement
+): string | undefined {
+  const names = descendantLocalNames(element)
+  return UNSUPPORTED_CONTENT_FEATURES.find(({ names: featureNames }) =>
+    featureNames.some((name) => names.has(name))
+  )?.feature
 }
 
 type PartialRunProperties = Readonly<{
@@ -3507,15 +3595,27 @@ function parseRun(
         )
       }
     } else if (name === "drawing") {
-      const image = parseDrawing(
-        current.element,
-        part,
-        `${xmlPath}/${current.name}[${count}]`,
-        media,
-        options,
-        diagnostics
-      )
-      if (image !== undefined) inlines.push(image)
+      const feature = unsupportedContentFeature(current.element)
+      if (feature !== undefined) {
+        reportUnsupported(
+          diagnostics,
+          "DOCX_UNSUPPORTED_INLINE",
+          `Drawing content is outside the supported inline-image profile (${feature}).`,
+          source(part, `${xmlPath}/${current.name}[${count}]`),
+          options,
+          feature
+        )
+      } else {
+        const image = parseDrawing(
+          current.element,
+          part,
+          `${xmlPath}/${current.name}[${count}]`,
+          media,
+          options,
+          diagnostics
+        )
+        if (image !== undefined) inlines.push(image)
+      }
     } else if (name === "fldChar") {
       const fieldType = attr(current.element, "fldCharType")
       if (fieldType === "begin") {
@@ -3619,12 +3719,16 @@ function parseRun(
       // The paragraph owner materializes this isolated safe profile as a
       // semantic full-width block. It is intentionally not an inline glyph.
     } else if (name !== "rPr") {
+      const feature = unsupportedContentFeature(current.element)
       reportUnsupported(
         diagnostics,
         "DOCX_UNSUPPORTED_INLINE",
-        `Run child '${current.name}' is not supported.`,
+        feature === undefined
+          ? `Run child '${current.name}' is not supported.`
+          : `Run child '${current.name}' contains unsupported ${feature}.`,
         source(part, `${xmlPath}/${current.name}[${count}]`),
-        options
+        options,
+        feature
       )
     }
   }
@@ -3810,12 +3914,16 @@ function parseParagraph(
       childName !== "bookmarkEnd" &&
       childName !== "proofErr"
     ) {
+      const feature = unsupportedContentFeature(paragraphChild.element)
       reportUnsupported(
         diagnostics,
         "DOCX_UNSUPPORTED_INLINE",
-        `Paragraph child '${paragraphChild.name}' is not supported.`,
+        feature === undefined
+          ? `Paragraph child '${paragraphChild.name}' is not supported.`
+          : `Paragraph child '${paragraphChild.name}' contains unsupported ${feature}.`,
         source(part, `${xmlPath}/${paragraphChild.name}[${childCount}]`),
-        options
+        options,
+        feature
       )
     }
   }
@@ -5331,7 +5439,8 @@ function parseSectionProperties(
   element: OrderedElement,
   part: string,
   xmlPath: string,
-  diagnostics: ReturnType<typeof diagnostic>[]
+  diagnostics: ReturnType<typeof diagnostic>[],
+  options: DocxParseOptions
 ): ParsedDocxSectionProperties {
   const pageSize = child(element, "pgSz")?.element
   const margins = child(element, "pgMar")?.element
@@ -5342,6 +5451,24 @@ function parseSectionProperties(
       "DOCX_UNSUPPORTED_SECTION_BREAK",
       `Section break type '${sectionType}' is unsupported; only nextPage is deterministic.`,
       source(part, `${xmlPath}/w:type[1]`)
+    )
+  }
+  const columns = child(element, "cols")?.element
+  const explicitColumnCount =
+    columns === undefined ? 0 : children(columns, "col").length
+  const declaredColumnCount = integer(attr(columns, "num"))
+  if (
+    columns !== undefined &&
+    ((declaredColumnCount !== undefined && declaredColumnCount > 1) ||
+      explicitColumnCount > 1)
+  ) {
+    reportUnsupported(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      "Multi-column sections are outside the supported single-column section profile.",
+      source(part, `${xmlPath}/w:cols[1]`),
+      options,
+      "multiColumnSections"
     )
   }
   const width = integer(attr(pageSize, "w"))
@@ -5781,7 +5908,8 @@ export function parseValidatedDocx(
           paragraphSectionProperties,
           officeDocumentPart.value,
           `${currentPath}/w:pPr[1]/w:sectPr[1]`,
-          diagnostics
+          diagnostics,
+          options
         )
         sections.push({
           type: "docx-section",
@@ -5836,7 +5964,8 @@ export function parseValidatedDocx(
         current.element,
         officeDocumentPart.value,
         currentPath,
-        diagnostics
+        diagnostics,
+        options
       )
       sections.push({
         type: "docx-section",
@@ -5848,12 +5977,16 @@ export function parseValidatedDocx(
       })
       sectionBlocks = []
     } else {
+      const feature = unsupportedContentFeature(current.element)
       reportUnsupported(
         diagnostics,
         "DOCX_UNSUPPORTED_BLOCK",
-        `Document body child '${current.name}' is not supported.`,
+        feature === undefined
+          ? `Document body child '${current.name}' is not supported.`
+          : `Document body child '${current.name}' contains unsupported ${feature}.`,
         source(officeDocumentPart.value, currentPath),
-        options
+        options,
+        feature
       )
     }
   }

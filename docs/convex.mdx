@@ -3,7 +3,7 @@ title: "Convex integration"
 description: "The optional Phase 7 persistence, ownership, upload, cache, and cleanup boundary."
 ---
 
-Phase 7 adds optional application persistence around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; the Convex adapter covers demo isolation, metadata, file storage, status, and lifecycle operations. The current playground mounts that adapter only when a public Convex URL is configured, keeps its persistence drawer collapsed and disabled by default, and uploads nothing until the user explicitly enables persistence and chooses Save. This page describes the tested reference contract, not a production identity system, deployed service, or general-purpose document authorization system.
+Phase 7 adds optional application-persistence foundations around the deterministic renderer. The renderer remains a pure byte-in/byte-out library; the Convex adapter covers demo isolation, metadata, file storage, status, and lifecycle operations. The current playground always passes a disabled persistence capability and exposes no cloud controls, even when a Convex URL exists. This page describes the retained tested reference contract for possible future SaaS work, not a production identity system, deployed service, or general-purpose document authorization system.
 
 <Warning>
   The anonymous session used by the reference application isolates one browser
@@ -31,11 +31,14 @@ Large DOCX and PDF artifacts belong in Convex file storage, not database documen
 
 1. An owned mutation creates a 65-minute session-owned upload intent and returns its ID, an intent-specific MIME marker, and a short-lived Convex generated upload URL.
 2. The browser posts the DOCX bytes directly to that URL using the exact returned MIME marker.
-3. The browser immediately registers the returned storage ID against that intent; kind, ownership, expiry, exact marker, and byte size are checked.
-4. The template or render mutation consumes the registered intent exactly once and records the storage ID with bounded metadata.
-5. A scheduled cleanup searches the bounded storage creation-time window for the marker and deletes unclaimed artifacts in bounded batches after expiry.
+3. The browser immediately registers the returned storage ID against that intent. A Convex action checks kind, ownership, expiry, exact marker, and byte size, then reads the immutable stored blob and validates its bounded content before an internal mutation atomically marks it registered.
+4. PDF registration requires `%PDF-` at byte zero. DOCX registration validates classic single-volume ZIP structure, a bounded central directory, safe unique part paths, supported stored/deflate entries, archive-entry and declared-decompression limits, and the required `[Content_Types].xml`, `_rels/.rels`, and `word/document.xml` package parts.
+5. The template or render mutation consumes the registered intent exactly once and records the storage ID with bounded metadata.
+6. A scheduled cleanup searches the bounded storage creation-time window for the marker and deletes unclaimed artifacts in bounded batches after expiry.
 
 The DOCX does not pass through a Vercel server function. This avoids buffering a large document in the web server runtime and avoids treating that runtime as a file proxy. Generated upload URLs must be requested just in time and are not durable application credentials.
+
+The registration action deliberately inspects bounded slices rather than parsing or rendering the whole document again. Convex's action storage API returns a `Blob`, so the platform may materialize more of the stored object than the validator reads. DOCX registration does not inflate XML or repeat the engine's relationship, active-content, image, font, or OOXML semantic validation; the browser worker must already have compiled the exact bytes successfully. PDF registration is a format-magic guard, not a complete PDF parser or malware scan. Production deployments that accept uploads from clients other than this reference application need a separately reviewed scanning and quarantine boundary.
 
 Database records contain storage IDs and bounded metadata. They do not contain DOCX bytes, PDF bytes, document text, or the render JSON payload. Small status, hashes, timestamps, diagnostics summaries, and ownership metadata can remain in Convex documents; large artifacts remain in file storage.
 

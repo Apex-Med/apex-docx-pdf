@@ -1,6 +1,6 @@
 # Contributing to Apex DOCX PDF
 
-Thank you for helping improve Apex DOCX PDF. The project is an early prerelease: Phases 1–7 are implemented, but their hardening is ongoing and the broader DOCX profile is not complete.
+Thank you for helping improve Apex DOCX PDF. The project is an early prerelease: Phases 1–8 are implemented, Phase 9 hardening evidence is checked in, and the broader DOCX profile is deliberately bounded.
 
 ## Before you start
 
@@ -64,7 +64,7 @@ Phase 6 images are static, package-owned inline PNG/JPEG resources with explicit
 
 Phase 6 sections support multiple `nextPage` sections, explicit portrait/landscape geometry, inherited default headers/footers, exact edge-relative distances, header/footer template values, and global decimal `PAGE`/`NUMPAGES` fields. Keep the maximum-page digit reservation and post-pagination materialization deterministic. Do not imply support for continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, or arbitrary Word fields.
 
-Caller-supplied font bytes are an explicit compatibility input. Keep font processing browser-safe and deterministic: no filesystem access, system discovery, network fetches, or `Buffer`-only APIs. Do not describe the default complete-program embedding path as true subsetting.
+Caller-supplied font bytes are an explicit compatibility input. Keep font processing browser-safe and deterministic: no filesystem access, system discovery, network fetches, or `Buffer`-only APIs. Preserve deterministic TrueType subsetting and the exact source-to-subset glyph mapping; do not claim unsupported variable-axis instantiation or CFF embedding.
 
 ## Fixtures, privacy, and licensing
 

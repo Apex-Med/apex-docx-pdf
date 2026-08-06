@@ -12,14 +12,14 @@ Apex DOCX PDF is prerelease software built in narrow, testable slices. This road
 - **Phase 6 — Static images, sections, headers, footers, and page fields: implemented; hardening ongoing.** Engine version `0.0.0-phase.6` adds bounded inline PNG/JPEG resources, multiple `nextPage` sections, portrait/landscape pages, inherited default headers/footers, header/footer templates, and global decimal page fields.
 - **Phase 7 — Convex integration: implemented; hardening ongoing.** Engine version `0.0.0-phase.7` partitions render caches by engine/template/font/data/options hashes, while the optional app adapter adds anonymous session isolation, direct DOCX/PDF uploads, metadata, realtime render history, and bounded storage cleanup.
 - **Phase 8 — Landing page and documentation: implemented and browser-verified locally.** The landing page, Mintlify docs, responsive support matrix, interactive examples, community links, and SEO/PWA metadata are present.
-- **Phase 9 — Hardening: local evidence implemented; external proof pending.** Fixed-seed hostile-input tests, resource-limit coverage, Bun benchmarks, package-size measurements, public API review, browser accessibility checks, exact Bun/Node 24/Chromium golden parity, and a Nitro production preview are complete. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
+- **Phase 9 — Hardening: local evidence implemented; external proof pending.** Seeded fast-check properties and hostile-input corpora, resource-limit coverage, Bun benchmarks, package-size measurements, public API review, zero-violation automated axe scans for covered browser states, pull-request dependency review, exact Bun/Node 24/Chromium golden parity, and a Nitro production preview are complete. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
 - **Phase 10 — Release preparation: implemented; publication pending.** Changesets, lockstep prerelease versions, publishable ESM artifacts, package validation, provenance workflow skeletons, and release documentation are ready. The first npm `next` publication remains approval-gated.
 
 ## Phase status and planned phases
 
 ### Phase 3 — Paragraph, run, and registered-font fidelity
 
-Implemented slice: `docDefaults`, default paragraph/character styles, `basedOn` cascades, direct formatting with explicit false, supported paragraph indents/alignment/spacing, deterministic font matching, and complete TrueType embedding. Font shaping is limited to LTR Latin. General tab-stop layout, complex scripts, CFF PDF embedding, and true default subsetting remain unsupported. This status does not claim broad real-font fixture coverage.
+Implemented slice: `docDefaults`, default paragraph/character styles, `basedOn` cascades, direct formatting with explicit false, supported paragraph indents/alignment/spacing, deterministic font matching, and deterministic TrueType subsetting with exact glyph maps. Font shaping is limited to LTR Latin. General tab-stop layout, complex scripts, CFF PDF embedding, and variable-font axis instantiation remain unsupported. This status does not claim broad real-font fixture coverage.
 
 ### Phase 4 — Numbering, templates, and pagination controls
 
@@ -49,7 +49,7 @@ Implemented and locally browser-verified at 1440 × 900 and 390 × 844. The poli
 
 ### Phase 9 — Hardening
 
-Local hardening evidence is implemented: security fixtures, a fixed-seed fragmentation corpus, resource-limit and cancellation tests, real-browser rendering and accessibility checks, exact golden PDF/trace parity across separate Bun processes, Node 24, and a real Chromium module worker, Bun benchmarks, enforced publication-tarball size budgets, and a formal public API review. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
+Local hardening evidence is implemented: security fixtures, seeded fast-check properties plus fixed structural corpora, resource-limit and cancellation tests, real-browser rendering and zero-violation axe checks for the covered light/dark desktop/mobile states, exact golden PDF/trace parity across separate Bun processes, Node 24, and a real Chromium module worker, Bun benchmarks, enforced publication-tarball size budgets, pull-request dependency review, and a formal public API review. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
 
 ### Phase 10 — Release preparation
 

@@ -19,7 +19,10 @@ import {
   type SourceLocation,
   type TemplateInspectionResult,
 } from "@apex-docx-pdf/core"
-import { normaliseDocxBytes } from "@apex-docx-pdf/docx"
+import {
+  normaliseDocxBytes,
+  normaliseDocxBytesWithUsage,
+} from "@apex-docx-pdf/docx"
 import { createFontRegistry } from "@apex-docx-pdf/fonts"
 import {
   ImagePreparationError,
@@ -28,9 +31,14 @@ import {
 } from "@apex-docx-pdf/images"
 import { layoutDocument } from "@apex-docx-pdf/layout"
 import { serializePdf } from "@apex-docx-pdf/pdf"
-import { compileTemplate, resolveTemplate } from "@apex-docx-pdf/template"
+import {
+  compileTemplate,
+  resolveTemplateWithUsage,
+} from "@apex-docx-pdf/template"
 
-export const ENGINE_VERSION = "0.0.0-phase.7"
+// Cache compatibility identifier. Bump whenever compilation or rendered bytes
+// can change, independently of the npm package version.
+export const ENGINE_VERSION = "0.0.0-phase.8"
 
 export class EngineOperationError extends Error {
   constructor(
@@ -61,6 +69,14 @@ export async function createDocxPdfEngine(
   const textShaper = options.textShaper ?? fontRegistry
   const compiledTemplates = new WeakSet<object>()
   const staticImages = new WeakMap<object, ImagePreparationProvider>()
+  const packageUsage = new WeakMap<
+    object,
+    Readonly<{
+      templateBytes: number
+      archiveEntries: number
+      decompressedBytes: number
+    }>
+  >()
 
   const engine: DocxPdfEngine = {
     version: ENGINE_VERSION,
@@ -81,7 +97,7 @@ export async function createDocxPdfEngine(
     async compile(templateBytes, compileOptions = {}) {
       await yieldToAbort(compileOptions.signal)
       const templateHash = await sha256(templateBytes, compileOptions.signal)
-      const normalised = normaliseDocxBytes(templateBytes, {
+      const normalised = normaliseDocxBytesWithUsage(templateBytes, {
         limits,
         signal: compileOptions.signal,
         unsupportedFeatures: compileOptions.unsupportedFeatures,
@@ -97,7 +113,7 @@ export async function createDocxPdfEngine(
       throwForUnacceptableTemplateDiagnostics(normalised.diagnostics)
       let images: ImagePreparationProvider
       try {
-        images = prepareImageAssets(normalised.value.assets, {
+        images = prepareImageAssets(normalised.value.document.assets, {
           limits: {
             maxBytes: limits.maxImageBytes,
             maxDimensionPixels: limits.maxImageDimensionPixels,
@@ -120,7 +136,7 @@ export async function createDocxPdfEngine(
           Object.freeze([...normalised.diagnostics, diagnostic])
         )
       }
-      const compiled = await compileTemplate(normalised.value, {
+      const compiled = await compileTemplate(normalised.value.document, {
         limits,
         signal: compileOptions.signal,
         templateHash,
@@ -134,6 +150,14 @@ export async function createDocxPdfEngine(
       })
       compiledTemplates.add(result)
       staticImages.set(result, images)
+      packageUsage.set(
+        result,
+        Object.freeze({
+          templateBytes: templateBytes.byteLength,
+          archiveEntries: normalised.value.archiveEntries,
+          decompressedBytes: normalised.value.decompressedBytes,
+        })
+      )
       return result
     },
 
@@ -150,6 +174,7 @@ export async function createDocxPdfEngine(
       const commonLayoutOptions = {
         maxPages: limits.maxPages,
         signal: previewOptions.signal,
+        includeTrace: true,
       }
       const layout =
         fontRegistry && textShaper
@@ -166,9 +191,17 @@ export async function createDocxPdfEngine(
           layout.diagnostics
         )
       }
+      if (!layout.trace) {
+        throw new EngineOperationError(
+          "engine/preview-trace",
+          "The template preview did not produce its required layout trace",
+          layout.diagnostics
+        )
+      }
       return Object.freeze({
         displayList: layout.displayList,
         placeholderNodes: compiled.placeholderNodes,
+        layoutTrace: layout.trace,
         diagnostics: layout.diagnostics,
       })
     },
@@ -187,7 +220,7 @@ export async function createDocxPdfEngine(
       const safeData = cloneBoundedJsonData(data, limits)
       const startedAt = now()
       const resolveStartedAt = now()
-      const resolved = resolveTemplate(compiled, safeData, {
+      const resolved = resolveTemplateWithUsage(compiled, safeData, {
         limits,
         signal: renderOptions.signal,
         locale: renderOptions.locale,
@@ -204,7 +237,7 @@ export async function createDocxPdfEngine(
 
       let renderImages = staticImages.get(compiled)
       try {
-        const dynamicAssets = resolved.value.assets.slice(
+        const dynamicAssets = resolved.value.document.assets.slice(
           compiled.source.assets.length
         )
         if (dynamicAssets.length > 0) {
@@ -226,7 +259,7 @@ export async function createDocxPdfEngine(
         }
       } catch (error) {
         if (!(error instanceof ImagePreparationError)) throw error
-        const asset = resolved.value.assets.find(
+        const asset = resolved.value.document.assets.find(
           (candidate) => candidate.id === error.assetId
         )
         const diagnostic: Diagnostic = Object.freeze({
@@ -251,12 +284,12 @@ export async function createDocxPdfEngine(
       }
       const layout =
         fontRegistry && textShaper
-          ? layoutDocument(resolved.value, {
+          ? layoutDocument(resolved.value.document, {
               ...commonLayoutOptions,
               fonts: fontRegistry,
               shaper: textShaper,
             })
-          : layoutDocument(resolved.value, commonLayoutOptions)
+          : layoutDocument(resolved.value.document, commonLayoutOptions)
       const layoutAt = now()
       const preSerializationDiagnostics = Object.freeze([
         ...resolved.diagnostics,
@@ -300,6 +333,19 @@ export async function createDocxPdfEngine(
           pdfMs: completedAt - pdfStartedAt,
           totalMs: completedAt - startedAt,
         },
+        resourceUsage: Object.freeze({
+          ...(packageUsage.get(compiled) ??
+            (() => {
+              throw new EngineOperationError(
+                "engine/compiled-template",
+                "The compiled template has no package resource accounting",
+                []
+              )
+            })()),
+          expandedNodes: resolved.value.expandedNodes,
+          expandedTextBytes: resolved.value.expandedTextBytes,
+          pages: layout.displayList.pages.length,
+        }),
         ...(layout.trace ? { layoutTrace: layout.trace } : {}),
       }
       return Object.freeze(result)

@@ -375,7 +375,7 @@ describe("font registry", () => {
 })
 
 describe("font shaping", () => {
-  test("parses and shapes an openly licensed Noto Sans fixture with fontkit", async () => {
+  test("parses, shapes, and deterministically subsets an openly licensed Noto Sans fixture with fontkit", async () => {
     const fontPath = await Bun.resolve(
       "notosans-fontface/fonts/NotoSans-Regular.ttf",
       import.meta.dir
@@ -417,6 +417,43 @@ describe("font shaping", () => {
     )
     expect(shaped.glyphs.some((glyph) => glyph.unicode === "ffi")).toBe(true)
     expect(shaped.advanceX).toBeGreaterThan(0)
+
+    const requestedGlyphIds = shaped.glyphs.map(({ glyphId: id }) => id)
+    const firstSubset = registry.subset(face.faceId, [
+      ...requestedGlyphIds,
+      ...[...requestedGlyphIds].reverse(),
+    ])
+    const secondSubset = registry.subset(
+      face.faceId,
+      [...requestedGlyphIds].reverse()
+    )
+    const sortedGlyphIds = [...new Set(requestedGlyphIds)].sort(
+      (left, right) => left - right
+    )
+    expect(firstSubset.subsetted).toBe(true)
+    expect(firstSubset.kind).toBe("truetype")
+    expect(firstSubset.bytes.length).toBeLessThan(bytes.length / 10)
+    expect(firstSubset.bytes).not.toEqual(bytes)
+    expect(firstSubset.bytes).toEqual(secondSubset.bytes)
+    expect(firstSubset.postscriptName).toMatch(/^[A-Z]{6}\+NotoSans-Regular$/u)
+    expect(firstSubset.postscriptName).toBe(secondSubset.postscriptName)
+    expect(
+      firstSubset.glyphMap.map(({ sourceGlyphId }) => sourceGlyphId)
+    ).toEqual(sortedGlyphIds)
+    expect(firstSubset.glyphMap).toEqual(secondSubset.glyphMap)
+    expect(
+      firstSubset.glyphMap.every(({ subsetGlyphId }) => subsetGlyphId > 0)
+    ).toBe(true)
+    expect(
+      new Set(firstSubset.glyphMap.map(({ subsetGlyphId }) => subsetGlyphId))
+        .size
+    ).toBe(sortedGlyphIds.length)
+
+    const controller = new AbortController()
+    controller.abort()
+    expect(() =>
+      registry.subset(face.faceId, requestedGlyphIds, controller.signal)
+    ).toThrow()
   })
 
   test("caches parsed faces and cumulatively rounds advances to integer twips", async () => {
@@ -536,7 +573,7 @@ describe("font shaping", () => {
 })
 
 describe("font embedding", () => {
-  test("returns the complete immutable program by default and supports an injectable subset mapping seam", async () => {
+  test("keeps custom parsers on complete embedding unless an explicit subsetter is supplied", async () => {
     const base = configuration()
     const unsupported = await createFontRegistry(base, { parser: fakeParser() })
     const faceIdValue = unsupported.matchFace({

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apex-docx-pdf.dev/schemas/editor-fixture-manifest-v1.json",
+  "title": "Apex DOCX PDF editor fixture corpus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "corpusId", "fixtures"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "corpusId": { "type": "string", "minLength": 1 },
+    "fixtures": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fixture" }
+    }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "file",
+        "sha256",
+        "authoring",
+        "license",
+        "containsPersonalData",
+        "scenarios",
+        "expectedOutcome",
+        "expected"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "file": {
+          "type": "string",
+          "pattern": "^docx/[a-zA-Z0-9._-]+\\.docx$"
+        },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "authoring": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["editor", "version", "exportedAt", "exportFormat"],
+          "properties": {
+            "editor": {
+              "enum": ["microsoft-word", "google-docs", "synthetic"]
+            },
+            "version": { "type": "string", "minLength": 1 },
+            "exportedAt": { "type": "string", "format": "date" },
+            "exportFormat": { "const": "docx" }
+          }
+        },
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spdx", "sourceUrl", "redistributionAllowed"],
+          "properties": {
+            "spdx": { "type": "string", "minLength": 1 },
+            "sourceUrl": { "type": "string", "format": "uri" },
+            "redistributionAllowed": { "const": true },
+            "notice": { "type": "string" }
+          }
+        },
+        "containsPersonalData": { "const": false },
+        "scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "one-page-business-letter",
+              "multi-page-legal-agreement",
+              "nested-legal-numbering",
+              "invoice-repeating-rows",
+              "multi-page-table",
+              "repeating-table-headers",
+              "logo-and-footer",
+              "page-x-of-y",
+              "signature-table",
+              "fragmented-tags",
+              "missing-font-handling",
+              "multiple-sections",
+              "unsupported-features",
+              "malformed-packages",
+              "security-attacks"
+            ]
+          }
+        },
+        "expectedOutcome": {
+          "enum": ["render", "compile-rejection", "inspect-rejection"]
+        },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["diagnosticCodes"],
+          "properties": {
+            "diagnosticCodes": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "pageCount": { "type": "integer", "minimum": 1 },
+            "searchableTextIncludes": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "pdfSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "layoutTraceSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@ title: "Template language"
 description: "Current values, safe formatters, body/header/footer blocks, static-inline barriers, and generated contracts."
 ---
 
-Engine version `0.0.0-phase.7` resolves typed values, safe formatters, bounded whole-paragraph block tags in the body and reusable headers/footers, and dedicated whole-row table blocks. It never evaluates JavaScript or arbitrary helper code.
+Engine compatibility version `0.0.0-phase.8` resolves typed values, safe formatters, bounded whole-paragraph block tags in the body and reusable headers/footers, and dedicated whole-row table blocks. It never evaluates JavaScript or arbitrary helper code.
 
 ## Value tags
 
@@ -42,14 +42,22 @@ Only these formatters are supported:
 {{customer.name:string | upper}}
 {{customer.code:string | lower}}
 {{invoice.total:number | currency:"ZAR"}}
-{{invoice.issuedAt:date | date:"d MMMM yyyy"}}
+{{invoice.issuedAt:date | date}}
+{{appointment.startsAt:date | date:"dd-MM-yyyy HH:mm"}}
+{{appointment.startsAt:date | date:"dd-MM-yyyy hh:mm a"}}
 ```
 
 - `upper` and `lower` accept no argument.
-- `currency:"ISO"` requires one uppercase three-letter ISO currency code and an explicit render `locale`.
-- `date:"d MMMM yyyy"` supports only that exact pattern. It requires explicit render `locale` and `timeZone`, and the value must be an ISO 8601 date-time with an explicit `Z` or numeric offset, such as `2026-08-05T09:30:00+02:00`.
+- `currency:"ISO"` requires one uppercase three-letter ISO currency code and an explicit canonical `en-US` or `en-ZA` render `locale`. Currency symbols, separators, grouping, and the bounded ISO minor-unit table are engine-owned rather than delegated to runtime ICU data.
+- `date` defaults to `dd-MM-yyyy`, producing values such as `05-08-2026`.
+- `date:"pattern"` accepts one bounded date pattern. It must contain one year token (`yy` or `yyyy`), one month token (`M`, `MM`, `MMM`, or `MMMM`), and one day token (`d` or `dd`). Literal spaces, `-`, `/`, `.`, `,`, and `:` are allowed.
+- Add `H`/`HH` and optional `m`/`mm` and `s`/`ss` tokens to include 24-hour time. Use `h`/`hh` with `a` for 12-hour time. For example, `dd-MM-yyyy HH:mm` produces `05-08-2026 09:30`; `dd-MM-yyyy hh:mm a` produces `05-08-2026 09:30 AM` in an English locale.
+- Token case matters: `MM` is a two-digit month; `mm` is two-digit minutes.
+- Date formatting requires an explicit canonical `en-US` or `en-ZA` render `locale` plus `timeZone`, and the value must be an ISO 8601 date-time with an explicit `Z` or numeric offset, such as `2026-08-05T09:30:00+02:00`.
 
-Formatting uses explicit `Intl` context. It does not read the ambient locale, time zone, or clock. Unknown formatters, invalid arguments, incompatible formatter/type chains, and missing formatter context are errors.
+The unformatted `{{value:date}}` form remains an unchanged ISO string for backward compatibility. Use `| date` when you want the default display format.
+
+Formatting uses bounded engine-owned English locale profiles plus an explicit IANA time zone. It does not read the ambient locale, separators, currency data, time zone, or clock. Unknown formatters, unsupported locales, invalid arguments, incompatible formatter/type chains, and missing formatter context are errors.
 
 ## Whole-paragraph blocks
 

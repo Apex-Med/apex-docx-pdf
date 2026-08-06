@@ -14,7 +14,7 @@ The renderer is designed around reproducible inputs rather than ambient process 
 - Canonical JSON sorts object keys when computing the document hash.
 - Template manifests, nested JSON Schema, starter data, block expansion, and numbering definitions are emitted in deterministic order.
 - Loop, node, text, expression-depth, and traversal budgets are cumulative rather than reset by nesting.
-- Currency and date formatters use only caller-supplied `Intl` locale/time-zone context. Date values carry their own ISO 8601 offset; no current clock is read.
+- Currency and date formatters accept only the canonical `en-US` and `en-ZA` locale profiles. Currency symbols, grouping, decimal separators, and minor-unit precision plus English month/day-period text are engine-owned, so runtime ICU locale data cannot change output. Date-time zone projection uses only the caller-supplied IANA zone; the normalized pattern is template metadata, date values carry their own ISO 8601 offset, and no current clock is read.
 - List counters continue and restart from explicit numbering definitions and overrides, not runtime state.
 - Table geometry comes only from positive integer-twip `tblGrid` columns. Explicit `tblW` and `tcW` values must equal their grid-derived widths; the renderer performs no content-driven autofit.
 - Table rows, cells, fragments, fills, borders, text, and trace events retain stable source-linked identities. Repeating headers reuse prepared geometry without advancing their numbering state.
@@ -28,7 +28,7 @@ The renderer is designed around reproducible inputs rather than ambient process 
 
 ## What to persist for a reproducible render
 
-Persist the exact template bytes or template hash, bounded data JSON, complete font configuration and exact font bytes, engine version (`0.0.0-phase.7` for this slice), `locale`, `timeZone`, limits, metadata, render options, diagnostics, and optional layout trace. Package-owned image bytes and section/header/footer parts are included in the template bytes/hash. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
+Persist the exact template bytes or template hash, bounded data JSON, complete font configuration and exact font bytes, engine compatibility version (`0.0.0-phase.8` for this slice), `locale`, `timeZone`, limits, metadata, render options, diagnostics, and optional layout trace. Package-owned image bytes and section/header/footer parts are included in the template bytes/hash. The font registry exposes its own deterministic hash. A result exposes `documentHash`, `templateHash`, timings, diagnostics, and page count for comparison; timings and the optional trace are observational output, not compatibility inputs.
 
 <Note>
   The current serializer does not compress PDF streams, and repeat-identical

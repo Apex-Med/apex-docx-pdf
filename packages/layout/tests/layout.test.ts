@@ -382,13 +382,30 @@ describe("paragraph layout", () => {
     const metrics = createPhase1StandardFontMetrics()
     expect(metrics.measureText("Hello", style)).toBe(twips(507))
     const result = layoutDocument(
-      documentWith([paragraph([{ text: "Hello" }])])
+      documentWith([
+        paragraph([
+          { text: "Hello", style: { ...style, fontFamily: "Aptos" } },
+        ]),
+      ]),
+      { includeTrace: true }
     )
     expect(result.displayList.pages[0]?.items[0]).toMatchObject({
       type: "glyph-run",
       fontSource: "standard",
       text: "Hello",
     })
+    expect(result.trace?.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "glyph-run",
+          baselineY: expect.any(Number),
+        }),
+        expect.objectContaining({
+          kind: "font-fallback",
+          reason: "layout/font-fallback",
+        }),
+      ])
+    )
   })
 
   test("matches and shapes each semantic run once and emits positioned embedded glyphs", () => {
@@ -974,6 +991,13 @@ describe("paragraph layout", () => {
       )?.pageNumber
     expect(pageFor("first")).toBe(2)
     expect(pageFor("second")).toBe(2)
+    expect(result.trace?.events).toContainEqual(
+      expect.objectContaining({
+        kind: "keep-decision",
+        decision: "moved",
+        reason: "keep-with-next",
+      })
+    )
   })
 
   test("degrades an oversized keep-with-next chain once with an explicit reason", () => {
@@ -1501,8 +1525,11 @@ describe("table layout", () => {
     expect(splitResult.displayList.pages.length).toBeGreaterThan(1)
     expect(
       splitResult.trace?.events.some(
-        (event) => event.reason === "table-row-fragment"
+        (event) => event.kind === "table-row-fragment"
       )
+    ).toBe(true)
+    expect(
+      splitResult.trace?.events.some((event) => event.kind === "table")
     ).toBe(true)
 
     const base = table([["x"]])
@@ -1518,11 +1545,18 @@ describe("table layout", () => {
           pageHeight: twips(800),
         }
       ),
-      { metrics: fixedMetrics }
+      { metrics: fixedMetrics, includeTrace: true }
     )
     expect(moved.displayList.pages).toHaveLength(2)
     expect(glyphRuns(moved).find((run) => run.text === "x")?.baselineY).toBe(
       twips(312)
+    )
+    expect(moved.trace?.events).toContainEqual(
+      expect.objectContaining({
+        kind: "keep-decision",
+        decision: "moved",
+        reason: "table-cant-split",
+      })
     )
 
     const degraded = layoutDocument(
@@ -1537,10 +1571,16 @@ describe("table layout", () => {
         ],
         { pageHeight: twips(600) }
       ),
-      { metrics: fixedMetrics }
+      { metrics: fixedMetrics, includeTrace: true }
     )
     expect(degraded.diagnostics).toContainEqual(
       expect.objectContaining({ code: "layout/table-cant-split-too-tall" })
+    )
+    expect(degraded.trace?.events).toContainEqual(
+      expect.objectContaining({
+        kind: "unsupported-approximation",
+        reason: "table-cant-split-too-tall",
+      })
     )
   })
 
@@ -1679,7 +1719,7 @@ describe("table layout", () => {
       result.trace?.events
         .filter(
           (event) =>
-            event.kind === "block" &&
+            event.kind === "table-row-fragment" &&
             (event.sourceNodeId === "row-0" || event.sourceNodeId === "row-1")
         )
         .map((event) => ({ page: event.pageNumber, bounds: event.bounds }))
@@ -1705,7 +1745,9 @@ describe("table layout", () => {
     ])
     expect(
       result.trace?.events.some(
-        (event) => event.reason === "table-row-fragment"
+        (event) =>
+          event.kind === "table-row-fragment" &&
+          (event.fragmentOffset > 0 || event.bounds.height < event.rowHeight)
       )
     ).toBe(false)
   })
@@ -1822,10 +1864,18 @@ describe("table layout", () => {
       result.trace?.events
         .filter(
           (event) =>
-            event.sourceNodeId === "row-0" || event.sourceNodeId === "row-1"
+            event.kind === "table-row-fragment" &&
+            (event.sourceNodeId === "row-0" || event.sourceNodeId === "row-1")
         )
         .map((event) => event.bounds?.height)
     ).toEqual([twips(100), twips(180)])
+    expect(result.trace?.events).toContainEqual(
+      expect.objectContaining({
+        kind: "clipping",
+        sourceNodeId: "row-1",
+        reason: "avoided-by-vertical-merge-row-expansion",
+      })
+    )
     const items = result.displayList.pages[0]?.items ?? []
     const rectangles = items.filter((item) => item.type === "rectangle")
     expect(rectangles).toHaveLength(2)

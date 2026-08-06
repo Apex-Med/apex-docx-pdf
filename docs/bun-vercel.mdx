@@ -18,21 +18,21 @@ bun run dev
 bun run convex:dev
 ```
 
-Run `bun run dev` and `bun run convex:dev` in separate terminals. The first starts the Turbo application tasks; the second starts Convex development. For an unlinked backend, use `CONVEX_AGENT_MODE=anonymous bun run convex:dev`. The playground renders locally; its collapsed persistence drawer is off by default and uploads only after the user explicitly enables it and chooses Save.
+Run `bun run dev` to start the Turbo application tasks. The playground renders locally and exposes no cloud-persistence controls. `bun run convex:dev` remains available only for developing the unmounted future persistence foundations.
 
 The web app uses the browser package and a module worker. The checked-in runtime-neutral release suite reuses deterministic synthetic fixture builders for plain template formatting, multi-page template-table row expansion, and static PNG/JPEG rendering with sections, headers, and footers. It also checks a missing-required-data rejection with stable engine and diagnostic codes. The Bun/Node gate bundles that compact suite once, runs it in two separate Bun processes and Node 24, and requires exact agreement with canonical page counts, searchable text, PDF-validity flags, PDF hashes, and layout-trace hashes. The browser-determinism gate verifies the same canonical evidence through the production module worker in real headless Chromium. CI installs Chromium and runs both gates.
 
-The separate playground smoke drives the actual application through a three-page upright render, `%PDF-` download, form/JSON synchronization, invalid-data guard, stale-result invalidation, reset actions, and mobile keyboard tabs with zero runtime errors. Together these checks prove only the bounded release suite and local application walkthrough across the pinned Bun, Node 24, and Chromium toolchain. They are not broad browser, Word-fixture, operating-system, or hosted-production proof. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application font assets remains outside the renderer. DOCX images are package-owned bytes and require no runtime fetch.
+The separate playground smoke drives the actual application through a three-page upright render, `%PDF-` download, form/JSON synchronization, invalid-data guard, stale-result invalidation, reset actions, and mobile keyboard tabs with zero runtime errors. Hosted smoke additionally covers the migrated four-page K3 template. Together these checks prove only the bounded release suite and recorded Chromium walkthroughs. They are not broad browser, Word-fixture, or operating-system proof. The worker installer accepts explicit engine options, including caller-supplied font bytes; loading bundled application font assets remains outside the renderer. DOCX images are package-owned bytes and require no runtime fetch.
 
 ## Vercel status
 
-The TanStack Start application uses the current `nitro/vite` adapter and the repository includes a Bun-targeted `vercel.json`. Nitro's Vercel function configuration also pins `runtime: "bun1.x"` and `maxDuration: 30`. A local `NITRO_PRESET=vercel` build emits Build Output API function metadata with those exact values; the ordinary production build and local production preview are also verified. This proves the generated deployment shape, not the runtime of a hosted invocation. The repository is not linked to a Vercel project, no production environment variables or domain are configured here, and no live deployment or hosted playground URL is claimed.
+The TanStack Start application uses the current `nitro/vite` adapter and a Bun-targeted root Build Output API configuration. Nitro pins `runtime: "bun1.x"` and `maxDuration: 30`. The approved production deployment is live at `https://pdf-docx.apexmed.dev`; Vercel reports one 1.16 MB Bun function, and the canonical domain is verified. `VITE_SITE_URL` is configured while Convex and Mintlify URLs are intentionally absent. Exact deployment and smoke evidence is in `reports/deployment-review.md`.
 
 When deploying, keep the renderer’s explicit-input contract intact: package bytes and data should reach an application-owned endpoint or worker boundary; locale, time zone, metadata, limits, and authorization must be explicit. Do not turn deployment configuration into an implicit source of fonts, locale, clock data, or network template execution.
 
 <Note>
   The documentation site is configured independently under `docs/docs.json`. Its
-  deployment host should be chosen before adding a product or playground link.
+  canonical Mintlify origin remains to be deployed and configured.
 </Note>
 
 See the [deployment runbook](/deployment-runbook) for the exact preview, smoke,

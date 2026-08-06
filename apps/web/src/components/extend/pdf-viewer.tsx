@@ -1129,7 +1129,11 @@ function PDFViewerToolbar({
               disabled={controlsDisabled}
               modal={false}
             >
-              <SelectTrigger size="sm" className="w-[84px] min-w-[84px]">
+              <SelectTrigger
+                size="sm"
+                className="w-[84px] min-w-[84px]"
+                aria-label="Zoom level"
+              >
                 <SelectValue placeholder="Zoom">
                   {Math.round(currentZoomLevel * 100)}%
                 </SelectValue>
@@ -1428,6 +1432,8 @@ function PDFViewerThumbnails({
                 <ThumbImg
                   documentId={documentId}
                   meta={meta}
+                  role="presentation"
+                  aria-hidden="true"
                   className="block rounded-sm object-contain"
                   style={thumbnailImageStyle}
                 />
@@ -2539,12 +2545,14 @@ function PDFViewerInner({
               pageIndex={page.pageIndex}
               scale={Math.min(currentZoomLevel, PAGE_BASE_RENDER_MAX_SCALE)}
               dpr={PAGE_BASE_RENDER_DPR}
+              aria-hidden="true"
               className="pointer-events-none absolute inset-0 h-full w-full object-fill opacity-100 blur-[0.35px] transition-none"
             />
             <TilingLayer
               documentId={documentId}
               pageIndex={page.pageIndex}
               key={`tiles-${page.pageIndex}-${pageRotation}`}
+              aria-hidden="true"
               className="pointer-events-none opacity-100 transition-none [&_img]:opacity-100 [&_img]:transition-none"
             />
             <SearchLayer

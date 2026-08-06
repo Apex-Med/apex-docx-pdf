@@ -34,7 +34,7 @@ Image preparation accepts `AbortSignal` and checks it throughout hashing, chunk/
 
 Only deterministic `nextPage` sections are accepted. Page geometry must use positive integer twips and agree with portrait/landscape orientation. Header/footer relationships must be internal defaults; references inherit across sections until replaced. Distances must be non-negative and header/footer content may not collide with body margins. First/even header variants, continuous/odd/even breaks, automatic numbering in headers/footers, and non-decimal/arbitrary fields are rejected. `PAGE`/`NUMPAGES` reserve bounded width before pagination and materialize only after the global page count is known.
 
-Template paths cannot address prototype-related fields, inherited properties are not traversed, and values are resolved without executing code. The safe formatter set is closed. Currency formatting requires explicit locale; date formatting requires explicit locale and time zone plus an offset-bearing ISO date-time. No formatter reads ambient locale, time zone, or clock state.
+Template paths cannot address prototype-related fields, inherited properties are not traversed, and values are resolved without executing code. The safe formatter set is closed. Currency and date formatting accept only the engine-owned canonical `en-US` and `en-ZA` profiles; date formatting additionally requires an explicit time zone and offset-bearing ISO date-time. No formatter reads ambient locale data, time zone, or clock state.
 
 The low-level library font configuration accepts explicit `Uint8Array` programs only. The adapter performs no filesystem access, system-font discovery, network fetch, or `Buffer`-specific processing. Font licensing and redistribution rights remain the caller's responsibility.
 
@@ -49,13 +49,15 @@ The reference playground is stricter: it does not register uploaded DOCX embedde
 - Use `AbortSignal` to stop abandoned work.
 - Do not add network fetches, system-font lookup, executable helpers, or ambient locale/time/clock dependencies inside rendering stages.
 - Preserve source-located image, section, field, header/footer, and table diagnostics; review warnings such as oversized `cantSplit` rows or table headers too tall to repeat. Do not equate a produced PDF with full Word fidelity.
-- Treat dynamic/external/floating/cropped/rotated/SVG images, unsupported image profiles/colors, percentage/nested/styled/themed tables, non-`nextPage` sections, first/even headers, header/footer numbering, and deployment as unavailable until later phases establish explicit boundaries.
+- Treat dynamic/external/floating/cropped/rotated/SVG images, unsupported image profiles/colors, percentage/nested/styled/themed tables, non-`nextPage` sections, first/even headers, and header/footer numbering as unavailable until later phases establish explicit boundaries.
 
 ## Convex reference boundary
 
 The Phase 7 reference adapter uses an anonymous per-browser session identifier from `convex-helpers`. It scopes records for the demo, but it is not authentication: it does not prove a person's identity, organization, role, or entitlement. Production hosts should replace the principal-establishment seam with verified Clerk or WorkOS identity while preserving the session-owned data access contract and its server-side ownership checks.
 
 Persistence is opt-in and off by default. When it is disabled, the browser renderer must not invoke persistence uploads or save render artifacts. When it is enabled, the browser uploads DOCX bytes directly to a Convex generated upload URL; large document bytes must not be proxied through or buffered by a Vercel server function. Large DOCX and PDF artifacts remain in file storage, with storage IDs and bounded metadata stored in application records.
+
+Before an uploaded storage ID can be consumed, a session-bound Convex registration action reads the immutable blob and verifies bounded content. PDFs must begin exactly with `%PDF-`. DOCX files must be classic single-volume ZIP packages with bounded entry and declared-decompression counts, a bounded central directory, safe unique paths, supported compression methods, and the required content-types, root-relationships, and main-document parts. This server-side gate rejects mislabeled arbitrary bytes, malformed or incomplete ZIPs, encrypted entries, and oversized packages; it does not inflate and semantically re-parse OOXML or replace the browser engine's stricter active-content and relationship checks. Convex may materialize more of a storage blob than the bounded slices requested by the action. Production malware scanning and quarantine remain host responsibilities.
 
 Every file read begins with an ownership check. A bearer URL is generated only after that check and must not be treated as fine-grained authorization, a durable identifier, or safe log data. The underlying storage ID, not the generated URL, belongs in the database.
 

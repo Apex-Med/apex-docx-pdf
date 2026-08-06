@@ -21,7 +21,7 @@ Use these patterns to plan a Word template, then build the actual layout in a DO
     or repeated spaces.
 
     ```text
-    {{letter.sentAt:date | date:"d MMMM yyyy"}}
+    {{letter.sentAt:date | date}}
     {{recipient.name:string}}
     {{recipient.address:string}}
 
@@ -91,7 +91,7 @@ Use these patterns to plan a Word template, then build the actual layout in a DO
 
     ```text
     {{report.title:string}}
-    Prepared {{report.preparedAt:date | date:"d MMMM yyyy"}}
+    Prepared {{report.preparedAt:date | date:"dd-MM-yyyy HH:mm"}}
 
     {{#each report.sections}}
     {{heading:string}}
@@ -143,7 +143,7 @@ Use these patterns to plan a Word template, then build the actual layout in a DO
     ```text
     row: Signed by | {{signer.name:string}}
     row: Capacity | {{signer.capacity:string}}
-    row: Date | {{signer.signedAt:date | date:"d MMMM yyyy"}}
+    row: Date | {{signer.signedAt:date | date:"dd/MM/yyyy"}}
     row: Signature | ______________________________
     ```
 

@@ -8,11 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Bounded date/time formatter patterns: `date` now defaults to `dd-MM-yyyy`, explicit tokens can reorder the date or include 24-hour/12-hour time, and the generated playground form preserves the selected time precision in the explicit render time zone.
+- Engine compatibility version `0.0.0-phase.8`, forcing persisted render caches to miss across the current formatter, font-subsetting, table-rendering, and trace-output changes instead of reusing `phase.7` artifacts.
 - Phase 1 core vertical slice for a constrained DOCX profile: package validation, main-document paragraphs and text runs, typed inline value tags, deterministic layout, diagnostics, and searchable PDF output using built-in Helvetica.
 - Phase 2 browser vertical slice: worker-based local compile and render flow with the reference playground.
 - Phase 3 paragraph, run, and font fidelity slice: document defaults, paragraph/character default styles, `basedOn` cascades, direct formatting, supported paragraph indents/alignment/spacing, and explicit caller-supplied font configuration.
 - Exact-pinned `fontkit` 2.0.4 parsing and LTR Latin shaping in `@apex-docx-pdf/fonts`, with deterministic registry hashing and face fallback.
-- Searchable TrueType PDF embedding through Type0/CIDFontType2, FontDescriptor, FontFile2, CIDToGIDMap, ToUnicode, and absolute glyph positioning. The default embeds the complete immutable program with `subsetted: false`; an injectable deterministic subsetting seam carries source-to-subset mappings.
+- Searchable TrueType PDF embedding through Type0/CIDFontType2, FontDescriptor, FontFile2, CIDToGIDMap, ToUnicode, and absolute glyph positioning. The default fontkit path emits deterministic rewritten subsets with exact source-to-subset maps and stable PDF subset names; custom parsers without an explicit subsetter safely full-embed.
 - Phase 4 engine version `0.0.0-phase.4`: whole-paragraph nested `if`/optional `else`/`each` blocks, relative object fields inside loops, safe `upper`, `lower`, `currency:"ISO"`, and `date:"d MMMM yyyy"` formatters, deterministic nested JSON Schema/starter data, and cumulative template-data and expansion limits.
 - Relationship-owned DOCX numbering with concrete definitions and overrides, start/restart behavior, bullets, decimal, letter and Roman formats, multilevel/custom level text, legal numbering, style/direct `numPr` resolution, and direct `numId` 0 removal.
 - Searchable source-linked list labels, list indentation and wrapping, counter continuation/restarts, `keepWithNext` chains, `keepLinesTogether`, and widow/orphan control in layout.
@@ -26,22 +28,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Binary-safe testkit validation that follows classic xref offsets and declared stream lengths, checks image resources and upright transforms without scanning binary payloads as PDF syntax, and extracts searchable per-page text from workspace PDFs.
 - Phase 7 engine version `0.0.0-phase.7` with browser-visible engine and font-registry hashes for deterministic cache partitioning.
 - Optional Convex persistence with anonymous session ownership, generated browser upload URLs, bounded template/render metadata, indexed and paginated reads, realtime recent-render status, owned bearer-URL reads, completed-PDF cache reuse, and scheduled cascading storage deletion.
-- TanStack Start integration through Convex React Query, TanStack Query, and router SSR query hydration, with an optional collapsed persistence drawer in the playground.
-- A local-first playground boundary: persistence is absent when Convex is not configured and remains off until the user explicitly enables it and chooses Save.
+- TanStack Start integration through Convex React Query, TanStack Query, and router SSR query hydration, with retained unmounted persistence foundations.
+- A local-only playground boundary: the route always disables persistence and exposes no cloud controls, even when a Convex URL exists.
 - Deterministic canonical-JSON/data/options hashing, direct upload response validation, a privacy notice, storage-security documentation, and focused Convex ownership/lifecycle/cache/deletion tests.
 - Initial architecture, authoring, security, determinism, support-matrix, and troubleshooting documentation.
 - Phase 8 landing and documentation surfaces: Geist Mono product typography, interactive landing examples, Mintlify navigation, a responsive support matrix, community links, and SEO/PWA metadata.
-- Phase 9 local hardening evidence: fixed-seed OOXML fragmentation and hostile-input tests, resource-limit and cancellation coverage, reproducible Bun benchmarks, enforced publication-tarball size budgets, and a formal public API review.
+- Phase 9 local hardening evidence: seeded fast-check template/path properties, fixed structural and hostile-input corpora, resource-limit and cancellation coverage, reproducible Bun benchmarks, enforced publication-tarball size budgets, automated axe checks for covered browser states, pull-request dependency review, and a formal public API review.
 - Phase 10 prerelease preparation: lockstep `0.1.0-next.0` package metadata, CI-validated Changesets prerelease mode, ESM package builds with declarations and source maps, strict package validation, trusted-publishing workflow skeletons, and release/deployment runbooks.
 - Canonical `{{@image path}}` values with explicit PNG/JPEG bytes, dimensions, deterministic resource IDs, schema/starter generation, limit enforcement, and semantic alt text.
 - The `apex-docx-pdf` umbrella facade and opt-in `@apex-docx-pdf/devtools` React display-list preview package.
+- Interactive source-linked layout-trace overlays for page/content boxes, block and line boxes, baselines, source node IDs, page-break reasons, and overflows in the devtools template preview.
 - Session-owned direct-upload intents with exact-kind registration, one-time consumption, expiry, and bounded orphan cleanup for optional Convex persistence.
 - Bounded explicit left/start Word tab stops with positive integer-twip positions and no leaders; unsupported tab behavior is rejected rather than approximated.
 - Exact golden PDF and trace parity across separate Bun processes, Node 24, and a real Chromium module worker.
-- Current TanStack Start Nitro integration plus Bun-targeted Vercel configuration. A local Vercel-preset build emits `bun1.x` function metadata with a 30-second maximum duration; the ordinary production build and preview are locally verified, but no live deployment is claimed.
+- Current TanStack Start Nitro integration plus Bun-targeted root Build Output API configuration. The approved production deployment is live at `https://pdf-docx.apexmed.dev` with a Vercel-reported 1.16 MB Bun 1.x function and verified hosted landing/sample/K3/axe smoke.
 
 ### Fixed
 
+- Currency and English date text no longer depend on host ICU locale data. Canonical `en-US` and `en-ZA` profiles now produce identical symbols, grouping, decimal separators, minor-unit precision, month names, and day periods across supported Bun, Node, and browser runtimes; unsupported formatter locales fail explicitly.
 - PDF text baselines are converted to PDF coordinates without mirroring glyph outlines. Standard and embedded text now render upright, and y-up font offsets are normalized to y-down display-list coordinates.
 - Static CSS/OpenType font weights from 100 through 900 now remain distinct through alias resolution, nearest-weight matching, layout, browser specimens, and PDF embedding. The bundled Inter and Bricolage Grotesque catalogs include real Medium (500) and SemiBold (600) programs instead of collapsing those requests to Regular or Bold.
 - PDF table-cell shading now uses the display-list rectangle origin under the page coordinate transform, so fills align with their intended cells instead of being displaced downward by one fill height.
@@ -49,14 +53,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### In progress
 
-- Completing external Phase 9 proof with broader licensed Microsoft Word and Google Docs-exported fixtures and a live Vercel deployment.
+- Completing external Phase 9 proof with broader licensed Microsoft Word and Google Docs-exported fixtures.
 - Completing Phase 10 with the approval-gated first npm `next` publication and post-publication consumer/provenance checks.
 
 ### Not yet complete
 
-- Non-canonical image tags; image URL fetching; anchored/floating, cropped, rotated, or SVG images; tagged-PDF accessibility metadata; broad image-profile/color conversion; percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex-script shaping, true default font subsetting, and CFF PDF embedding remain unsupported.
+- Non-canonical image tags; image URL fetching; anchored/floating, cropped, rotated, or SVG images; tagged-PDF accessibility metadata; broad image-profile/color conversion; percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex-script shaping, variable-font axis instantiation, and CFF PDF embedding remain unsupported.
 - Continuous, odd-page, or even-page section breaks; first/even header variants; automatic numbering in headers/footers; and general Word field evaluation.
 - Broad licensed Microsoft Word and Google Docs-exported fixture coverage.
-- A supported hosted service or published npm prerelease. Configuration is present, but live deployment and publication remain approval-gated.
+- A persistent, authenticated hosted service or published npm prerelease. The current hosted playground is deliberately local-only; publication remains blocked by the licensed fixture gate.
 
 No stable release has been cut.

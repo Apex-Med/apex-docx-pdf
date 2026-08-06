@@ -450,7 +450,7 @@ class Registry implements ManagedFontRegistry {
     const uniqueGlyphIds = [...new Set(glyphIds)].sort(
       (left, right) => left - right
     )
-    if (!this.#subsetter) {
+    if (!this.#subsetter || stored.resource.kind !== "truetype") {
       return Object.freeze({
         faceId: faceIdValue,
         kind: stored.resource.kind,
@@ -502,8 +502,17 @@ export async function createFontRegistry(
   configuration: FontConfiguration,
   options: CreateFontRegistryOptions = {}
 ): Promise<ManagedFontRegistry> {
-  const parser =
-    options.parser ?? (await import("./fontkit-adapter")).fontkitParserAdapter
+  const defaultAdapters =
+    options.parser === undefined ? await import("./fontkit-adapter") : undefined
+  const parser = options.parser ?? defaultAdapters?.fontkitParserAdapter
+  if (parser === undefined) {
+    throw new FontConfigurationError("A font parser adapter is required")
+  }
+  const subsetter =
+    options.subsetter ??
+    (options.parser === undefined
+      ? defaultAdapters?.fontkitSubsetAdapter
+      : undefined)
   const snapshots = configuration.faces.map((registration) => {
     validateRegistration(registration)
     return Object.freeze({
@@ -616,13 +625,6 @@ export async function createFontRegistry(
     ])
   )
   return Object.freeze(
-    new Registry(
-      registryHash,
-      byId,
-      byKey,
-      aliases,
-      fallbackFamily,
-      options.subsetter
-    )
+    new Registry(registryHash, byId, byKey, aliases, fallbackFamily, subsetter)
   )
 }

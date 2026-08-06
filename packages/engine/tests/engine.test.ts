@@ -187,7 +187,7 @@ describe("engine vertical slice", () => {
     const validation = validatePdfStructure(first.pdf)
     const pdfSource = new TextDecoder("latin1").decode(first.pdf)
 
-    expect(ENGINE_VERSION).toBe("0.0.0-phase.7")
+    expect(ENGINE_VERSION).toBe("0.0.0-phase.8")
     expect(compiled.version).toBe(ENGINE_VERSION)
     expect(compiled.source.assets).toHaveLength(2)
     expect(
@@ -206,10 +206,22 @@ describe("engine vertical slice", () => {
     expect(first.pdf).toEqual(second.pdf)
     expect(first.documentHash).toBe(second.documentHash)
     expect(first.templateHash).toBe(compiled.templateHash)
-    expect(first.resourceUsage).toBeUndefined()
+    expect(first.resourceUsage).toEqual({
+      templateBytes: 3237,
+      archiveEntries: 10,
+      decompressedBytes: 5448,
+      expandedNodes: 37,
+      expandedTextBytes: 222,
+      pages: 3,
+    })
+    expect(first.resourceUsage).toEqual(second.resourceUsage)
     expect(first.pageCount).toBe(3)
     expect(preview).toEqual(repeatedPreview)
     expect(preview.displayList.pages).toHaveLength(3)
+    expect(preview.layoutTrace.pages).toHaveLength(3)
+    expect(preview.layoutTrace.events.some(({ kind }) => kind === "line")).toBe(
+      true
+    )
     expect(
       preview.displayList.pages
         .flatMap(({ items }) => items)
@@ -381,7 +393,15 @@ describe("engine vertical slice", () => {
     expect(first.pageCount).toBe(1)
     expect(first.pdf).toEqual(second.pdf)
     expect(first.documentHash).toBe(second.documentHash)
-    expect(first.resourceUsage).toBeUndefined()
+    expect(first.resourceUsage).toEqual({
+      templateBytes: 956,
+      archiveEntries: 3,
+      decompressedBytes: 1114,
+      expandedNodes: 3,
+      expandedTextBytes: 26,
+      pages: 1,
+    })
+    expect(first.resourceUsage).toEqual(second.resourceUsage)
     const pdfSource = new TextDecoder("latin1").decode(first.pdf)
     expect(pdfSource).toContain("(Prepared for ) Tj")
     expect(pdfSource).toContain("(Amara Mokoena) Tj")
@@ -423,7 +443,7 @@ describe("engine vertical slice", () => {
     expect(pdfSource).toContain("/Subtype /CIDFontType2")
     expect(pdfSource).toContain("/FontFile2")
     expect(pdfSource).toContain("/ToUnicode")
-    expect(pdfSource).toContain("/NotoSans-Regular")
+    expect(pdfSource).toMatch(/\/BaseFont \/[A-Z]{6}\+NotoSans-Regular/u)
     expect(pdfSource).toContain("<006600660069>")
   })
 
@@ -455,9 +475,9 @@ describe("engine vertical slice", () => {
     )
     const pdfSource = new TextDecoder("latin1").decode(rendered.pdf)
     expect(validatePdfStructure(rendered.pdf).valid).toBe(true)
-    expect(pdfSource).toContain("/Inter-Medium")
-    expect(pdfSource).toContain("/Inter-SemiBold")
-    expect(pdfSource).toContain("/BricolageGrotesque-SemiBold")
+    expect(pdfSource).toMatch(/\/[A-Z]{6}\+Inter-Medium/u)
+    expect(pdfSource).toMatch(/\/[A-Z]{6}\+Inter-SemiBold/u)
+    expect(pdfSource).toMatch(/\/[A-Z]{6}\+BricolageGrotesque-SemiBold/u)
     expect(pdfSource.match(/\/Subtype \/Type0/gu)).toHaveLength(3)
   })
 
@@ -509,6 +529,30 @@ describe("engine vertical slice", () => {
     expect(validation.text).not.toContain("{{")
   })
 
+  test("renders default and time-inclusive date patterns into searchable PDF text", async () => {
+    const engine = await createDocxPdfEngine()
+    const compiled = await engine.compile(
+      sampleDocx(`
+        <w:p><w:r><w:t xml:space="preserve">Default {{when:date | date}} Timed {{when:date | date:"dd-MM-yyyy HH:mm"}}</w:t></w:r></w:p>
+      `)
+    )
+    const input = { when: "2024-01-02T23:30:00.000Z" }
+    const options = {
+      locale: "en-ZA",
+      timeZone: "Africa/Johannesburg",
+    } as const
+
+    const first = await engine.render(compiled, input, options)
+    const second = await engine.render(compiled, input, options)
+    const validation = validatePdfStructure(first.pdf)
+
+    expect(first.pdf).toEqual(second.pdf)
+    expect(validation.valid).toBe(true)
+    expect(validation.text).toContain(
+      "Default 03-01-2024 Timed 03-01-2024 01:30"
+    )
+  })
+
   test("continues searchable list numbering across repeated template paragraphs", async () => {
     const engine = await createDocxPdfEngine()
     const compiled = await engine.compile(
@@ -550,7 +594,7 @@ describe("engine vertical slice", () => {
     if (!section || table?.type !== "table")
       throw new Error("Expected the fixture table to compile")
 
-    expect(ENGINE_VERSION).toBe("0.0.0-phase.7")
+    expect(ENGINE_VERSION).toBe("0.0.0-phase.8")
     expect(compiled.version).toBe(ENGINE_VERSION)
     expect(Number(section.properties.pageWidth)).toBeLessThan(
       Number(section.properties.pageHeight)
@@ -628,7 +672,7 @@ describe("engine vertical slice", () => {
     )
     expect(
       first.layoutTrace?.events.some(
-        (event) => event.reason === "table-row-fragment"
+        (event) => event.kind === "table-row-fragment"
       )
     ).toBe(true)
     expect(

@@ -97,13 +97,40 @@ export type PageDisplayList = Readonly<{
   pages: readonly PageDisplayListPage[]
 }>
 
-export type LayoutTraceEvent = Readonly<{
+type LayoutTraceEventBase = Readonly<{
   pageNumber: number
   sourceNodeId: NodeId
-  kind: "block" | "line" | "page-break" | "overflow"
   bounds?: Rect
   reason?: string
 }>
+
+export type LayoutTraceEvent =
+  | (LayoutTraceEventBase &
+      Readonly<{ kind: "block" | "line" | "table"; bounds: Rect }>)
+  | (LayoutTraceEventBase &
+      Readonly<{ kind: "glyph-run"; bounds: Rect; baselineY: Twip }>)
+  | (LayoutTraceEventBase &
+      Readonly<{
+        kind: "table-row-fragment"
+        bounds: Rect
+        fragmentOffset: Twip
+        rowHeight: Twip
+        repeatedHeader: boolean
+      }>)
+  | (LayoutTraceEventBase &
+      Readonly<{
+        kind: "keep-decision"
+        decision: "moved" | "adjusted" | "degraded"
+        reason: string
+      }>)
+  | (LayoutTraceEventBase & Readonly<{ kind: "page-break"; reason: string }>)
+  | (LayoutTraceEventBase & Readonly<{ kind: "overflow"; reason: string }>)
+  | (LayoutTraceEventBase &
+      Readonly<{ kind: "clipping"; bounds: Rect; reason: string }>)
+  | (LayoutTraceEventBase &
+      Readonly<{ kind: "font-fallback"; bounds: Rect; reason: string }>)
+  | (LayoutTraceEventBase &
+      Readonly<{ kind: "unsupported-approximation"; reason: string }>)
 
 export type LayoutTrace = Readonly<{
   pages: readonly Readonly<{

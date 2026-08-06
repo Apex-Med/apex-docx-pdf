@@ -4,10 +4,18 @@ import {
   glyphId,
   type FontFaceMetrics,
   type FontProgramKind,
+  type GlyphId,
 } from "@apex-docx-pdf/core"
 import { create } from "fontkit"
 import { FontConfigurationError, FontShapingError } from "./errors"
-import type { FontParserAdapter, ParsedFontFace, ParsedGlyph } from "./parser"
+import type {
+  FontParserAdapter,
+  FontSubsetAdapter,
+  ParsedFontFace,
+  ParsedGlyph,
+} from "./parser"
+
+const fontkitFaces = new WeakMap<ParsedFontFace, ReturnType<typeof create>>()
 
 function finiteMetric(value: number, name: string): number {
   if (!Number.isFinite(value)) {
@@ -138,6 +146,69 @@ export const fontkitParserAdapter: FontParserAdapter = Object.freeze({
         return Object.freeze({ glyphs: Object.freeze(glyphs) })
       },
     })
+    fontkitFaces.set(parsed, font)
     return parsed
   },
 })
+
+/** Rewrites a TrueType program to the exact sorted glyph set used by one PDF. */
+export const fontkitSubsetAdapter: FontSubsetAdapter = Object.freeze({
+  subset(
+    face: ParsedFontFace,
+    glyphIds: readonly GlyphId[],
+    signal?: AbortSignal
+  ) {
+    signal?.throwIfAborted()
+    if (face.kind !== "truetype") {
+      throw new FontConfigurationError(
+        "The default fontkit subsetter supports TrueType programs only"
+      )
+    }
+    const font = fontkitFaces.get(face)
+    if (font === undefined) {
+      throw new FontConfigurationError(
+        "The font face was not created by the default fontkit parser"
+      )
+    }
+    const orderedGlyphIds = [...new Set(glyphIds)].sort(
+      (left, right) => left - right
+    )
+    const subset = font.createSubset()
+    const glyphMap = orderedGlyphIds.map((sourceGlyphId) => {
+      signal?.throwIfAborted()
+      return Object.freeze({
+        sourceGlyphId,
+        subsetGlyphId: subset.includeGlyph(sourceGlyphId),
+      })
+    })
+    signal?.throwIfAborted()
+    const bytes = subset.encode()
+    signal?.throwIfAborted()
+    return Object.freeze({
+      bytes: bytes.slice(),
+      postscriptName: subsetPostscriptName(
+        face.postscriptName,
+        orderedGlyphIds
+      ),
+      glyphMap: Object.freeze(glyphMap),
+    })
+  },
+})
+
+function subsetPostscriptName(
+  postscriptName: string,
+  glyphIds: readonly GlyphId[]
+): string {
+  let hash = 0x811c9dc5
+  const framed = `${postscriptName}\u0000${glyphIds.join(",")}`
+  for (const byte of new TextEncoder().encode(framed)) {
+    hash = Math.imul(hash ^ byte, 0x01000193) >>> 0
+  }
+  let value = hash
+  let prefix = ""
+  for (let index = 0; index < 6; index += 1) {
+    prefix += String.fromCharCode(65 + (value % 26))
+    value = Math.floor(value / 26)
+  }
+  return `${prefix}+${postscriptName}`
+}
