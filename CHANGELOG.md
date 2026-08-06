@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Phase 8 landing and documentation surfaces: Geist Mono product typography, interactive landing examples, Mintlify navigation, a responsive support matrix, community links, and SEO/PWA metadata.
 - Phase 9 local hardening evidence: seeded fast-check template/path properties, fixed structural and hostile-input corpora, resource-limit and cancellation coverage, reproducible Bun benchmarks, enforced publication-tarball size budgets, automated axe checks for covered browser states, pull-request dependency review, and a formal public API review.
 - Phase 10 prerelease preparation: lockstep `0.1.0-next.0` package metadata, CI-validated Changesets prerelease mode, ESM package builds with declarations and source maps, strict package validation, trusted-publishing workflow skeletons, and release/deployment runbooks.
+- Initial npm publication of the `apex-docx-pdf` facade and ten `@apexmed/*` packages at `0.1.0-next.0`, with clean registry-only Bun/Node import verification, registry-signature audit, and GitHub OIDC trusted-publisher bindings for future prereleases.
 - Canonical `{{@image path}}` values with explicit PNG/JPEG bytes, dimensions, deterministic resource IDs, schema/starter generation, limit enforcement, and semantic alt text.
 - The `apex-docx-pdf` umbrella facade and opt-in `@apexmed/devtools` React display-list preview package.
 - Interactive source-linked layout-trace overlays for page/content boxes, block and line boxes, baselines, source node IDs, page-break reasons, and overflows in the devtools template preview.
@@ -55,13 +56,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### In progress
 
 - Completing external Phase 9 proof with broader licensed Microsoft Word and Google Docs-exported fixtures.
-- Completing Phase 10 with the approval-gated first npm `next` publication and post-publication consumer/provenance checks.
+- Proving npm provenance on the next GitHub OIDC-published prerelease; the one-time direct bootstrap publication was intentionally created without a local provenance claim.
 
 ### Not yet complete
 
 - Non-canonical image tags; image URL fetching; anchored/floating, cropped, rotated, or SVG images; tagged-PDF accessibility metadata; broad image-profile/color conversion; percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex-script shaping, variable-font axis instantiation, and CFF PDF embedding remain unsupported.
 - Continuous, odd-page, or even-page section breaks; first/even header variants; automatic numbering in headers/footers; and general Word field evaluation.
 - Broad licensed Microsoft Word and Google Docs-exported fixture coverage.
-- A persistent, authenticated hosted service or published npm prerelease. The current hosted playground is deliberately local-only; prerelease publication still requires npm namespace and account-security bootstrap.
+- A persistent, authenticated hosted service. The current hosted playground is deliberately local-only, and the npm package set remains prerelease software.
 
 No stable release has been cut.

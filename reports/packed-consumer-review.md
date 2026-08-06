@@ -43,8 +43,18 @@ runtime-footprint claim because it includes React and TypeScript validation
 tooling.
 
 The local tarball set measured 2,463,981 compressed bytes. This evidence proves
-prepublication tarball installation, public declaration consumption, package
+candidate-tarball installation, public declaration consumption, package
 exports, runtime loading, and one exact cross-runtime render on the recorded
-machine. It does not prove npm registry transfer/integrity/provenance, a
-post-publication install without local overrides, other operating systems, a
-consumer browser bundle, or hosted Vercel execution.
+machine. It does not prove other operating systems, a consumer browser bundle,
+hosted Vercel execution, or provenance for the one-time direct bootstrap
+release.
+
+## Registry-only follow-up
+
+After publishing `0.1.0-next.0`, a separate empty npm consumer installed
+`apex-docx-pdf@next`, `@apexmed/browser@next`, and
+`@apexmed/devtools@next` plus React with no local paths or overrides. The
+resulting graph loaded all 11 public packages under Bun 1.3.14 and Node
+v24.15.0. `npm audit signatures` verified all 36 installed registry signatures
+and reported zero vulnerabilities. The exact package integrities and bootstrap
+provenance boundary are recorded in `npm-publication-review.md`.

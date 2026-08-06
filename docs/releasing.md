@@ -16,7 +16,7 @@ Workspace manifests continue to export TypeScript source so Bun tests, Vite, and
 
 Run `bun run packages:check` to build and then validate every publication directory with Publint, Are the Types Wrong, and `npm pack --dry-run`. Validation also enforces packed/unpacked size budgets and required license, README, declaration, manifest, and font provenance/OFL assets. `npm pack` is used only to create or inspect artifacts; dependency installation remains Bun-only. Run `bun run packages:size:review` after a build to regenerate the checked-in measurement report.
 
-Run `bun run packages:consumer-smoke` after the build to pack all 11 artifacts and install them into isolated temporary Bun consumers. The gate rejects workspace resolution, type-checks the complete public declaration surface, imports every public package, and requires one repeat-identical render under both Bun and Node. Local `overrides` bind unpublished exact internal versions to their tarballs; a separate registry install remains mandatory after publication.
+Run `bun run packages:consumer-smoke` after the build to pack all 11 artifacts and install them into isolated temporary Bun consumers. The gate rejects workspace resolution, type-checks the complete public declaration surface, imports every public package, and requires one repeat-identical render under both Bun and Node. Local `overrides` bind the exact internal versions to the candidate tarballs so the gate tests the current build rather than the already-published registry version. Repeat a registry-only install after every publication.
 
 Run `bun run fixtures:check` to validate any checked-in editor exports and their provenance. `bun run fixtures:release` remains the gate for complete cross-editor compatibility claims and any stable release: it fails until the corpus contains licensed, redistributable Microsoft Word and Google Docs exports covering all 15 fixture scenarios in the project brief. A publicly downloadable sample, private template, or synthetic OOXML builder does not satisfy that gate. The `next` prerelease workflow deliberately relies on the full deterministic CI, package, consumer, and security suites instead; prerelease documentation must not imply that the complete editor corpus has passed.
 
@@ -26,14 +26,16 @@ Run `bun run fixtures:check` to validate any checked-in editor exports and their
 2. Keep `.changeset/pre.json` in `pre` mode with the `next` tag. If prerelease mode is ever exited deliberately, run `bunx changeset pre enter next` before producing another prerelease version. Never run a normal Changesets version pass for this package set while prerelease policy is active. `bun run release:validate` checks this mode, the complete fixed group, lockstep versions, and the initial prerelease Changeset in ordinary CI as well as the publish workflow.
 3. Merge the generated version PR only after CI and the package checklist pass.
 4. Review the packed file lists, exact internal dependency versions, licenses, package sizes, declarations, source maps, and changelogs.
-5. Verify npm scope ownership and configure each package's GitHub Actions trusted publisher for this repository, the `publish-next.yml` workflow, and the protected `npm` environment.
+5. Verify npm scope ownership and confirm each package's GitHub Actions trusted publisher still names `craig-bredenkamp/apex-docx-pdf`, `publish-next.yml`, the protected `npm` environment, and publish-only permission.
 6. Require an environment approval, dispatch the workflow with the exact confirmation value, and inspect the `next` artifacts after publication. Publication is never implied by a green build or version PR.
 
 ## Trusted publishing and provenance
 
-The publication skeleton uses GitHub's OIDC token (`id-token: write`) and npm provenance. It must not store or pass a long-lived npm token. The `npm` GitHub environment should require maintainers' approval and restrict the deployment branch to `main`. npm trusted-publisher settings must match the repository owner/name, workflow filename, and environment exactly.
+The publication workflow uses GitHub's OIDC token (`id-token: write`) and npm provenance. It must not store or pass a long-lived npm token. The protected `npm` GitHub environment requires maintainer approval and restricts deployment to `main`. All 11 npm packages are bound to the exact repository, `publish-next.yml` filename, `npm` environment, and publish-only permission.
 
-The publish workflow is manual, rejects any confirmation other than `publish-next`, runs the full quality gate, verifies Changesets is in `pre` mode with tag `next`, and publishes with the `next` dist-tag. A maintainer must inspect the workflow diff immediately before first use. Do not use it for `latest`, stable versions, or a first publication until npm scope/package ownership has been independently confirmed.
+The publish workflow is manual, rejects any confirmation other than `publish-next`, runs the full quality gate, verifies Changesets is in `pre` mode with tag `next`, and publishes with the `next` dist-tag. A maintainer must inspect the workflow diff immediately before every use. Do not use it for a stable version or advance `latest` deliberately without a separately approved stable release.
+
+The first-ever `0.1.0-next.0` versions were bootstrapped directly with 2FA and `--provenance=false`, then installed and signature-audited from the public registry. npm created the mandatory initial `latest` metadata key alongside `next` and rejected removing it; future explicit `next` publications must not advance that key. The bootstrap versions therefore have registry signatures but no first-party provenance attestation. Future trusted-publisher releases are expected to receive automatic npm provenance.
 
 ## Release checklist
 
@@ -41,7 +43,7 @@ The publish workflow is manual, rejects any confirmation other than `publish-nex
 - [ ] `bun install --frozen-lockfile`, format, lint, typecheck, tests, docs, build, Publint, ATTW, pack dry-runs, and the isolated packed-consumer smoke pass from a clean checkout.
 - [ ] Packed manifests contain no `workspace:` ranges, private package references, source-only exports, credentials, fixtures, app code, or unexpected large files.
 - [ ] Public API and compatibility changes are documented; `ENGINE_VERSION` and cache migration implications were reviewed separately.
-- [ ] npm trusted-publisher mappings and the protected `npm` environment are exact; no long-lived npm token is configured.
-- [ ] The release is approved specifically for publication, uses the `next` tag, and is not `1.0.0` or tagged `latest`.
-- [ ] After publishing, install each package from `next` in an empty Bun and Node consumer, exercise the browser worker build, verify provenance on npm, and record package URLs and integrity values.
+- [ ] npm trusted-publisher mappings and the protected `npm` environment are exact; no long-lived CI npm token is configured.
+- [ ] The release is approved specifically for publication, uses the `next` tag, is not `1.0.0`, and does not advance `latest`.
+- [ ] After publishing, install each package from `next` in an empty Bun and Node consumer, exercise the browser worker build, audit registry signatures and provenance, and record package URLs and integrity values.
 - [ ] Roll-forward is prepared. npm versions are immutable; use deprecation for a bad release and publish a corrected prerelease rather than attempting replacement.

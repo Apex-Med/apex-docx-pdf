@@ -250,11 +250,15 @@ Landing, sample, migrated K3, local-only, browser-error, and axe observations
 are recorded in `reports/deployment-review.md`. Mintlify deployment remains a
 separate future action; Convex was intentionally not configured.
 
-Publication remains approval-gated. The manual `publish-next.yml` workflow
-requires `publish-next`, the protected `npm` environment, OIDC trusted
-publishing, the full CI gate, lockstep prerelease validation, and the `next`
-tag. `fixtures:release` is separately required for stable-release or complete
-cross-editor claims. No `latest`, `1.0.0`, or npm publication is claimed.
+The explicitly approved first npm publication is complete. All 11 packages are
+public at `0.1.0-next.0`; a clean registry-only install loads the full package
+surface under Bun and Node, and npm registry signatures verify. Each package is
+bound to the protected `npm` environment and `publish-next.yml` trusted
+publisher for future OIDC releases. The direct bootstrap intentionally has no
+first-party provenance attestation. npm also created its required initial
+`latest` metadata key alongside `next`; future prereleases must not advance it.
+`fixtures:release` remains separately required for stable-release or complete
+cross-editor claims, and no `1.0.0` or stable-release claim is made.
 
 ## Prioritized remaining roadmap
 
@@ -268,9 +272,9 @@ cross-editor claims. No `latest`, `1.0.0`, or npm publication is claimed.
    Convex persistence as SaaS infrastructure.
 4. Run manual VoiceOver, keyboard-only, zoom/reflow, and persisted/error-state
    accessibility reviews before claiming conformance.
-5. After publication approval, repeat the consumer install from the registry
-   with recorded integrity/provenance; add more browser engines, isolated
-   per-case memory, and broader licensed font/image fixtures.
+5. Prove automatic npm provenance on the next GitHub OIDC publication; add more
+   browser engines, isolated per-case memory, and broader licensed font/image
+   fixtures.
 6. Decide or narrow advanced package/API stability before a 1.0 promise.
 
 The Vercel, DNS, and GitHub configuration recorded here was performed under the

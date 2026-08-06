@@ -1,6 +1,6 @@
 # Public API review
 
-Date: 2026-08-05. Scope: current source entrypoints, prepared `dist` manifests, and package validation. This is an API inventory, not a semver-stability or npm-publication promise.
+Date: 2026-08-06. Scope: current source entrypoints, published `0.1.0-next.0` manifests, and package validation. This is an API inventory, not a stable semver promise.
 
 ## Supported application-facing surface
 
@@ -23,7 +23,7 @@ The `docx`, `fonts`, `images`, `layout`, `pdf`, and `template` packages expose p
 1. The 11 public packages—`apex-docx-pdf`, browser, core, devtools, docx, engine, fonts, images, layout, pdf, and template—are in lockstep at `0.1.0-next.0`. Source workspace manifests point to TypeScript entrypoints for local development; each build prepares a separate ESM `dist` manifest with JavaScript, declarations, declaration maps/source maps where applicable, license, and README files.
 2. `bun run packages:validate` passes for all 11 prepared packages. The gate runs strict Publint, `@arethetypeswrong/cli` with the ESM-only profile, and `npm pack --dry-run`. The reported CommonJS-to-ESM condition is intentionally ignored by that ESM-only profile; CommonJS is not a supported entry mode.
 3. The root CI gate executes the checked-in PDF/layout-trace golden in separate Bun processes and Node 24, then matches the same evidence in a real Chromium module worker. This is concrete parity for the golden profile, not a promise of every Node/browser version or every supported document.
-4. No npm package or `next` dist-tag publication was performed or verified. Local tarballs now pass isolated Bun installation, declaration/import, and Bun/Node render checks; the first registry publication, provenance confirmation, and post-publication registry install remain approval-gated work.
+4. All 11 packages are published at `0.1.0-next.0`. A clean registry-only install imported the complete surface under Bun 1.3.14 and Node v24.15.0, npm audited all 36 installed dependency signatures successfully, and every package now has a publish-only GitHub OIDC trusted publisher. The direct bootstrap versions have no first-party provenance attestation; that remains to be proved on the next automated prerelease.
 5. The umbrella currently re-exports the complete core barrel. This is convenient for the prerelease but also makes low-level constructors, semantic nodes, font adapters, resource defaults, and layout representations reachable. Replace or document that broad barrel before promising a stable 1.0 surface.
 6. `@apexmed/fonts` likewise exposes implementation-oriented adapter contracts. Label parser/subsetter seams as advanced or move them to explicit subpaths before stable compatibility is promised.
 7. `@apexmed/docx` exports parsed OOXML model types and normalization functions. Decide whether it is a supported parser API or engine-private before 1.0; the prerelease classifies it as advanced/experimental.

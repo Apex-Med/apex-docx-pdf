@@ -10,7 +10,7 @@ The image profile remains deliberately bounded. Static images must be internal D
 
 The local-only reference playground is deployed at [pdf-docx.apexmed.dev](https://pdf-docx.apexmed.dev), with [docx-pdf.apexmed.dev](https://docx-pdf.apexmed.dev) as an additional verified alias. That hosted browser surface is verified; it is not a persistent SaaS or production-identity claim.
 
-The current source tree contains the `apex-docx-pdf` umbrella and public `@apexmed/*` packages at `0.1.0-next.0`. In this repository, run `bun install --frozen-lockfile` and consume them through the Bun workspace. `bun run packages:consumer-smoke` also proves that the prepared tarballs install in isolated Bun projects, type-check through their published declarations, and render identically under Bun and Node. After the approval-gated npm prerelease is published, consumers will be able to install the umbrella with `bun add apex-docx-pdf@next` or use fixed-version advanced packages directly. No npm publication is claimed yet; browser-worker bindings and React devtools remain opt-in.
+The `apex-docx-pdf` umbrella and public `@apexmed/*` packages are published on npm at `0.1.0-next.0`. Install the recommended facade with `bun add apex-docx-pdf@next`; browser-worker bindings and React devtools remain opt-in through `@apexmed/browser` and `@apexmed/devtools`. A clean registry-only install loads all 11 packages under both Bun and Node, and the local packed-consumer gate additionally type-checks their declarations and requires repeat-identical rendering. The one-time direct bootstrap release has registry signatures but no npm provenance attestation; all packages are now bound to the protected GitHub trusted publisher for future provenance-bearing prereleases.
 
 ## Development
 

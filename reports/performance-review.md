@@ -53,7 +53,7 @@ The raw samples and process peak RSS are in `benchmarks/results/bun-local-full.j
 
 - Licensed Microsoft Word and Google Docs-exported fixtures for the named invoice, agreement, and report cases. None were fabricated for this review.
 - Per-case isolated peak RSS and repeat-run confidence intervals.
-- A post-publication registry install with recorded integrity and provenance, plus Linux/Windows installed-size observations.
+- Linux/Windows registry-installed size observations and a provenance-bearing GitHub OIDC prerelease. The macOS registry-only import/signature evidence is recorded in `npm-publication-review.md`.
 - Cold/warm Vercel duration distributions, peak function memory, and multi-region observations. The deployed artifact and smoke boundary are recorded in `reports/deployment-review.md`.
 
 ## Reproduction

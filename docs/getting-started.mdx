@@ -32,17 +32,15 @@ Before using any template, accept or reject every tracked change and remove ever
 
 The engine requires an explicit `locale` and `timeZone` for every render.
 
-From this repository's current source, install the workspace and run the example
-against the local `apex-docx-pdf` package:
+Install the published prerelease facade:
 
 ```bash
-bun install --frozen-lockfile
+bun add apex-docx-pdf@next
 ```
 
-The package metadata is prepared at `0.1.0-next.0`, but the npm prerelease is
-still approval-gated. After it is published, an external consumer can install
-the same umbrella entrypoint with `bun add apex-docx-pdf@next`. These docs do not
-claim that the npm tag exists yet.
+The current npm prerelease is `0.1.0-next.0`. Advanced packages are also
+available at exact versions under the `@apexmed` scope, but the unscoped facade
+is the recommended application entrypoint.
 
 ```ts
 import { createDocxPdfEngine } from "apex-docx-pdf"
