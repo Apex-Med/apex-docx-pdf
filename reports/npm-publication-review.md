@@ -1,11 +1,33 @@
 # npm publication review
 
-Date: 2026-08-06. The explicitly approved bootstrap publication was performed
-as npm user `c-bredenkamp`, owner of the `apexmed` organization, from source
-commit `4734215`. All 11 public packages are available at `0.1.0-next.0` and
-carry the `next` dist-tag.
+Date: 2026-08-06. The current explicitly approved publication was performed as
+npm user `c-bredenkamp`, owner of the `apexmed` organization, from source commit
+`bffdfb1`. All 11 public packages are available at `0.1.0-next.1` and carry the
+`next` dist-tag.
 
-## Published artifacts
+## Current `0.1.0-next.1` artifacts
+
+| Package                                                                | SHA-1 shasum                               | SHA-512 integrity                                                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| [`apex-docx-pdf`](https://www.npmjs.com/package/apex-docx-pdf)         | `955bf188498a01187e05d7763f76a91cbd39cfb1` | `sha512-HLQb19LxXqgN+cwA5wYOIxC4JWHx1OvX1YEeK5JWvwYZsJR8fivZfOi+T/320eqQaNkWGM3F8ABOrbSiS2214g==` |
+| [`@apexmed/core`](https://www.npmjs.com/package/@apexmed/core)         | `58a24f908441f87892ad9a56084aa362f49adccf` | `sha512-pWGnXr3m7YrZC8HdkorLgkFYPXpbf7zx55UTItuKqBr+bjbA7+voRob8YceihhnH2ABS7KKpVnIU+DgdJNebwA==` |
+| [`@apexmed/docx`](https://www.npmjs.com/package/@apexmed/docx)         | `3a8dccd0e510b3abd1e76b7527a8d43d8ce8ab02` | `sha512-oCqcSYNjq/jTRaogGXCcLOxe6uqd3MjjiuajxiiQ7W8d2LAPeXRc1ifEViUxnGBooQfO0L2rvzUxocnWh0qQvg==` |
+| [`@apexmed/fonts`](https://www.npmjs.com/package/@apexmed/fonts)       | `ab7ee4eafc61db71cc11287516c740c315308528` | `sha512-ICjhpv/o1SY6GH0xdsu0W+QHK8cNn7ROoW6v9V2wWIY7dthm4H1otjEoBfniK5ZUuKhdmW8CpTYrtW6lGgTGQw==` |
+| [`@apexmed/images`](https://www.npmjs.com/package/@apexmed/images)     | `c377bf5a7d2ee46638269f3396aaebdece6729a9` | `sha512-ldURwVOkEcoGe/JdWdHxUmhQ8xBNsC/LZFZpGqLZj+UP7P910AtlTmOeu+Ojlwb5C40XGiKu/6vJG7ntzCCmVA==` |
+| [`@apexmed/layout`](https://www.npmjs.com/package/@apexmed/layout)     | `8f9f3c7bdaf82bf35e3ceaa30ca7bb80607bcff2` | `sha512-383nwCH/dCAnpHSNn+2GhasdqB2XsACqNtUsfQI6pGrMCgFOg0AGwx2RVRBlnqeVB5R4/tABxfmfnj/4w1oLZg==` |
+| [`@apexmed/template`](https://www.npmjs.com/package/@apexmed/template) | `49a04aa59ea66b683829fb90efef506e2c0518ca` | `sha512-Zs946TQ9oz9qEOjRT7Ui0VQdyuOkbhCWifikefSeJtgnnku0Jym/y8rVuKMrwL1ZO9dSKfHLr0myqbX+nDgdVg==` |
+| [`@apexmed/pdf`](https://www.npmjs.com/package/@apexmed/pdf)           | `e49c68051ec309d5e446038ae83b91476cd70cf9` | `sha512-ZklTor3gbLOla6nomMUVDjHcPbPwOiKFYR1tvGKBSpMBeGdhcfxGHFugbD0+xrpY8g+52Z8ie4qxZjETaErapg==` |
+| [`@apexmed/engine`](https://www.npmjs.com/package/@apexmed/engine)     | `de71d526a4f65927fa769df6cbd0911230e9d67d` | `sha512-p54ZJ86T1Ezv7ko0sQPXp8unvKsiKUVSINXwZPGsXr8qrB/zA8pW4vwkM5oRfcEQsAX0paS1N64/su+uden0CA==` |
+| [`@apexmed/browser`](https://www.npmjs.com/package/@apexmed/browser)   | `c451a36e73e42e53570f13d24b2717758a6923c8` | `sha512-qQ75hsT4CmEXVPNqHLm3JlD8zgUUo+IF8+WgQSJErCSm17XtEgcSs8EeSQ1rWbBhvDpQ4relJAvO6kg2gNs0mw==` |
+| [`@apexmed/devtools`](https://www.npmjs.com/package/@apexmed/devtools) | `44e40399298418c9b8e3dedf4fae0abe5aaa2b8e` | `sha512-oG7R7EhY/rWuAeYuw84QvB7TdHTp+Dh0eUWABGi/3M3hKfN1sMXBh3TQcuRkMaB/BW1inkTLo7Pq1Gc/Iq3WFA==` |
+
+The approved GitHub OIDC run `31126488337` was dispatched from `main`, passed
+the protected `npm` environment approval, and then was cancelled by GitHub with
+zero steps started while Actions reported a major outage. No registry write
+occurred from that run. The local fallback used the same already-validated
+artifacts with `--tag next --access public --provenance=false`.
+
+## Bootstrap `0.1.0-next.0` artifacts
 
 | Package                                                                | SHA-1 shasum                               | SHA-512 integrity                                                                                 |
 | ---------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
@@ -30,16 +52,17 @@ release or `1.0.0` claim is implied by the bootstrap metadata.
 ## Registry-only verification
 
 A new temporary npm project with no workspace path or package override installed
-`apex-docx-pdf@next`, `@apexmed/browser@next`,
-`@apexmed/devtools@next`, and React. That graph loaded every public package
-under Bun 1.3.14 and Node v24.15.0 with the same export counts. npm reported
-zero vulnerabilities. `npm audit signatures` verified all 36 installed
-registry signatures.
+all 11 exact `0.1.0-next.1` packages. The umbrella loaded at engine version
+`0.0.0-phase.8`; its installed manifest exposed the expected `ai` metadata, all
+12 agent files were present, and the shipped inspector loaded and printed its
+usage contract. The earlier bootstrap graph also loaded every public package
+under Bun 1.3.14 and Node v24.15.0 with the same export counts. `npm audit
+signatures` verified all 36 installed registry signatures.
 
-The audit also found three dependency attestations, but the Apex packages are
-not included in that attestation count. The first publication was a direct,
-2FA-authorized bootstrap with `--provenance=false`, because npm provenance
-cannot truthfully be generated by an unsupported local build environment.
+The current audit also found three dependency attestations, but the Apex
+packages are not included in that attestation count. Both Apex prereleases were
+published directly with `--provenance=false`, because npm provenance cannot
+truthfully be generated by an unsupported local build environment.
 
 ## Trusted publisher
 
@@ -54,14 +77,15 @@ trusted publisher:
 The workflow has `id-token: write`, runs on a GitHub-hosted runner, requires the
 exact `publish-next` dispatch confirmation, executes the complete release gate,
 and targets `next`. The GitHub `npm` environment requires maintainer approval
-and is restricted to `main`. Future workflow publications should receive npm's
-automatic provenance; that path remains unproved until a new prerelease version
-is published through OIDC.
+and is restricted to `main`. The `next.1` dispatch proved workflow creation and
+environment approval but not runner execution or npm OIDC exchange. A future
+workflow publication should receive npm's automatic provenance; that path
+remains unproved until a new version is published through OIDC.
 
 ## Remaining boundaries
 
 This evidence proves public registry availability, exact artifact integrity,
 registry signatures, clean Bun/Node loading on the recorded macOS machine, and
 trusted-publisher configuration. It does not prove Linux or Windows installs,
-automatic provenance for the bootstrap version, broad editor compatibility, or
+automatic provenance for either direct version, broad editor compatibility, or
 stable API compatibility.

@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Phase 9 local hardening evidence: seeded fast-check template/path properties, fixed structural and hostile-input corpora, resource-limit and cancellation coverage, reproducible Bun benchmarks, enforced publication-tarball size budgets, automated axe checks for covered browser states, pull-request dependency review, and a formal public API review.
 - Phase 10 prerelease preparation: lockstep `0.1.0-next.0` package metadata, CI-validated Changesets prerelease mode, ESM package builds with declarations and source maps, strict package validation, trusted-publishing workflow skeletons, and release/deployment runbooks.
 - Initial npm publication of the `apex-docx-pdf` facade and ten `@apexmed/*` packages at `0.1.0-next.0`, with clean registry-only Bun/Node import verification, registry-signature audit, and GitHub OIDC trusted-publisher bindings for future prereleases.
+- Direct npm publication of all 11 packages at `0.1.0-next.1` after GitHub's Actions outage cancelled the approved OIDC job before any step started. The registry-only audit verifies all package signatures and the installed umbrella's agent metadata, instructions, context, skills, references, and runnable template inspector; the local fallback truthfully carries no GitHub provenance attestation.
 - Package-shipped AI integration material: root agent instructions, compact context and `llms.txt`, validated runtime-integration and compatible-DOCX-template skills, and a runnable strict template inspector enforced through tarball and isolated-consumer checks.
 - Canonical `{{@image path}}` values with explicit PNG/JPEG bytes, dimensions, deterministic resource IDs, schema/starter generation, limit enforcement, and semantic alt text.
 - The `apex-docx-pdf` umbrella facade and opt-in `@apexmed/devtools` React display-list preview package.
@@ -57,7 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### In progress
 
 - Completing external Phase 9 proof with broader licensed Microsoft Word and Google Docs-exported fixtures.
-- Proving npm provenance on the next GitHub OIDC-published prerelease; the one-time direct bootstrap publication was intentionally created without a local provenance claim.
+- Proving npm provenance on a future GitHub OIDC-published prerelease; both current prerelease versions were published directly without a false local provenance claim.
 
 ### Not yet complete
 

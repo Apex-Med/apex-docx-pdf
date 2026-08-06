@@ -250,13 +250,14 @@ Landing, sample, migrated K3, local-only, browser-error, and axe observations
 are recorded in `reports/deployment-review.md`. Mintlify deployment remains a
 separate future action; Convex was intentionally not configured.
 
-The explicitly approved first npm publication is complete. All 11 packages are
-public at `0.1.0-next.0`; a clean registry-only install loads the full package
-surface under Bun and Node, and npm registry signatures verify. Each package is
+The explicitly approved npm prerelease publication is complete. All 11 packages
+are public at `0.1.0-next.1`; a clean registry-only install loads the facade and
+its shipped AI material, and npm registry signatures verify. Each package is
 bound to the protected `npm` environment and `publish-next.yml` trusted
-publisher for future OIDC releases. The direct bootstrap intentionally has no
-first-party provenance attestation. npm also created its required initial
-`latest` metadata key alongside `next`; future prereleases must not advance it.
+publisher for future OIDC releases. GitHub cancelled the approved `next.1` job
+with zero steps started during a major Actions outage, so the authenticated
+local fallback intentionally has no first-party provenance attestation. npm's
+initial `latest` metadata key remains on `next.0`; prereleases must not advance it.
 `fixtures:release` remains separately required for stable-release or complete
 cross-editor claims, and no `1.0.0` or stable-release claim is made.
 
@@ -272,7 +273,7 @@ cross-editor claims, and no `1.0.0` or stable-release claim is made.
    Convex persistence as SaaS infrastructure.
 4. Run manual VoiceOver, keyboard-only, zoom/reflow, and persisted/error-state
    accessibility reviews before claiming conformance.
-5. Prove automatic npm provenance on the next GitHub OIDC publication; add more
+5. Prove automatic npm provenance on a future GitHub OIDC publication; add more
    browser engines, isolated per-case memory, and broader licensed font/image
    fixtures.
 6. Decide or narrow advanced package/API stability before a 1.0 promise.
