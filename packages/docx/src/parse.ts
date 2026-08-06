@@ -1,4 +1,4 @@
-import { DEFAULT_RESOURCE_LIMITS, throwIfAborted } from "@apex-docx-pdf/core"
+import { DEFAULT_RESOURCE_LIMITS, throwIfAborted } from "@apexmed/core"
 import { XMLParser, XMLValidator } from "fast-xml-parser"
 import { unzlibSync } from "fflate"
 

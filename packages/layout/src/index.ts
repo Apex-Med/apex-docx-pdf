@@ -30,7 +30,7 @@ import {
   type TextShaper,
   type TextStyle,
   type Twip,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 /** The A4 dimensions used by Word, represented as integer twips. */
 export const A4_PAGE_WIDTH = twips(11_906)

@@ -1,8 +1,4 @@
-import type {
-  FontFaceMetrics,
-  FontProgramKind,
-  GlyphId,
-} from "@apex-docx-pdf/core"
+import type { FontFaceMetrics, FontProgramKind, GlyphId } from "@apexmed/core"
 
 export type ParsedGlyph = Readonly<{
   glyphId: GlyphId

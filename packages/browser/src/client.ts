@@ -1,4 +1,4 @@
-import type { RenderOptions } from "@apex-docx-pdf/core"
+import type { RenderOptions } from "@apexmed/core"
 
 import type {
   BrowserCompileResult,

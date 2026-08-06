@@ -1,4 +1,4 @@
-import type { SemanticImageAsset } from "@apex-docx-pdf/core"
+import type { SemanticImageAsset } from "@apexmed/core"
 import { unzlibSync, zlibSync } from "fflate"
 
 export type PreparedImage = Readonly<{

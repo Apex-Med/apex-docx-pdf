@@ -2,7 +2,7 @@ import type {
   Diagnostic,
   OperationResult,
   SemanticDocument,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import { parseValidatedDocx } from "./parse"
 import { normaliseDocx } from "./normalise"

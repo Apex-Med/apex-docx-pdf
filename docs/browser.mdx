@@ -3,15 +3,15 @@ title: "Browser usage"
 description: "Run the same renderer in a Web Worker without uploading the document."
 ---
 
-`@apex-docx-pdf/browser` wraps the same engine packages used by Bun and Node. A Web Worker owns compilation and rendering so the UI thread can remain responsive.
+`@apexmed/browser` wraps the same engine packages used by Bun and Node. A Web Worker owns compilation and rendering so the UI thread can remain responsive.
 
-The Phase 3 `@apex-docx-pdf/fonts` adapter is browser-safe, and the worker carries the current template, numbering, fixed-grid table, static-image, section/header/footer, page-field, and PDF path through the same engine API. The worker installer accepts explicit engine options, or a promise for them, so an application can resolve its bundled font assets to `Uint8Array` values before the engine is created. Font acquisition remains application-owned. Static document images come only from internal DOCX parts; neither the engine nor its font/image packages discover system resources, read the filesystem, or fetch the network.
+The Phase 3 `@apexmed/fonts` adapter is browser-safe, and the worker carries the current template, numbering, fixed-grid table, static-image, section/header/footer, page-field, and PDF path through the same engine API. The worker installer accepts explicit engine options, or a promise for them, so an application can resolve its bundled font assets to `Uint8Array` values before the engine is created. Font acquisition remains application-owned. Static document images come only from internal DOCX parts; neither the engine nor its font/image packages discover system resources, read the filesystem, or fetch the network.
 
 ## Install the worker
 
 ```ts
 // render.worker.ts
-import { installRendererWorker } from "@apex-docx-pdf/browser/worker"
+import { installRendererWorker } from "@apexmed/browser/worker"
 
 const engineOptions = loadApplicationOwnedFontConfiguration()
 installRendererWorker(undefined, engineOptions)
@@ -22,7 +22,7 @@ installRendererWorker(undefined, engineOptions)
 ## Create a client
 
 ```ts
-import { BrowserRendererClient, ObjectUrlLease } from "@apex-docx-pdf/browser"
+import { BrowserRendererClient, ObjectUrlLease } from "@apexmed/browser"
 
 const worker = new Worker(new URL("./render.worker.ts", import.meta.url), {
   type: "module",

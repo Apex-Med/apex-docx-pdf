@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { validatePdfStructure } from "@apex-docx-pdf/testkit"
+import { validatePdfStructure } from "@apexmed/testkit"
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 import { loadOfflineFontConfiguration } from "../../../scripts/offline-font-configuration"
 

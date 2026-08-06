@@ -40,8 +40,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*",
-    "@apex-docx-pdf/engine": "workspace:*"
+    "@apexmed/core": "workspace:*",
+    "@apexmed/engine": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6"

@@ -9,7 +9,7 @@ import {
   type SemanticParagraph,
   type SemanticTable,
   type SemanticText,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import { compileTemplate, resolveTemplate } from "../src"
 

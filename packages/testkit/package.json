@@ -1,5 +1,5 @@
 {
-  "name": "@apex-docx-pdf/testkit",
+  "name": "@apexmed/testkit",
   "version": "0.0.0",
   "type": "module",
   "private": true,
@@ -12,11 +12,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*",
+    "@apexmed/core": "workspace:*",
     "fflate": "^0.8.3"
   },
   "devDependencies": {
-    "@apex-docx-pdf/pdf": "workspace:*",
+    "@apexmed/pdf": "workspace:*",
     "typescript": "^6"
   }
 }

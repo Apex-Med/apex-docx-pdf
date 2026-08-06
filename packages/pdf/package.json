@@ -1,5 +1,5 @@
 {
-  "name": "@apex-docx-pdf/pdf",
+  "name": "@apexmed/pdf",
   "version": "0.1.0-next.0",
   "description": "Deterministic searchable PDF serialization for Apex DOCX PDF.",
   "type": "module",
@@ -39,8 +39,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*",
-    "@apex-docx-pdf/images": "workspace:*"
+    "@apexmed/core": "workspace:*",
+    "@apexmed/images": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6"

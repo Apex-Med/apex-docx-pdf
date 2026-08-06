@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { buildMinimalDocx, validatePdfStructure } from "@apex-docx-pdf/testkit"
+import { buildMinimalDocx, validatePdfStructure } from "@apexmed/testkit"
 import fc from "fast-check"
 
 import { createDocxPdfEngine, EngineOperationError } from "../src"

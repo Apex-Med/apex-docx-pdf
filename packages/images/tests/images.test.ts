@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { SemanticImageAsset } from "@apex-docx-pdf/core"
+import type { SemanticImageAsset } from "@apexmed/core"
 import { encode } from "fast-png"
 import { unzlibSync, zlibSync } from "fflate"
 

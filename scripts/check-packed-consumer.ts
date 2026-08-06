@@ -28,14 +28,14 @@ const PUBLIC_PACKAGE_DIRECTORIES = [
 ] as const
 const RUNTIME_PACKAGE_NAMES = [
   "apex-docx-pdf",
-  "@apex-docx-pdf/core",
-  "@apex-docx-pdf/docx",
-  "@apex-docx-pdf/engine",
-  "@apex-docx-pdf/fonts",
-  "@apex-docx-pdf/images",
-  "@apex-docx-pdf/layout",
-  "@apex-docx-pdf/pdf",
-  "@apex-docx-pdf/template",
+  "@apexmed/core",
+  "@apexmed/docx",
+  "@apexmed/engine",
+  "@apexmed/fonts",
+  "@apexmed/images",
+  "@apexmed/layout",
+  "@apexmed/pdf",
+  "@apexmed/template",
 ] as const
 
 type PackageManifest = Readonly<{ name: string; version: string }>
@@ -288,16 +288,16 @@ function consumerSource(
   importAllPackages: boolean
 ): string {
   const packageImports = importAllPackages
-    ? `import * as browser from "@apex-docx-pdf/browser"
-import * as core from "@apex-docx-pdf/core"
-import * as devtools from "@apex-docx-pdf/devtools"
-import * as docx from "@apex-docx-pdf/docx"
-import * as enginePackage from "@apex-docx-pdf/engine"
-import * as fonts from "@apex-docx-pdf/fonts"
-import * as images from "@apex-docx-pdf/images"
-import * as layout from "@apex-docx-pdf/layout"
-import * as pdf from "@apex-docx-pdf/pdf"
-import * as template from "@apex-docx-pdf/template"
+    ? `import * as browser from "@apexmed/browser"
+import * as core from "@apexmed/core"
+import * as devtools from "@apexmed/devtools"
+import * as docx from "@apexmed/docx"
+import * as enginePackage from "@apexmed/engine"
+import * as fonts from "@apexmed/fonts"
+import * as images from "@apexmed/images"
+import * as layout from "@apexmed/layout"
+import * as pdf from "@apexmed/pdf"
+import * as template from "@apexmed/template"
 
 const modules = { browser, core, devtools, docx, enginePackage, fonts, images, layout, pdf, template }
 for (const [name, module] of Object.entries(modules)) {

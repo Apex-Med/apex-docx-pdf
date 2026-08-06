@@ -4,19 +4,19 @@ Date: 2026-08-05. Scope: current source entrypoints, prepared `dist` manifests, 
 
 ## Supported application-facing surface
 
-The narrow application facade is the `apex-docx-pdf` umbrella package. It re-exports the core contracts plus `createDocxPdfEngine`, `ENGINE_VERSION`, and `EngineOperationError` from `@apex-docx-pdf/engine`. Consumers should pass hostile DOCX bytes to `inspect`/`compile`, retain the opaque compiled value, and call `preview`/`render` on the same engine instance.
+The narrow application facade is the `apex-docx-pdf` umbrella package. It re-exports the core contracts plus `createDocxPdfEngine`, `ENGINE_VERSION`, and `EngineOperationError` from `@apexmed/engine`. Consumers should pass hostile DOCX bytes to `inspect`/`compile`, retain the opaque compiled value, and call `preview`/`render` on the same engine instance.
 
-`@apex-docx-pdf/browser` is the supported browser transport boundary. Its client and worker bootstrap are public, and the prepared package exposes both `.` and `./worker` entrypoints.
+`@apexmed/browser` is the supported browser transport boundary. Its client and worker bootstrap are public, and the prepared package exposes both `.` and `./worker` entrypoints.
 
-`@apex-docx-pdf/core` contains shared data contracts needed by engine configuration and results. Its branded constructors and low-level semantic/layout records remain implementation-building blocks rather than the recommended application entrypoint.
+`@apexmed/core` contains shared data contracts needed by engine configuration and results. Its branded constructors and low-level semantic/layout records remain implementation-building blocks rather than the recommended application entrypoint.
 
-`@apex-docx-pdf/devtools` is an opt-in React peer package. Its public `DisplayListPreview` renders the engine's canonical display list and source mappings; `LayoutTraceViewer` adds independently toggleable page/content boxes, block/line boxes, baselines, source-node labels, page-break reasons, and overflow overlays. Neither component approximates DOCX layout or loads fonts for the host.
+`@apexmed/devtools` is an opt-in React peer package. Its public `DisplayListPreview` renders the engine's canonical display list and source mappings; `LayoutTraceViewer` adds independently toggleable page/content boxes, block/line boxes, baselines, source-node labels, page-break reasons, and overflow overlays. Neither component approximates DOCX layout or loads fonts for the host.
 
 ## Internal or advanced surfaces
 
 The `docx`, `fonts`, `images`, `layout`, `pdf`, and `template` packages expose pipeline stages. They support repository tests and advanced composition, but callers can bypass engine provenance checks and safety orchestration by composing them directly. Treat them as advanced/experimental until their invariants, compatibility policy, and error model are documented.
 
-`@apex-docx-pdf/testkit` remains private and test-only. It is not included in the public validation set and should never be a runtime dependency of the engine, browser, umbrella, or devtools packages.
+`@apexmed/testkit` remains private and test-only. It is not included in the public validation set and should never be a runtime dependency of the engine, browser, umbrella, or devtools packages.
 
 ## Current release-preparation evidence
 
@@ -25,8 +25,8 @@ The `docx`, `fonts`, `images`, `layout`, `pdf`, and `template` packages expose p
 3. The root CI gate executes the checked-in PDF/layout-trace golden in separate Bun processes and Node 24, then matches the same evidence in a real Chromium module worker. This is concrete parity for the golden profile, not a promise of every Node/browser version or every supported document.
 4. No npm package or `next` dist-tag publication was performed or verified. Local tarballs now pass isolated Bun installation, declaration/import, and Bun/Node render checks; the first registry publication, provenance confirmation, and post-publication registry install remain approval-gated work.
 5. The umbrella currently re-exports the complete core barrel. This is convenient for the prerelease but also makes low-level constructors, semantic nodes, font adapters, resource defaults, and layout representations reachable. Replace or document that broad barrel before promising a stable 1.0 surface.
-6. `@apex-docx-pdf/fonts` likewise exposes implementation-oriented adapter contracts. Label parser/subsetter seams as advanced or move them to explicit subpaths before stable compatibility is promised.
-7. `@apex-docx-pdf/docx` exports parsed OOXML model types and normalization functions. Decide whether it is a supported parser API or engine-private before 1.0; the prerelease classifies it as advanced/experimental.
+6. `@apexmed/fonts` likewise exposes implementation-oriented adapter contracts. Label parser/subsetter seams as advanced or move them to explicit subpaths before stable compatibility is promised.
+7. `@apexmed/docx` exports parsed OOXML model types and normalization functions. Decide whether it is a supported parser API or engine-private before 1.0; the prerelease classifies it as advanced/experimental.
 8. Compiled templates are structurally visible but engine-instance-bound through an internal `WeakSet`. Persistence or transfer across engine instances, workers, or processes is unsupported even though the value looks serializable.
 9. `EngineOperationError.code` and diagnostic `code` are strings without a published compatibility taxonomy. Consumers may inspect them during the prerelease, but stable branching categories are not promised.
 10. Browser request/response protocol types are reachable through the browser package. If they are intended for direct consumers, version and document the protocol explicitly before stable release.
@@ -37,7 +37,7 @@ The `docx`, `fonts`, `images`, `layout`, `pdf`, and `template` packages expose p
 
 - Recommended prerelease facade: `apex-docx-pdf` and its direct engine/core contracts.
 - Supported with browser-specific versioning: browser client and worker bootstrap.
-- Opt-in peer UI: `@apex-docx-pdf/devtools`.
+- Opt-in peer UI: `@apexmed/devtools`.
 - Advanced/experimental: core low-level contracts and the docx/fonts/images/layout/pdf/template stages.
 - Private test-only: testkit.
 

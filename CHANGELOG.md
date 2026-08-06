@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Phase 1 core vertical slice for a constrained DOCX profile: package validation, main-document paragraphs and text runs, typed inline value tags, deterministic layout, diagnostics, and searchable PDF output using built-in Helvetica.
 - Phase 2 browser vertical slice: worker-based local compile and render flow with the reference playground.
 - Phase 3 paragraph, run, and font fidelity slice: document defaults, paragraph/character default styles, `basedOn` cascades, direct formatting, supported paragraph indents/alignment/spacing, and explicit caller-supplied font configuration.
-- Exact-pinned `fontkit` 2.0.4 parsing and LTR Latin shaping in `@apex-docx-pdf/fonts`, with deterministic registry hashing and face fallback.
+- Exact-pinned `fontkit` 2.0.4 parsing and LTR Latin shaping in `@apexmed/fonts`, with deterministic registry hashing and face fallback.
 - Searchable TrueType PDF embedding through Type0/CIDFontType2, FontDescriptor, FontFile2, CIDToGIDMap, ToUnicode, and absolute glyph positioning. The default fontkit path emits deterministic rewritten subsets with exact source-to-subset maps and stable PDF subset names; custom parsers without an explicit subsetter safely full-embed.
 - Phase 4 engine version `0.0.0-phase.4`: whole-paragraph nested `if`/optional `else`/`each` blocks, relative object fields inside loops, safe `upper`, `lower`, `currency:"ISO"`, and `date:"d MMMM yyyy"` formatters, deterministic nested JSON Schema/starter data, and cumulative template-data and expansion limits.
 - Relationship-owned DOCX numbering with concrete definitions and overrides, start/restart behavior, bullets, decimal, letter and Roman formats, multilevel/custom level text, legal numbering, style/direct `numPr` resolution, and direct `numId` 0 removal.
@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Phase 9 local hardening evidence: seeded fast-check template/path properties, fixed structural and hostile-input corpora, resource-limit and cancellation coverage, reproducible Bun benchmarks, enforced publication-tarball size budgets, automated axe checks for covered browser states, pull-request dependency review, and a formal public API review.
 - Phase 10 prerelease preparation: lockstep `0.1.0-next.0` package metadata, CI-validated Changesets prerelease mode, ESM package builds with declarations and source maps, strict package validation, trusted-publishing workflow skeletons, and release/deployment runbooks.
 - Canonical `{{@image path}}` values with explicit PNG/JPEG bytes, dimensions, deterministic resource IDs, schema/starter generation, limit enforcement, and semantic alt text.
-- The `apex-docx-pdf` umbrella facade and opt-in `@apex-docx-pdf/devtools` React display-list preview package.
+- The `apex-docx-pdf` umbrella facade and opt-in `@apexmed/devtools` React display-list preview package.
 - Interactive source-linked layout-trace overlays for page/content boxes, block and line boxes, baselines, source node IDs, page-break reasons, and overflows in the devtools template preview.
 - Session-owned direct-upload intents with exact-kind registration, one-time consumption, expiry, and bounded orphan cleanup for optional Convex persistence.
 - Bounded explicit left/start Word tab stops with positive integer-twip positions and no leaders; unsupported tab behavior is rejected rather than approximated.

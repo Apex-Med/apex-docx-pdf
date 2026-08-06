@@ -25,26 +25,26 @@ DOCX bytes
   -> PDF bytes
 ```
 
-Each arrow is an explicit typed boundary. OOXML vocabulary ends at `@apex-docx-pdf/docx`; PDF syntax begins only inside `@apex-docx-pdf/pdf`.
+Each arrow is an explicit typed boundary. OOXML vocabulary ends at `@apexmed/docx`; PDF syntax begins only inside `@apexmed/pdf`.
 
 ## Current package graph
 
 ```text
-@apex-docx-pdf/core     -> no workspace packages
-@apex-docx-pdf/docx     -> core
-@apex-docx-pdf/template -> core
-@apex-docx-pdf/fonts    -> core + fontkit 2.0.4
-@apex-docx-pdf/images   -> core + fflate
-@apex-docx-pdf/layout   -> core
-@apex-docx-pdf/pdf      -> core + images
-@apex-docx-pdf/engine   -> core + docx + template + fonts + images + layout + pdf
-@apex-docx-pdf/browser  -> core + engine
-@apex-docx-pdf/devtools -> core + React peer
+@apexmed/core     -> no workspace packages
+@apexmed/docx     -> core
+@apexmed/template -> core
+@apexmed/fonts    -> core + fontkit 2.0.4
+@apexmed/images   -> core + fflate
+@apexmed/layout   -> core
+@apexmed/pdf      -> core + images
+@apexmed/engine   -> core + docx + template + fonts + images + layout + pdf
+@apexmed/browser  -> core + engine
+@apexmed/devtools -> core + React peer
 apex-docx-pdf           -> core + engine
-@apex-docx-pdf/testkit  -> core + fflate
+@apexmed/testkit  -> core + fflate
 @workspace/ui           -> no workspace packages
 web                     -> browser + core + devtools + engine + ui + Convex/TanStack adapters
-@apex-docx-pdf/docs     -> no workspace packages
+@apexmed/docs     -> no workspace packages
 ```
 
 These arrows list the important internal workspace and renderer-runtime dependencies in the current package manifests. `fonts`, `images`, and `testkit` are real packages. Third-party renderer runtime dependencies include exact-pinned `fontkit` 2.0.4 in `fonts`, `fflate` in `images`, plus the DOCX/test-fixture ZIP and XML dependencies. The application and UI packages have their own browser and React dependencies. Parser code does not import template, layout, PDF, React, Convex, or Vercel. Layout consumes a resolved document and emits a page display list. PDF consumes that display list, explicit metadata, and explicit font/image providers.

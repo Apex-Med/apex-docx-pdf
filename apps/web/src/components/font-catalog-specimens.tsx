@@ -1,4 +1,4 @@
-import { OFFLINE_FONT_CATALOG } from "@apex-docx-pdf/fonts"
+import { OFFLINE_FONT_CATALOG } from "@apexmed/fonts"
 
 import { browserCatalogFontCss } from "@/lib/font-assets"
 

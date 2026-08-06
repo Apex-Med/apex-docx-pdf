@@ -1,4 +1,4 @@
-import type { JsonSchema, TemplateField } from "@apex-docx-pdf/core"
+import type { JsonSchema, TemplateField } from "@apexmed/core"
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020"
 import addFormats from "ajv-formats"
 

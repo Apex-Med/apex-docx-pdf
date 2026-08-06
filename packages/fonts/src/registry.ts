@@ -20,7 +20,7 @@ import {
   type ShapedText,
   type TextShaper,
   type Twip,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 import { FontConfigurationError, FontShapingError } from "./errors"
 import type {
   FontParserAdapter,

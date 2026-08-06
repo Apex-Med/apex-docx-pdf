@@ -1,4 +1,4 @@
-import { installRendererWorker } from "@apex-docx-pdf/browser/worker"
+import { installRendererWorker } from "@apexmed/browser/worker"
 
 import { loadOfflineFontConfiguration } from "@/lib/font-assets"
 

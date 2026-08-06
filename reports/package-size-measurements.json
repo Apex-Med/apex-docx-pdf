@@ -1,47 +1,47 @@
 {
   "schemaVersion": 2,
-  "measuredAt": "2026-08-06T17:16:22.052Z",
+  "measuredAt": "2026-08-06T17:34:52.477Z",
   "basis": "npm pack --dry-run measurements from the current publishable dist directories",
   "packages": {
     "apex-docx-pdf": {
       "directory": "packages/apex-docx-pdf/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 7002,
-      "unpackedBytes": 18113,
+      "packedBytes": 6993,
+      "unpackedBytes": 18071,
       "entryCount": 6,
-      "javascriptBytes": 203,
-      "declarationBytes": 136,
+      "javascriptBytes": 191,
+      "declarationBytes": 124,
       "sourceMapBytes": 89,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 8000,
         "maxUnpackedBytes": 22000
       },
-      "remainingPackedBytes": 998,
-      "remainingUnpackedBytes": 3887
+      "remainingPackedBytes": 1007,
+      "remainingUnpackedBytes": 3929
     },
-    "@apex-docx-pdf/browser": {
+    "@apexmed/browser": {
       "directory": "packages/browser/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 16444,
-      "unpackedBytes": 61239,
+      "packedBytes": 16440,
+      "unpackedBytes": 61154,
       "entryCount": 10,
-      "javascriptBytes": 11867,
-      "declarationBytes": 5425,
-      "sourceMapBytes": 26167,
+      "javascriptBytes": 11861,
+      "declarationBytes": 5407,
+      "sourceMapBytes": 26130,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 18000,
         "maxUnpackedBytes": 70000
       },
-      "remainingPackedBytes": 1556,
-      "remainingUnpackedBytes": 8761
+      "remainingPackedBytes": 1560,
+      "remainingUnpackedBytes": 8846
     },
-    "@apex-docx-pdf/core": {
+    "@apexmed/core": {
       "directory": "packages/core/dist",
       "version": "0.1.0-next.0",
       "packedBytes": 15972,
-      "unpackedBytes": 56757,
+      "unpackedBytes": 56745,
       "entryCount": 6,
       "javascriptBytes": 2129,
       "declarationBytes": 26650,
@@ -52,154 +52,154 @@
         "maxUnpackedBytes": 65000
       },
       "remainingPackedBytes": 1028,
-      "remainingUnpackedBytes": 8243
+      "remainingUnpackedBytes": 8255
     },
-    "@apex-docx-pdf/devtools": {
+    "@apexmed/devtools": {
       "directory": "packages/devtools/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 19021,
-      "unpackedBytes": 71077,
+      "packedBytes": 19023,
+      "unpackedBytes": 71047,
       "entryCount": 6,
       "javascriptBytes": 15734,
-      "declarationBytes": 2292,
-      "sourceMapBytes": 35339,
+      "declarationBytes": 2286,
+      "sourceMapBytes": 35333,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 21000,
         "maxUnpackedBytes": 80000
       },
-      "remainingPackedBytes": 1979,
-      "remainingUnpackedBytes": 8923
+      "remainingPackedBytes": 1977,
+      "remainingUnpackedBytes": 8953
     },
-    "@apex-docx-pdf/docx": {
+    "@apexmed/docx": {
       "directory": "packages/docx/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 125575,
-      "unpackedBytes": 645001,
+      "packedBytes": 125559,
+      "unpackedBytes": 644929,
       "entryCount": 6,
-      "javascriptBytes": 196636,
-      "declarationBytes": 9954,
-      "sourceMapBytes": 420721,
+      "javascriptBytes": 196630,
+      "declarationBytes": 9948,
+      "sourceMapBytes": 420679,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 140000,
         "maxUnpackedBytes": 720000
       },
-      "remainingPackedBytes": 14425,
-      "remainingUnpackedBytes": 74999
+      "remainingPackedBytes": 14441,
+      "remainingUnpackedBytes": 75071
     },
-    "@apex-docx-pdf/engine": {
+    "@apexmed/engine": {
       "directory": "packages/engine/dist",
       "version": "0.1.0-next.0",
       "packedBytes": 23680,
-      "unpackedBytes": 91378,
+      "unpackedBytes": 91206,
       "entryCount": 6,
-      "javascriptBytes": 24192,
-      "declarationBytes": 632,
-      "sourceMapBytes": 48661,
+      "javascriptBytes": 24150,
+      "declarationBytes": 620,
+      "sourceMapBytes": 48597,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 26000,
         "maxUnpackedBytes": 105000
       },
       "remainingPackedBytes": 2320,
-      "remainingUnpackedBytes": 13622
+      "remainingUnpackedBytes": 13794
     },
-    "@apex-docx-pdf/fonts": {
+    "@apexmed/fonts": {
       "directory": "packages/fonts/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 2067912,
-      "unpackedBytes": 4220499,
+      "packedBytes": 2067946,
+      "unpackedBytes": 4220451,
       "entryCount": 32,
-      "javascriptBytes": 30307,
-      "declarationBytes": 6440,
-      "sourceMapBytes": 62204,
+      "javascriptBytes": 30301,
+      "declarationBytes": 6434,
+      "sourceMapBytes": 62186,
       "assetBytes": 4103870,
       "budget": {
         "maxPackedBytes": 2300000,
         "maxUnpackedBytes": 4700000
       },
-      "remainingPackedBytes": 232088,
-      "remainingUnpackedBytes": 479501
+      "remainingPackedBytes": 232054,
+      "remainingUnpackedBytes": 479549
     },
-    "@apex-docx-pdf/images": {
+    "@apexmed/images": {
       "directory": "packages/images/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 32189,
-      "unpackedBytes": 126390,
+      "packedBytes": 32188,
+      "unpackedBytes": 126360,
       "entryCount": 6,
       "javascriptBytes": 32613,
-      "declarationBytes": 1420,
-      "sourceMapBytes": 74705,
+      "declarationBytes": 1414,
+      "sourceMapBytes": 74699,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 38000,
         "maxUnpackedBytes": 160000
       },
-      "remainingPackedBytes": 5811,
-      "remainingUnpackedBytes": 33610
+      "remainingPackedBytes": 5812,
+      "remainingUnpackedBytes": 33640
     },
-    "@apex-docx-pdf/layout": {
+    "@apexmed/layout": {
       "directory": "packages/layout/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 73341,
-      "unpackedBytes": 344676,
+      "packedBytes": 73331,
+      "unpackedBytes": 344640,
       "entryCount": 6,
-      "javascriptBytes": 102041,
-      "declarationBytes": 1748,
-      "sourceMapBytes": 223268,
+      "javascriptBytes": 102035,
+      "declarationBytes": 1742,
+      "sourceMapBytes": 223262,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 82000,
         "maxUnpackedBytes": 390000
       },
-      "remainingPackedBytes": 8659,
-      "remainingUnpackedBytes": 45324
+      "remainingPackedBytes": 8669,
+      "remainingUnpackedBytes": 45360
     },
-    "@apex-docx-pdf/pdf": {
+    "@apexmed/pdf": {
       "directory": "packages/pdf/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 32829,
-      "unpackedBytes": 131952,
+      "packedBytes": 32822,
+      "unpackedBytes": 131890,
       "entryCount": 6,
-      "javascriptBytes": 35220,
-      "declarationBytes": 884,
-      "sourceMapBytes": 78174,
+      "javascriptBytes": 35214,
+      "declarationBytes": 872,
+      "sourceMapBytes": 78154,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 40000,
         "maxUnpackedBytes": 165000
       },
-      "remainingPackedBytes": 7171,
-      "remainingUnpackedBytes": 33048
+      "remainingPackedBytes": 7178,
+      "remainingUnpackedBytes": 33110
     },
-    "@apex-docx-pdf/template": {
+    "@apexmed/template": {
       "directory": "packages/template/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 50036,
-      "unpackedBytes": 231458,
+      "packedBytes": 50027,
+      "unpackedBytes": 231410,
       "entryCount": 6,
-      "javascriptBytes": 63886,
-      "declarationBytes": 2105,
-      "sourceMapBytes": 147814,
+      "javascriptBytes": 63880,
+      "declarationBytes": 2099,
+      "sourceMapBytes": 147796,
       "assetBytes": 0,
       "budget": {
         "maxPackedBytes": 52000,
         "maxUnpackedBytes": 260000
       },
-      "remainingPackedBytes": 1964,
-      "remainingUnpackedBytes": 28542
+      "remainingPackedBytes": 1973,
+      "remainingUnpackedBytes": 28590
     }
   },
   "aggregate": {
-    "packedBytes": 2464001,
-    "unpackedBytes": 5998540,
+    "packedBytes": 2463981,
+    "unpackedBytes": 5997903,
     "budget": {
       "maxPackedBytes": 2700000,
       "maxUnpackedBytes": 6600000
     },
-    "remainingPackedBytes": 235999,
-    "remainingUnpackedBytes": 601460
+    "remainingPackedBytes": 236019,
+    "remainingUnpackedBytes": 602097
   },
   "fontCatalog": {
     "families": [

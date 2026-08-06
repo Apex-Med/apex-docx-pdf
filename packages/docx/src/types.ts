@@ -6,7 +6,7 @@ import type {
   PageFieldKind,
   SemanticImageMimeType,
   SourceLocation,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 /**
  * The OOXML-shaped representation owned by this package.  It deliberately

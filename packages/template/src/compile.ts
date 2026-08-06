@@ -12,7 +12,7 @@ import {
   type SemanticTable,
   type TemplateField,
   type TemplateFieldKind,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import {
   parseBlockMarker,

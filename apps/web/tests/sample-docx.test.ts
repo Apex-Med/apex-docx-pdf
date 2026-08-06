@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createDocxPdfEngine } from "@apex-docx-pdf/engine"
+import { createDocxPdfEngine } from "@apexmed/engine"
 import { strFromU8, unzipSync } from "fflate"
 
 import { SAMPLE_DATA, createSampleDocx } from "../src/lib/sample-docx"

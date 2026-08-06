@@ -311,7 +311,7 @@ function App() {
                         usage
                       </p>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                        bun add @apex-docx-pdf/engine
+                        bun add @apexmed/engine
                       </p>
                     </div>
                     <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">

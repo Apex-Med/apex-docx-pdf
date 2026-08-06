@@ -3,7 +3,7 @@ import {
   OFFLINE_FONT_CATALOG_VERSION,
   OFFLINE_FONT_FALLBACK_FAMILY,
   OFFLINE_FONT_FAMILIES,
-} from "@apex-docx-pdf/fonts"
+} from "@apexmed/fonts"
 
 export const FONT_CATALOG_VERSION = OFFLINE_FONT_CATALOG_VERSION
 

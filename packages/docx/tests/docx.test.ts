@@ -5,7 +5,7 @@ import type {
   SemanticInline,
   SemanticParagraph,
   SemanticText,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import { inspectDocx, normaliseDocxBytes, parseDocx } from "../src"
 import { buildOneParagraphDocx } from "./helpers/docx-fixture"

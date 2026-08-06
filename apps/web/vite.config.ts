@@ -50,7 +50,7 @@ const config = defineConfig(({ mode }) => {
 
   return {
     resolve: { tsconfigPaths: true },
-    ssr: { noExternal: ["@apex-docx-pdf/fonts"] },
+    ssr: { noExternal: ["@apexmed/fonts"] },
     plugins: [
       canonicalSiteFiles(siteUrl),
       devtools(),

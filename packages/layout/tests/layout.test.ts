@@ -16,7 +16,7 @@ import {
   type ResolvedTable,
   type TextShaper,
   type TextStyle,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import {
   createPhase1StandardFontMetrics,

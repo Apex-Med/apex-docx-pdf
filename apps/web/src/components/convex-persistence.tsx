@@ -3,7 +3,7 @@
 import type {
   BrowserCompileResult,
   BrowserRenderResult,
-} from "@apex-docx-pdf/browser"
+} from "@apexmed/browser"
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"

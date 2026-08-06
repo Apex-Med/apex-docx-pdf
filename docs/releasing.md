@@ -4,11 +4,11 @@ Apex DOCX PDF remains prerelease software. The npm packages use a shared `0.x` v
 
 ## Package set
 
-The public, fixed-version package set is `core`, `docx`, `fonts`, `images`, `layout`, `pdf`, `template`, `engine`, `browser`, and `devtools` under the `@apex-docx-pdf` scope, plus the unscoped `apex-docx-pdf` umbrella. The reference web app, docs, UI workspace, and `testkit` stay private. Fixed Changesets versions keep internal dependencies coherent while the public API is still evolving.
+The public, fixed-version package set is `core`, `docx`, `fonts`, `images`, `layout`, `pdf`, `template`, `engine`, `browser`, and `devtools` under the `@apexmed` scope, plus the unscoped `apex-docx-pdf` umbrella. The reference web app, docs, UI workspace, and `testkit` stay private. Fixed Changesets versions keep internal dependencies coherent while the public API is still evolving.
 
 The unscoped umbrella deliberately exports the engine factory, operation error, compatibility version, and public core contracts. It depends on `core` and `engine` only: browser-worker and React devtools code remain opt-in subpackages. The private monorepo root is not publishable.
 
-`@apex-docx-pdf/devtools` exposes the React display-list preview used by the reference playground. React remains a peer dependency, and the engine/core/layout package graph does not depend on devtools.
+`@apexmed/devtools` exposes the React display-list preview used by the reference playground. React remains a peer dependency, and the engine/core/layout package graph does not depend on devtools.
 
 ## Build and package contract
 

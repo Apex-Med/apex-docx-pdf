@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { documentHash } from "@apex-docx-pdf/core"
+import { documentHash } from "@apexmed/core"
 import {
   serializeLayoutTrace,
   sha256Hex,
   validatePdfStructure,
-} from "@apex-docx-pdf/testkit"
+} from "@apexmed/testkit"
 import { strToU8, zipSync } from "fflate"
 
 import { createDocxPdfEngine, EngineOperationError } from "../src"

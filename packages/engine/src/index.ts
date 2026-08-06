@@ -18,23 +18,17 @@ import {
   type SemanticParagraph,
   type SourceLocation,
   type TemplateInspectionResult,
-} from "@apex-docx-pdf/core"
-import {
-  normaliseDocxBytes,
-  normaliseDocxBytesWithUsage,
-} from "@apex-docx-pdf/docx"
-import { createFontRegistry } from "@apex-docx-pdf/fonts"
+} from "@apexmed/core"
+import { normaliseDocxBytes, normaliseDocxBytesWithUsage } from "@apexmed/docx"
+import { createFontRegistry } from "@apexmed/fonts"
 import {
   ImagePreparationError,
   prepareImageAssets,
   type ImagePreparationProvider,
-} from "@apex-docx-pdf/images"
-import { layoutDocument } from "@apex-docx-pdf/layout"
-import { serializePdf } from "@apex-docx-pdf/pdf"
-import {
-  compileTemplate,
-  resolveTemplateWithUsage,
-} from "@apex-docx-pdf/template"
+} from "@apexmed/images"
+import { layoutDocument } from "@apexmed/layout"
+import { serializePdf } from "@apexmed/pdf"
+import { compileTemplate, resolveTemplateWithUsage } from "@apexmed/template"
 
 // Cache compatibility identifier. Bump whenever compilation or rendered bytes
 // can change, independently of the npm package version.
@@ -815,4 +809,4 @@ export type {
   RenderOptions,
   RenderResult,
   TemplateImageValue,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"

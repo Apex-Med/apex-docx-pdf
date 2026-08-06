@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { resolve } from "node:path"
 import { describe, expect, test } from "bun:test"
-import { twips, type FontFaceRegistration } from "@apex-docx-pdf/core"
+import { twips, type FontFaceRegistration } from "@apexmed/core"
 
 import {
   createFontRegistry,

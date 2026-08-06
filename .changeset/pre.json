@@ -3,16 +3,16 @@
   "tag": "next",
   "initialVersions": {
     "apex-docx-pdf": "0.1.0-next.0",
-    "@apex-docx-pdf/browser": "0.1.0-next.0",
-    "@apex-docx-pdf/core": "0.1.0-next.0",
-    "@apex-docx-pdf/devtools": "0.1.0-next.0",
-    "@apex-docx-pdf/docx": "0.1.0-next.0",
-    "@apex-docx-pdf/engine": "0.1.0-next.0",
-    "@apex-docx-pdf/fonts": "0.1.0-next.0",
-    "@apex-docx-pdf/images": "0.1.0-next.0",
-    "@apex-docx-pdf/layout": "0.1.0-next.0",
-    "@apex-docx-pdf/pdf": "0.1.0-next.0",
-    "@apex-docx-pdf/template": "0.1.0-next.0"
+    "@apexmed/browser": "0.1.0-next.0",
+    "@apexmed/core": "0.1.0-next.0",
+    "@apexmed/devtools": "0.1.0-next.0",
+    "@apexmed/docx": "0.1.0-next.0",
+    "@apexmed/engine": "0.1.0-next.0",
+    "@apexmed/fonts": "0.1.0-next.0",
+    "@apexmed/images": "0.1.0-next.0",
+    "@apexmed/layout": "0.1.0-next.0",
+    "@apexmed/pdf": "0.1.0-next.0",
+    "@apexmed/template": "0.1.0-next.0"
   },
   "changesets": []
 }

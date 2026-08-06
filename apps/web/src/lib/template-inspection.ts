@@ -1,8 +1,5 @@
-import type {
-  BrowserCompileResult,
-  WorkerProgress,
-} from "@apex-docx-pdf/browser"
-import type { TemplateFieldKind } from "@apex-docx-pdf/core"
+import type { BrowserCompileResult, WorkerProgress } from "@apexmed/browser"
+import type { TemplateFieldKind } from "@apexmed/core"
 
 import { REFERENCE_FONT_POLICY } from "./font-policy"
 

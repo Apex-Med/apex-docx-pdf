@@ -8,7 +8,7 @@ import type {
   RenderTimings,
   TemplateManifest,
   TemplateInspectionResult,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 export type WorkerProgressStage =
   | "validating"

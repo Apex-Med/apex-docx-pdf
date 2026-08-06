@@ -1,5 +1,5 @@
 {
-  "name": "@apex-docx-pdf/docx",
+  "name": "@apexmed/docx",
   "version": "0.1.0-next.0",
   "description": "Bounded DOCX package validation, parsing, and normalization for Apex DOCX PDF.",
   "type": "module",
@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*",
+    "@apexmed/core": "workspace:*",
     "fast-xml-parser": "^5.10.1",
     "fflate": "^0.8.2"
   },

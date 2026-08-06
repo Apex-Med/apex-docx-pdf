@@ -7,7 +7,7 @@ export type SupportRow = Readonly<{
   behavior: string
 }>
 
-export { ENGINE_VERSION } from "@apex-docx-pdf/engine"
+export { ENGINE_VERSION } from "@apexmed/engine"
 
 export const supportStatusLabel: Record<SupportStatus, string> = {
   supported: "Supported",

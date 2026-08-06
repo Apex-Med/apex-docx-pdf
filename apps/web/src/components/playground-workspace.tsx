@@ -14,13 +14,13 @@ import {
   BrowserRenderError,
   BrowserRendererClient,
   ObjectUrlLease,
-} from "@apex-docx-pdf/browser"
+} from "@apexmed/browser"
 import type {
   BrowserCompileResult,
   BrowserRenderResult,
   WorkerProgress,
-} from "@apex-docx-pdf/browser"
-import type { RenderOptions, TemplateField } from "@apex-docx-pdf/core"
+} from "@apexmed/browser"
+import type { RenderOptions, TemplateField } from "@apexmed/core"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"

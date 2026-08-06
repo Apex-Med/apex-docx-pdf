@@ -1,15 +1,15 @@
 ---
 "apex-docx-pdf": patch
-"@apex-docx-pdf/browser": patch
-"@apex-docx-pdf/core": patch
-"@apex-docx-pdf/devtools": patch
-"@apex-docx-pdf/docx": patch
-"@apex-docx-pdf/engine": patch
-"@apex-docx-pdf/fonts": patch
-"@apex-docx-pdf/images": patch
-"@apex-docx-pdf/layout": patch
-"@apex-docx-pdf/pdf": patch
-"@apex-docx-pdf/template": patch
+"@apexmed/browser": patch
+"@apexmed/core": patch
+"@apexmed/devtools": patch
+"@apexmed/docx": patch
+"@apexmed/engine": patch
+"@apexmed/fonts": patch
+"@apexmed/images": patch
+"@apexmed/layout": patch
+"@apexmed/pdf": patch
+"@apexmed/template": patch
 ---
 
 Add the first public prerelease package builds, declarations, source maps, package metadata, release validation, unscoped umbrella, and React display-list devtools.

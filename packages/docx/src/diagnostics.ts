@@ -2,7 +2,7 @@ import type {
   Diagnostic,
   DiagnosticSeverity,
   SourceLocation,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 export function diagnostic(
   code: string,

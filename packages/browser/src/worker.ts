@@ -1,12 +1,5 @@
-import {
-  EngineOperationError,
-  createDocxPdfEngine,
-} from "@apex-docx-pdf/engine"
-import type {
-  CompiledTemplate,
-  Diagnostic,
-  EngineOptions,
-} from "@apex-docx-pdf/core"
+import { EngineOperationError, createDocxPdfEngine } from "@apexmed/engine"
+import type { CompiledTemplate, Diagnostic, EngineOptions } from "@apexmed/core"
 
 import type {
   BrowserCompileResult,

@@ -4,7 +4,7 @@ import type {
   LayoutTraceEvent,
   PageDisplayList,
   PageDisplayListPage,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 import { useMemo, useState } from "react"
 
 export type DisplayListPreviewAsset = Readonly<{

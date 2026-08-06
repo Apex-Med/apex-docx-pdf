@@ -5,7 +5,7 @@ import {
   type FontFaceMetrics,
   type FontProgramKind,
   type GlyphId,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 import { create } from "fontkit"
 import { FontConfigurationError, FontShapingError } from "./errors"
 import type {

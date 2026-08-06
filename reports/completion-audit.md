@@ -71,8 +71,8 @@ layout units, dependency selection, and fontkit/subsetting decisions are ADRs
 ## Engine and public API
 
 The recommended consumer surface is `apex-docx-pdf`; browser integrations use
-`@apex-docx-pdf/browser`, and React trace tooling is opt-in through
-`@apex-docx-pdf/devtools`.
+`@apexmed/browser`, and React trace tooling is opt-in through
+`@apexmed/devtools`.
 
 ```ts
 const engine = await createDocxPdfEngine({ fonts })

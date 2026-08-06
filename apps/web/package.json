@@ -12,11 +12,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/browser": "workspace:*",
-    "@apex-docx-pdf/core": "workspace:*",
-    "@apex-docx-pdf/devtools": "workspace:*",
-    "@apex-docx-pdf/engine": "workspace:*",
-    "@apex-docx-pdf/fonts": "workspace:*",
+    "@apexmed/browser": "workspace:*",
+    "@apexmed/core": "workspace:*",
+    "@apexmed/devtools": "workspace:*",
+    "@apexmed/engine": "workspace:*",
+    "@apexmed/fonts": "workspace:*",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",
     "@codemirror/lint": "^6.9.7",

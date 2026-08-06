@@ -7,7 +7,7 @@ import type {
   SemanticText,
   SourceLocation,
   TemplateFieldKind,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import { DEFAULT_DATE_FORMAT, parseDateTimeFormat } from "./date-format"
 

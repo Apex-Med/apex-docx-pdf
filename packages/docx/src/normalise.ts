@@ -1,4 +1,4 @@
-import { nodeId, twips } from "@apex-docx-pdf/core"
+import { nodeId, twips } from "@apexmed/core"
 import type {
   OperationResult,
   SemanticBlock,
@@ -7,7 +7,7 @@ import type {
   SemanticInline,
   SemanticParagraph,
   SemanticTable,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import type {
   ParsedDocxDocument,

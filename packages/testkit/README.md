@@ -1,4 +1,4 @@
-# `@apex-docx-pdf/testkit`
+# `@apexmed/testkit`
 
 Deterministic, browser-safe test helpers for Apex DOCX-to-PDF packages.
 

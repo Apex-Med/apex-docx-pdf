@@ -16,7 +16,7 @@ Font programs also carry licensing and redistribution constraints. Embedding onl
 
 ## Decision
 
-Use exact-pinned `fontkit` 2.0.4 behind `@apex-docx-pdf/fonts` to parse explicit caller-supplied font bytes and shape left-to-right Latin text. `FontConfiguration` is a compatibility input. The registry snapshots the supplied `Uint8Array` values, derives stable face and registry hashes, and uses deterministic family matching. It never searches the operating system, reads the filesystem, fetches the network, or requires `Buffer`.
+Use exact-pinned `fontkit` 2.0.4 behind `@apexmed/fonts` to parse explicit caller-supplied font bytes and shape left-to-right Latin text. `FontConfiguration` is a compatibility input. The registry snapshots the supplied `Uint8Array` values, derives stable face and registry hashes, and uses deterministic family matching. It never searches the operating system, reads the filesystem, fetches the network, or requires `Buffer`.
 
 The default fontkit path rewrites each TrueType program to the sorted, unique set of source glyph IDs used by the PDF. Fontkit includes `.notdef` and returns the output glyph IDs assigned by the rewritten program. The provider reports `subsetted: true`, returns the complete source-to-subset map, and derives the conventional six-letter PDF subset prefix deterministically from the PostScript name and glyph set. PDF serialization embeds the result through Type0/CIDFontType2, FontDescriptor, FontFile2, CIDToGIDMap, and ToUnicode objects and writes absolute positions for each shaped glyph.
 

@@ -12,7 +12,7 @@ description: "Accepted decision for distinct readonly pipeline types."
 
 Use distinct, readonly types for validated DOCX packages, parsed OOXML, semantic documents, compiled templates, resolved documents, layout documents, page display lists, and render results.
 
-Package dependencies follow the pipeline direction. `@apex-docx-pdf/core` owns public cross-stage contracts but has no DOCX, PDF, React, Convex, or Vercel dependencies.
+Package dependencies follow the pipeline direction. `@apexmed/core` owns public cross-stage contracts but has no DOCX, PDF, React, Convex, or Vercel dependencies.
 
 ## Consequences
 

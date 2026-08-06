@@ -1,5 +1,5 @@
-import type { BrowserTemplatePreview } from "@apex-docx-pdf/browser"
-import { LayoutTraceViewer } from "@apex-docx-pdf/devtools"
+import type { BrowserTemplatePreview } from "@apexmed/browser"
+import { LayoutTraceViewer } from "@apexmed/devtools"
 
 import { browserCatalogFontCss } from "@/lib/font-assets"
 

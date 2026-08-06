@@ -4,7 +4,7 @@ import {
   type FontConfiguration,
   type FontFaceMetrics,
   type FontWeight,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 import { describe, expect, test } from "bun:test"
 import {
   createFontRegistry,

@@ -1,5 +1,5 @@
 {
-  "name": "@apex-docx-pdf/fonts",
+  "name": "@apexmed/fonts",
   "version": "0.1.0-next.0",
   "description": "Explicit font registration and shaping adapters for Apex DOCX PDF.",
   "type": "module",
@@ -41,7 +41,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*",
+    "@apexmed/core": "workspace:*",
     "fontkit": "2.0.4"
   },
   "devDependencies": {

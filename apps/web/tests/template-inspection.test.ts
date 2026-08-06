@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type {
-  BrowserCompileResult,
-  WorkerProgress,
-} from "@apex-docx-pdf/browser"
+import type { BrowserCompileResult, WorkerProgress } from "@apexmed/browser"
 
 import {
   BUNDLED_FONT_PROFILE,

@@ -1,4 +1,4 @@
-import type { LayoutTrace } from "@apex-docx-pdf/core"
+import type { LayoutTrace } from "@apexmed/core"
 
 /**
  * Serializes a layout trace with a fixed field order and no environment-specific

@@ -2,16 +2,16 @@ import { readFile } from "node:fs/promises"
 
 const PUBLIC_PACKAGES = [
   ["apex-docx-pdf", "apex-docx-pdf"],
-  ["browser", "@apex-docx-pdf/browser"],
-  ["core", "@apex-docx-pdf/core"],
-  ["devtools", "@apex-docx-pdf/devtools"],
-  ["docx", "@apex-docx-pdf/docx"],
-  ["engine", "@apex-docx-pdf/engine"],
-  ["fonts", "@apex-docx-pdf/fonts"],
-  ["images", "@apex-docx-pdf/images"],
-  ["layout", "@apex-docx-pdf/layout"],
-  ["pdf", "@apex-docx-pdf/pdf"],
-  ["template", "@apex-docx-pdf/template"],
+  ["browser", "@apexmed/browser"],
+  ["core", "@apexmed/core"],
+  ["devtools", "@apexmed/devtools"],
+  ["docx", "@apexmed/docx"],
+  ["engine", "@apexmed/engine"],
+  ["fonts", "@apexmed/fonts"],
+  ["images", "@apexmed/images"],
+  ["layout", "@apexmed/layout"],
+  ["pdf", "@apexmed/pdf"],
+  ["template", "@apexmed/template"],
 ] as const
 
 type ChangesetsConfig = Readonly<{

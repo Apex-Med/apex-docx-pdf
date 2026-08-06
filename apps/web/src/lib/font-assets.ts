@@ -2,32 +2,32 @@ import type {
   FontConfiguration,
   FontFaceRegistration,
   FontWeight,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 import {
   OFFLINE_FONT_ALIASES,
   OFFLINE_FONT_CATALOG,
   OFFLINE_FONT_FALLBACK_FAMILY,
-} from "@apex-docx-pdf/fonts"
-import bricolageBoldUrl from "@apex-docx-pdf/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-Bold.ttf?url"
-import bricolageMediumUrl from "@apex-docx-pdf/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-Medium.ttf?url"
-import bricolageRegularUrl from "@apex-docx-pdf/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-Regular.ttf?url"
-import bricolageSemiBoldUrl from "@apex-docx-pdf/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-SemiBold.ttf?url"
-import geistMonoBoldUrl from "@apex-docx-pdf/fonts/assets/catalog/geist-mono/GeistMono-Bold.ttf?url"
-import geistMonoBoldItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/geist-mono/GeistMono-BoldItalic.ttf?url"
-import geistMonoItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/geist-mono/GeistMono-Italic.ttf?url"
-import geistMonoRegularUrl from "@apex-docx-pdf/fonts/assets/catalog/geist-mono/GeistMono-Regular.ttf?url"
-import instrumentSansBoldUrl from "@apex-docx-pdf/fonts/assets/catalog/instrument-sans/InstrumentSans-Bold.ttf?url"
-import instrumentSansBoldItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/instrument-sans/InstrumentSans-BoldItalic.ttf?url"
-import instrumentSansItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/instrument-sans/InstrumentSans-Italic.ttf?url"
-import instrumentSansRegularUrl from "@apex-docx-pdf/fonts/assets/catalog/instrument-sans/InstrumentSans-Regular.ttf?url"
-import instrumentSerifItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/instrument-serif/InstrumentSerif-Italic.ttf?url"
-import instrumentSerifRegularUrl from "@apex-docx-pdf/fonts/assets/catalog/instrument-serif/InstrumentSerif-Regular.ttf?url"
-import interBoldUrl from "@apex-docx-pdf/fonts/assets/catalog/inter/Inter-Bold.ttf?url"
-import interBoldItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/inter/Inter-BoldItalic.ttf?url"
-import interItalicUrl from "@apex-docx-pdf/fonts/assets/catalog/inter/Inter-Italic.ttf?url"
-import interMediumUrl from "@apex-docx-pdf/fonts/assets/catalog/inter/Inter-Medium.ttf?url"
-import interRegularUrl from "@apex-docx-pdf/fonts/assets/catalog/inter/Inter-Regular.ttf?url"
-import interSemiBoldUrl from "@apex-docx-pdf/fonts/assets/catalog/inter/Inter-SemiBold.ttf?url"
+} from "@apexmed/fonts"
+import bricolageBoldUrl from "@apexmed/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-Bold.ttf?url"
+import bricolageMediumUrl from "@apexmed/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-Medium.ttf?url"
+import bricolageRegularUrl from "@apexmed/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-Regular.ttf?url"
+import bricolageSemiBoldUrl from "@apexmed/fonts/assets/catalog/bricolage-grotesque/BricolageGrotesque-SemiBold.ttf?url"
+import geistMonoBoldUrl from "@apexmed/fonts/assets/catalog/geist-mono/GeistMono-Bold.ttf?url"
+import geistMonoBoldItalicUrl from "@apexmed/fonts/assets/catalog/geist-mono/GeistMono-BoldItalic.ttf?url"
+import geistMonoItalicUrl from "@apexmed/fonts/assets/catalog/geist-mono/GeistMono-Italic.ttf?url"
+import geistMonoRegularUrl from "@apexmed/fonts/assets/catalog/geist-mono/GeistMono-Regular.ttf?url"
+import instrumentSansBoldUrl from "@apexmed/fonts/assets/catalog/instrument-sans/InstrumentSans-Bold.ttf?url"
+import instrumentSansBoldItalicUrl from "@apexmed/fonts/assets/catalog/instrument-sans/InstrumentSans-BoldItalic.ttf?url"
+import instrumentSansItalicUrl from "@apexmed/fonts/assets/catalog/instrument-sans/InstrumentSans-Italic.ttf?url"
+import instrumentSansRegularUrl from "@apexmed/fonts/assets/catalog/instrument-sans/InstrumentSans-Regular.ttf?url"
+import instrumentSerifItalicUrl from "@apexmed/fonts/assets/catalog/instrument-serif/InstrumentSerif-Italic.ttf?url"
+import instrumentSerifRegularUrl from "@apexmed/fonts/assets/catalog/instrument-serif/InstrumentSerif-Regular.ttf?url"
+import interBoldUrl from "@apexmed/fonts/assets/catalog/inter/Inter-Bold.ttf?url"
+import interBoldItalicUrl from "@apexmed/fonts/assets/catalog/inter/Inter-BoldItalic.ttf?url"
+import interItalicUrl from "@apexmed/fonts/assets/catalog/inter/Inter-Italic.ttf?url"
+import interMediumUrl from "@apexmed/fonts/assets/catalog/inter/Inter-Medium.ttf?url"
+import interRegularUrl from "@apexmed/fonts/assets/catalog/inter/Inter-Regular.ttf?url"
+import interSemiBoldUrl from "@apexmed/fonts/assets/catalog/inter/Inter-SemiBold.ttf?url"
 
 const fontAssetUrls = Object.freeze({
   "catalog/inter/Inter-Regular.ttf": interRegularUrl,

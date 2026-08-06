@@ -1,6 +1,6 @@
-export * from "@apex-docx-pdf/core"
+export * from "@apexmed/core"
 export {
   ENGINE_VERSION,
   EngineOperationError,
   createDocxPdfEngine,
-} from "@apex-docx-pdf/engine"
+} from "@apexmed/engine"

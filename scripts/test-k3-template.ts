@@ -1,9 +1,6 @@
 import { createHash } from "node:crypto"
 
-import type {
-  FontConfiguration,
-  FontFaceRegistration,
-} from "@apex-docx-pdf/core"
+import type { FontConfiguration, FontFaceRegistration } from "@apexmed/core"
 
 import { createDocxPdfEngine } from "../packages/engine/src"
 import { validatePdfStructure } from "../packages/testkit/src"

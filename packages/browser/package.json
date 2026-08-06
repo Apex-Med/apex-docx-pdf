@@ -1,5 +1,5 @@
 {
-  "name": "@apex-docx-pdf/browser",
+  "name": "@apexmed/browser",
   "version": "0.1.0-next.0",
   "description": "Browser client and Web Worker bindings for Apex DOCX PDF.",
   "type": "module",
@@ -40,8 +40,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*",
-    "@apex-docx-pdf/engine": "workspace:*"
+    "@apexmed/core": "workspace:*",
+    "@apexmed/engine": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6"

@@ -1,5 +1,5 @@
 {
-  "name": "@apex-docx-pdf/template",
+  "name": "@apexmed/template",
   "version": "0.1.0-next.0",
   "description": "Typed, bounded DOCX template compilation and resolution for Apex DOCX PDF.",
   "type": "module",
@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apex-docx-pdf/core": "workspace:*"
+    "@apexmed/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6"

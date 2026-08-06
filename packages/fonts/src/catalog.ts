@@ -1,4 +1,4 @@
-import type { FontWeight } from "@apex-docx-pdf/core"
+import type { FontWeight } from "@apexmed/core"
 
 export const OFFLINE_FONT_CATALOG_VERSION = "apex-offline-ttf/v2"
 

@@ -6,12 +6,9 @@ import {
   type EmbeddedFontSubset,
   type FontEmbeddingProvider,
   type PageDisplayList,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 import { validatePdfStructure } from "../../testkit/src"
-import type {
-  ImagePreparationProvider,
-  PreparedImage,
-} from "@apex-docx-pdf/images"
+import type { ImagePreparationProvider, PreparedImage } from "@apexmed/images"
 
 import { serializePdf } from "../src"
 

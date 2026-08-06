@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { twips, type LayoutTrace } from "@apex-docx-pdf/core"
+import { twips, type LayoutTrace } from "@apexmed/core"
 
 import { serializeLayoutTrace } from "../src"
 

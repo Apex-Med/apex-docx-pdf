@@ -19,7 +19,7 @@ import {
   type SemanticTableRow,
   type SemanticText,
   type TemplateFieldKind,
-} from "@apex-docx-pdf/core"
+} from "@apexmed/core"
 
 import {
   inlineLogicalLength,

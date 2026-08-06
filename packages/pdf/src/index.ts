@@ -11,11 +11,8 @@ import {
   type PositionedGlyph,
   type RenderMetadata,
   type Twip,
-} from "@apex-docx-pdf/core"
-import type {
-  ImagePreparationProvider,
-  PreparedImage,
-} from "@apex-docx-pdf/images"
+} from "@apexmed/core"
+import type { ImagePreparationProvider, PreparedImage } from "@apexmed/images"
 
 export type PdfSerializeOptions = Readonly<{
   fonts?: FontEmbeddingProvider

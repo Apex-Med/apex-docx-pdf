@@ -5,8 +5,8 @@ import {
   twips,
   type FontEmbeddingProvider,
   type PageDisplayList,
-} from "@apex-docx-pdf/core"
-import { serializePdf } from "@apex-docx-pdf/pdf"
+} from "@apexmed/core"
+import { serializePdf } from "@apexmed/pdf"
 
 import { validatePdfStructure } from "../src"
 
