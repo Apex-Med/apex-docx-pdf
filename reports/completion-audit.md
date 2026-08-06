@@ -239,8 +239,9 @@ bun run ci
 ```
 
 The approved Vercel sequence is complete. Deployment
-`dpl_BjmLgUdLkgK91JBRY438VN2qWfgC` was built with Bun 1.x, checked at its
-immutable URL, promoted, and verified at `https://pdf-docx.apexmed.dev`.
+`dpl_CiFTQhuN4gUuULNtGywHVXL44q9x` was built from Git commit `14dcdbf`, checked
+at its immutable URL, promoted, and verified at both
+`https://pdf-docx.apexmed.dev` and `https://docx-pdf.apexmed.dev`.
 Landing, sample, migrated K3, local-only, browser-error, and axe observations
 are recorded in `reports/deployment-review.md`. Mintlify deployment remains a
 separate future action; Convex was intentionally not configured.

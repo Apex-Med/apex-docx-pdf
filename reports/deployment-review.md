@@ -7,10 +7,13 @@ or broad Microsoft Word compatibility claim.
 ## Deployment identity
 
 - Vercel team/project: `apex-f42a7d7e/apex-docx-pdf`.
-- Deployment ID: `dpl_BjmLgUdLkgK91JBRY438VN2qWfgC`.
+- Deployment ID: `dpl_CiFTQhuN4gUuULNtGywHVXL44q9x`.
 - Immutable URL:
-  `https://apex-docx-lq75yrz6f-apex-f42a7d7e.vercel.app`.
+  `https://apex-docx-8hvemhkox-apex-f42a7d7e.vercel.app`.
 - Canonical origin: `https://pdf-docx.apexmed.dev`.
+- Additional verified alias: `https://docx-pdf.apexmed.dev`.
+- Git source: commit `14dcdbf7962104234cee61c775f80bdf571f358e` on
+  `codex/release-apex-docx-pdf`.
 - Vercel reported the deployment `Ready`, the domain verified and configured
   correctly, and one 1.16 MB `__server` function in `iad1`.
 - The remote build used Nitro's Vercel preset and emitted `runtime: bun1.x`
@@ -49,6 +52,6 @@ The observations above prove this exact deployed artifact and browser session.
 They do not establish cold/warm latency distributions, peak function memory,
 multi-region behavior, a browser matrix, production persistence/authentication,
 Mintlify hosting, npm provenance, or a redistributable editor fixture corpus.
-The CLI deployment uploaded a verified local worktree before its Git commit, so
-the deployment is identified by immutable Vercel ID and URL rather than claimed
-as a Git-attached deployment.
+Vercel's deployment metadata binds the promoted artifact to the Git source
+listed above; the follow-up evidence-only commit does not change application
+runtime bytes.
