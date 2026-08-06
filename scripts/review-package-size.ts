@@ -74,6 +74,12 @@ for (const directoryName of PACKAGE_DIRECTORIES) {
   const assetBytes = result.files
     .filter(({ path }) => path.startsWith("assets/"))
     .reduce((sum, { size }) => sum + size, 0)
+  const aiBytes = result.files
+    .filter(
+      ({ path }) =>
+        path === "AGENTS.md" || path === "llms.txt" || path.startsWith("ai/")
+    )
+    .reduce((sum, { size }) => sum + size, 0)
   const budget = budgets.packages[directoryName]
   if (!budget) throw new Error(`${directoryName}: missing size budget`)
 
@@ -87,6 +93,7 @@ for (const directoryName of PACKAGE_DIRECTORIES) {
     declarationBytes,
     sourceMapBytes,
     assetBytes,
+    aiBytes,
     budget,
     remainingPackedBytes: budget.maxPackedBytes - result.size,
     remainingUnpackedBytes: budget.maxUnpackedBytes - result.unpackedSize,

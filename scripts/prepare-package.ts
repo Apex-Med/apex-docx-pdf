@@ -2,6 +2,7 @@ import { cp, readFile, writeFile } from "node:fs/promises"
 import { basename, join, resolve } from "node:path"
 
 type PackageJson = Record<string, unknown> & {
+  ai?: unknown
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
   name?: string
@@ -53,6 +54,7 @@ const dependencies = Object.fromEntries(
 )
 const browser = basename(packageDirectory) === "browser"
 const fonts = basename(packageDirectory) === "fonts"
+const umbrella = basename(packageDirectory) === "apex-docx-pdf"
 const entry = (file: string) => ({
   types: `./${file}.d.ts`,
   import: `./${file}.js`,
@@ -69,6 +71,7 @@ const published = {
   homepage: source.homepage,
   bugs: source.bugs,
   keywords: source.keywords,
+  ai: source.ai,
   sideEffects: source.sideEffects,
   engines: source.engines,
   exports: browser
@@ -104,6 +107,21 @@ await Promise.all([
             recursive: true,
           }
         ),
+      ]
+    : []),
+  ...(umbrella
+    ? [
+        cp(
+          join(packageDirectory, "AGENTS.md"),
+          join(packageDirectory, "dist", "AGENTS.md")
+        ),
+        cp(
+          join(packageDirectory, "llms.txt"),
+          join(packageDirectory, "dist", "llms.txt")
+        ),
+        cp(join(packageDirectory, "ai"), join(packageDirectory, "dist", "ai"), {
+          recursive: true,
+        }),
       ]
     : []),
 ])

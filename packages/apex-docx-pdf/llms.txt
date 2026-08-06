@@ -1,0 +1,27 @@
+# apex-docx-pdf
+
+> Deterministic, Bun-first DOCX template to searchable PDF rendering for TypeScript.
+
+Package prerelease: read ./package.json
+Engine compatibility: import ENGINE_VERSION from apex-docx-pdf
+Install: bun add apex-docx-pdf@next
+
+## Agent entry points
+
+- Agent instructions: ./AGENTS.md
+- Integration context: ./ai/CONTEXT.md
+- Integration skill: ./ai/skills/integrate-apex-docx-pdf/SKILL.md
+- Compatible-template skill: ./ai/skills/generate-compatible-docx-template/SKILL.md
+- Template inspector: ./ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs
+
+## Public entry points
+
+- Recommended facade: apex-docx-pdf
+- Browser client: @apexmed/browser
+- Browser worker: @apexmed/browser/worker
+- Optional React developer UI: @apexmed/devtools
+
+The renderer uses a deliberately bounded DOCX profile. Always inspect and strictly compile the exact template, review every diagnostic, render with explicit locale and timeZone values, and validate representative and boundary data before deployment.
+
+Documentation source: https://github.com/craig-bredenkamp/apex-docx-pdf/tree/main/docs
+Repository: https://github.com/craig-bredenkamp/apex-docx-pdf

@@ -1,6 +1,6 @@
 {
   "name": "@apexmed/images",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Bounded PNG and JPEG preparation for Apex DOCX PDF.",
   "type": "module",
   "sideEffects": false,

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate Compatible DOCX Templates"
+  short_description: "Author templates for Apex DOCX PDF"
+  default_prompt: "Use $generate-compatible-docx-template to create and validate a compatible DOCX template."

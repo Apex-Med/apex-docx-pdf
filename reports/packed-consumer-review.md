@@ -12,7 +12,7 @@ The first project declares only `apex-docx-pdf` and installs production
 dependencies. Prepublication `overrides` bind the umbrella package's exact
 internal versions to the corresponding local tarballs; after publication those
 same versions will resolve through the registry instead. The installed runtime
-tree measured 17,550,066 bytes across 1,012 files on this macOS arm64 machine.
+tree measured 17,587,120 bytes across 1,024 files on this macOS arm64 machine.
 That includes the engine's transitive runtime dependencies and the complete
 offline font catalog.
 
@@ -33,16 +33,22 @@ then runs under Bun 1.3.14 and Node v24.15.0 and must produce identical output:
 The smoke also requires a valid PDF header, no error diagnostics, deterministic
 resource usage, and the requested layout trace.
 
+The installed umbrella manifest must expose its versioned `ai` discovery
+object. The consumer resolves the agent instructions, compact context,
+`llms.txt`, both `SKILL.md` entrypoints, and the strict template-inspection
+script from those tarball files. It then executes that shipped script against
+the generated DOCX and requires the same engine version and manifest paths.
+
 ## Complete public package surface
 
 The second project installs all 11 tarballs plus React, React declarations, and
 TypeScript. It type-checks a strict JavaScript consumer with `skipLibCheck:
 false`, imports every public package, and repeats the Bun/Node render. This tree
-measured 43,862,644 bytes across 1,216 files, but it is deliberately not a
+measured 43,900,692 bytes across 1,228 files, but it is deliberately not a
 runtime-footprint claim because it includes React and TypeScript validation
 tooling.
 
-The local tarball set measured 2,463,981 compressed bytes. This evidence proves
+The local tarball set measured 2,477,730 compressed bytes. This evidence proves
 candidate-tarball installation, public declaration consumption, package
 exports, runtime loading, and one exact cross-runtime render on the recorded
 machine. It does not prove other operating systems, a consumer browser bundle,

@@ -1,6 +1,6 @@
 {
   "name": "@apexmed/engine",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "The deterministic DOCX-to-PDF orchestration engine for Apex DOCX PDF.",
   "type": "module",
   "sideEffects": false,

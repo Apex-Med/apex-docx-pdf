@@ -15,6 +15,33 @@ const packages = [
   "template",
 ]
 
+const UMBRELLA_AI_METADATA = {
+  schemaVersion: 1,
+  instructions: "./AGENTS.md",
+  context: "./ai/CONTEXT.md",
+  llms: "./llms.txt",
+  skills: {
+    integrate: "./ai/skills/integrate-apex-docx-pdf/SKILL.md",
+    generateCompatibleDocxTemplate:
+      "./ai/skills/generate-compatible-docx-template/SKILL.md",
+  },
+} as const
+
+const UMBRELLA_AI_FILES = [
+  "AGENTS.md",
+  "llms.txt",
+  "ai/CONTEXT.md",
+  "ai/skills/integrate-apex-docx-pdf/SKILL.md",
+  "ai/skills/integrate-apex-docx-pdf/agents/openai.yaml",
+  "ai/skills/integrate-apex-docx-pdf/references/integration-api.md",
+  "ai/skills/integrate-apex-docx-pdf/references/security-and-determinism.md",
+  "ai/skills/generate-compatible-docx-template/SKILL.md",
+  "ai/skills/generate-compatible-docx-template/agents/openai.yaml",
+  "ai/skills/generate-compatible-docx-template/references/template-language.md",
+  "ai/skills/generate-compatible-docx-template/references/supported-docx-profile.md",
+  "ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs",
+] as const
+
 type PackResult = Readonly<{
   size: number
   unpackedSize: number
@@ -78,6 +105,7 @@ for (const name of packages) {
   const directory = `${process.cwd()}/packages/${name}/dist`
   const manifestText = await readFile(join(directory, "package.json"), "utf8")
   const manifest = JSON.parse(manifestText) as {
+    ai?: unknown
     name: string
     version: string
   }
@@ -102,6 +130,30 @@ for (const name of packages) {
         throw new Error(`fonts: publication artifact is missing ${required}`)
       }
     }
+  }
+  if (name === "apex-docx-pdf") {
+    if (JSON.stringify(manifest.ai) !== JSON.stringify(UMBRELLA_AI_METADATA)) {
+      throw new Error(
+        "apex-docx-pdf: publication manifest has incorrect AI metadata"
+      )
+    }
+    for (const required of UMBRELLA_AI_FILES) {
+      if (!(await exists(join(directory, required)))) {
+        throw new Error(
+          `apex-docx-pdf: publication artifact is missing ${required}`
+        )
+      }
+      const contents = await readFile(join(directory, required), "utf8")
+      if (contents.includes("TODO")) {
+        throw new Error(
+          `apex-docx-pdf: published AI artifact contains TODO: ${required}`
+        )
+      }
+    }
+  } else if (manifest.ai !== undefined) {
+    throw new Error(
+      `${name}: only the umbrella package may publish AI metadata`
+    )
   }
 
   for (const command of [
@@ -140,6 +192,13 @@ for (const name of packages) {
   ]) {
     if (!packedPaths.has(required)) {
       throw new Error(`${name}: npm tarball would omit ${required}`)
+    }
+  }
+  if (name === "apex-docx-pdf") {
+    for (const required of UMBRELLA_AI_FILES) {
+      if (!packedPaths.has(required)) {
+        throw new Error(`apex-docx-pdf: npm tarball would omit ${required}`)
+      }
     }
   }
   const forbidden = [...packedPaths].filter(

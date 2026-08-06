@@ -42,6 +42,12 @@ The current npm prerelease is `0.1.0-next.0`. Advanced packages are also
 available at exact versions under the `@apexmed` scope, but the unscoped facade
 is the recommended application entrypoint.
 
+Agents working in a consuming codebase can start at
+`node_modules/apex-docx-pdf/AGENTS.md`. The umbrella package's `ai` manifest
+field points to compact integration context, a runtime-integration skill, a
+compatible-DOCX-template skill, and a strict template-inspection script. These
+files ship in the npm tarball and are exercised by the packed-consumer gate.
+
 ```ts
 import { createDocxPdfEngine } from "apex-docx-pdf"
 

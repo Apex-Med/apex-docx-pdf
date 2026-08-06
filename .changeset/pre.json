@@ -12,7 +12,11 @@
     "@apexmed/images": "0.1.0-next.0",
     "@apexmed/layout": "0.1.0-next.0",
     "@apexmed/pdf": "0.1.0-next.0",
-    "@apexmed/template": "0.1.0-next.0"
+    "@apexmed/template": "0.1.0-next.0",
+    "web": "0.0.1",
+    "@apexmed/docs": "0.0.0",
+    "@apexmed/testkit": "0.0.0",
+    "@workspace/ui": "0.0.0"
   },
-  "changesets": []
+  "changesets": ["initial-prerelease-packaging", "ship-agent-context"]
 }

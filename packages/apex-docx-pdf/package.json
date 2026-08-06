@@ -1,6 +1,6 @@
 {
   "name": "apex-docx-pdf",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Deterministic, Bun-first DOCX template to PDF rendering for TypeScript.",
   "type": "module",
   "sideEffects": false,
@@ -21,6 +21,16 @@
     "typescript",
     "bun"
   ],
+  "ai": {
+    "schemaVersion": 1,
+    "instructions": "./AGENTS.md",
+    "context": "./ai/CONTEXT.md",
+    "llms": "./llms.txt",
+    "skills": {
+      "integrate": "./ai/skills/integrate-apex-docx-pdf/SKILL.md",
+      "generateCompatibleDocxTemplate": "./ai/skills/generate-compatible-docx-template/SKILL.md"
+    }
+  },
   "engines": {
     "node": ">=20"
   },

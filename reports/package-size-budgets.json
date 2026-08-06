@@ -6,7 +6,7 @@
     "maxUnpackedBytes": 6600000
   },
   "packages": {
-    "apex-docx-pdf": { "maxPackedBytes": 8000, "maxUnpackedBytes": 22000 },
+    "apex-docx-pdf": { "maxPackedBytes": 22000, "maxUnpackedBytes": 60000 },
     "browser": { "maxPackedBytes": 18000, "maxUnpackedBytes": 70000 },
     "core": { "maxPackedBytes": 17000, "maxUnpackedBytes": 65000 },
     "devtools": { "maxPackedBytes": 21000, "maxUnpackedBytes": 80000 },

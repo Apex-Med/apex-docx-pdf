@@ -38,7 +38,17 @@ const RUNTIME_PACKAGE_NAMES = [
   "@apexmed/template",
 ] as const
 
-type PackageManifest = Readonly<{ name: string; version: string }>
+type PackageManifest = Readonly<{
+  ai?: Readonly<{
+    schemaVersion: number
+    instructions: string
+    context: string
+    llms: string
+    skills: Readonly<Record<string, string>>
+  }>
+  name: string
+  version: string
+}>
 type PackResult = Readonly<{
   filename: string
   name: string
@@ -180,6 +190,7 @@ try {
     ],
   })
   const fixtureBase64 = Buffer.from(fixture).toString("base64")
+  await Bun.write(join(runtimeConsumerDirectory, "template.docx"), fixture)
   await Bun.write(
     join(runtimeConsumerDirectory, "index.mjs"),
     consumerSource(fixtureBase64, false)
@@ -217,6 +228,34 @@ try {
   if (runtimeBunResult !== runtimeNodeResult) {
     throw new Error(
       `Packed runtime consumer output differs across Bun and Node:\nBun: ${runtimeBunResult}\nNode: ${runtimeNodeResult}`
+    )
+  }
+  const aiInspection = JSON.parse(
+    run(
+      [
+        "bun",
+        "node_modules/apex-docx-pdf/ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs",
+        "template.docx",
+      ],
+      runtimeConsumerDirectory
+    ).stdout
+  ) as {
+    compilation?: {
+      ok?: boolean
+      manifest?: { fields?: readonly { path?: string }[] }
+    }
+    engineVersion?: string
+    inspection?: { documentModelAvailable?: boolean }
+  }
+  if (
+    !aiInspection.inspection?.documentModelAvailable ||
+    !aiInspection.compilation?.ok ||
+    JSON.stringify(
+      aiInspection.compilation.manifest?.fields?.map(({ path }) => path)
+    ) !== JSON.stringify(["customer.name", "issuedAt"])
+  ) {
+    throw new Error(
+      `The shipped AI template inspector returned an unexpected contract: ${JSON.stringify(aiInspection)}`
     )
   }
 
@@ -273,6 +312,12 @@ try {
           ["node", "--version"],
           runtimeConsumerDirectory
         ).stdout.trim(),
+        aiTemplateInspector: {
+          engineVersion: aiInspection.engineVersion,
+          fields: aiInspection.compilation.manifest?.fields?.map(
+            ({ path }) => path
+          ),
+        },
         result: JSON.parse(runtimeBunResult) as unknown,
       },
       null,
@@ -413,6 +458,37 @@ async function verifyPackedInstall(
     )
     if (installed.name !== name || installed.version !== expectedVersion) {
       throw new Error(`${name}: installed package identity is incorrect`)
+    }
+    if (name === "apex-docx-pdf") {
+      await verifyInstalledAiSurface(installedDirectory, installed)
+    }
+  }
+}
+
+async function verifyInstalledAiSurface(
+  installedDirectory: string,
+  manifest: PackageManifest
+): Promise<void> {
+  const required = [
+    manifest.ai?.instructions,
+    manifest.ai?.context,
+    manifest.ai?.llms,
+    manifest.ai?.skills.integrate,
+    manifest.ai?.skills.generateCompatibleDocxTemplate,
+    "./ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs",
+  ]
+  if (manifest.ai?.schemaVersion !== 1 || required.some((path) => !path)) {
+    throw new Error("The installed umbrella package has invalid AI metadata")
+  }
+  for (const path of required) {
+    if (!path) continue
+    const absolutePath = join(installedDirectory, path)
+    if (!(await Bun.file(absolutePath).exists())) {
+      throw new Error(`The installed umbrella package is missing ${path}`)
+    }
+    const contents = await readFile(absolutePath, "utf8")
+    if (contents.includes("TODO")) {
+      throw new Error(`The installed AI artifact contains TODO: ${path}`)
     }
   }
 }

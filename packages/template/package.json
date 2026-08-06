@@ -1,6 +1,6 @@
 {
   "name": "@apexmed/template",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Typed, bounded DOCX template compilation and resolution for Apex DOCX PDF.",
   "type": "module",
   "sideEffects": false,

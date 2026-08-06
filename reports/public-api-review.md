@@ -1,6 +1,6 @@
 # Public API review
 
-Date: 2026-08-06. Scope: current source entrypoints, published `0.1.0-next.0` manifests, and package validation. This is an API inventory, not a stable semver promise.
+Date: 2026-08-06. Scope: current source entrypoints, published `0.1.0-next.0` artifacts, prepared `0.1.0-next.1` manifests, and package validation. This is an API inventory, not a stable semver promise.
 
 ## Supported application-facing surface
 
@@ -20,8 +20,8 @@ The `docx`, `fonts`, `images`, `layout`, `pdf`, and `template` packages expose p
 
 ## Current release-preparation evidence
 
-1. The 11 public packages—`apex-docx-pdf`, browser, core, devtools, docx, engine, fonts, images, layout, pdf, and template—are in lockstep at `0.1.0-next.0`. Source workspace manifests point to TypeScript entrypoints for local development; each build prepares a separate ESM `dist` manifest with JavaScript, declarations, declaration maps/source maps where applicable, license, and README files.
-2. `bun run packages:validate` passes for all 11 prepared packages. The gate runs strict Publint, `@arethetypeswrong/cli` with the ESM-only profile, and `npm pack --dry-run`. The reported CommonJS-to-ESM condition is intentionally ignored by that ESM-only profile; CommonJS is not a supported entry mode.
+1. The 11 prepared public packages—`apex-docx-pdf`, browser, core, devtools, docx, engine, fonts, images, layout, pdf, and template—are in lockstep at `0.1.0-next.1`. Source workspace manifests point to TypeScript entrypoints for local development; each build prepares a separate ESM `dist` manifest with JavaScript, declarations, declaration maps/source maps where applicable, license, and README files.
+2. `bun run packages:validate` passes for all 11 prepared packages. The gate runs strict Publint, `@arethetypeswrong/cli` with the ESM-only profile, and `npm pack --dry-run`. It also requires the umbrella's exact agent metadata/files and rejects placeholder skill content. The reported CommonJS-to-ESM condition is intentionally ignored by that ESM-only profile; CommonJS is not a supported entry mode.
 3. The root CI gate executes the checked-in PDF/layout-trace golden in separate Bun processes and Node 24, then matches the same evidence in a real Chromium module worker. This is concrete parity for the golden profile, not a promise of every Node/browser version or every supported document.
 4. All 11 packages are published at `0.1.0-next.0`. A clean registry-only install imported the complete surface under Bun 1.3.14 and Node v24.15.0, npm audited all 36 installed dependency signatures successfully, and every package now has a publish-only GitHub OIDC trusted publisher. The direct bootstrap versions have no first-party provenance attestation; that remains to be proved on the next automated prerelease.
 5. The umbrella currently re-exports the complete core barrel. This is convenient for the prerelease but also makes low-level constructors, semantic nodes, font adapters, resource defaults, and layout representations reachable. Replace or document that broad barrel before promising a stable 1.0 surface.
@@ -32,6 +32,7 @@ The `docx`, `fonts`, `images`, `layout`, `pdf`, and `template` packages expose p
 10. Browser request/response protocol types are reachable through the browser package. If they are intended for direct consumers, version and document the protocol explicitly before stable release.
 11. Release package version and compiled engine format version remain deliberately distinct. The web support matrix now re-exports `ENGINE_VERSION` from the engine package rather than duplicating its value.
 12. `TemplatePreviewResult` and `BrowserTemplatePreview` now carry the deterministic layout trace required by the developer overlay. This is intentional prerelease API growth; the trace remains diagnostic evidence and must not be treated as a stable serialized template format.
+13. The umbrella manifest's `ai` object and its `AGENTS.md`, `llms.txt`, context, skills, references, and inspector are advisory/discovery artifacts, not executable runtime exports or a stable cross-vendor AI metadata standard. The tarball/consumer gates nevertheless pin their exact paths and prove that the inspector runs from an isolated install.
 
 ## Proposed stability labels
 

@@ -12,6 +12,8 @@ The local-only reference playground is deployed at [pdf-docx.apexmed.dev](https:
 
 The `apex-docx-pdf` umbrella and public `@apexmed/*` packages are published on npm at `0.1.0-next.0`. Install the recommended facade with `bun add apex-docx-pdf@next`; browser-worker bindings and React devtools remain opt-in through `@apexmed/browser` and `@apexmed/devtools`. A clean registry-only install loads all 11 packages under both Bun and Node, and the local packed-consumer gate additionally type-checks their declarations and requires repeat-identical rendering. The one-time direct bootstrap release has registry signatures but no npm provenance attestation; all packages are now bound to the protected GitHub trusted publisher for future provenance-bearing prereleases.
 
+The umbrella tarball also includes agent-readable integration material. Start with `node_modules/apex-docx-pdf/AGENTS.md` or the manifest's `ai` field, then load `ai/CONTEXT.md` and the relevant shipped skill. `integrate-apex-docx-pdf` covers safe runtime adoption; `generate-compatible-docx-template` covers DOCX authoring and includes a runnable strict template inspector. Package validation and the isolated consumer smoke require those exact files and execute the inspector from the packed install.
+
 ## Development
 
 ```bash

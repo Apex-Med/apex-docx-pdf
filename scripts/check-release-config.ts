@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises"
+import { readdir, readFile } from "node:fs/promises"
 
 const PUBLIC_PACKAGES = [
   ["apex-docx-pdf", "apex-docx-pdf"],
@@ -46,6 +46,11 @@ const rootManifest = await readJson<{
 }>("package.json")
 const expectedNames = PUBLIC_PACKAGES.map(([, name]) => name).sort()
 const fixedNames = [...(config.fixed[0] ?? [])].sort()
+const localChangesets = (await readdir(".changeset"))
+  .filter((path) => path.endsWith(".md") && path !== "README.md")
+  .map((path) => path.slice(0, -".md".length))
+  .sort()
+const consumedChangesets = [...prerelease.changesets].sort()
 
 if (config.fixed.length !== 1 || !sameStrings(fixedNames, expectedNames)) {
   throw new Error(
@@ -60,6 +65,11 @@ if (expectedNames.some((name) => config.ignore.includes(name))) {
 }
 if (prerelease.mode !== "pre" || prerelease.tag !== "next") {
   throw new Error("Changesets must remain in next prerelease mode")
+}
+if (!sameStrings(consumedChangesets, localChangesets)) {
+  throw new Error(
+    "Prerelease state must consume every local Changeset and no unknown Changesets"
+  )
 }
 if (
   config.changelog[0] !== "@changesets/changelog-github" ||
@@ -163,14 +173,6 @@ if (await Bun.file(initialChangesetPath).exists()) {
   const changesetConsumed = prerelease.changesets.includes(
     "initial-prerelease-packaging"
   )
-  if (
-    prerelease.changesets.length > 0 &&
-    (prerelease.changesets.length !== 1 || !changesetConsumed)
-  ) {
-    throw new Error(
-      "Prerelease state contains an unexpected consumed Changeset"
-    )
-  }
   if (!changesetConsumed) {
     for (const [, name] of PUBLIC_PACKAGES) {
       if (prerelease.initialVersions[name] !== lockstepVersion) {

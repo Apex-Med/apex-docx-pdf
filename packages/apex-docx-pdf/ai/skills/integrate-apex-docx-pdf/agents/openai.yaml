@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integrate Apex DOCX PDF"
+  short_description: "Integrate deterministic DOCX-to-PDF rendering"
+  default_prompt: "Use $integrate-apex-docx-pdf to add Apex DOCX PDF safely to this codebase."

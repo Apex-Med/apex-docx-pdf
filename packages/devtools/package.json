@@ -1,6 +1,6 @@
 {
   "name": "@apexmed/devtools",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "React developer preview components for Apex DOCX PDF display lists and source mappings.",
   "type": "module",
   "sideEffects": false,
