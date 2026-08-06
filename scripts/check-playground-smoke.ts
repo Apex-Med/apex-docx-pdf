@@ -40,6 +40,7 @@ const browser = await chromium.launch({ headless: true })
 try {
   const desktopContext = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
+    colorScheme: "light",
   })
   const landingPage = await desktopContext.newPage()
   const landingErrors = monitorRuntimeErrors(landingPage)
@@ -55,6 +56,7 @@ try {
 
   const cancellationContext = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
+    colorScheme: "light",
   })
   const cancellationPage = await cancellationContext.newPage()
   await installOfflineViewerAsset(cancellationPage)
@@ -74,6 +76,7 @@ try {
 
   const reflowContext = await browser.newContext({
     viewport: { width: 320, height: 800 },
+    colorScheme: "light",
   })
   const reflowPage = await reflowContext.newPage()
   await installOfflineViewerAsset(reflowPage)

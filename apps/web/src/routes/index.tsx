@@ -442,11 +442,9 @@ function App() {
 
         @keyframes landing-reveal {
           from {
-            opacity: 0;
             transform: translateY(12px);
           }
           to {
-            opacity: 1;
             transform: translateY(0);
           }
         }
@@ -458,10 +456,10 @@ function App() {
         @keyframes landing-stage-pulse {
           0%,
           100% {
-            opacity: 0.55;
+            box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 0%, transparent);
           }
           50% {
-            opacity: 1;
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand) 22%, transparent);
           }
         }
 
@@ -469,7 +467,6 @@ function App() {
           .landing-reveal,
           .landing-stage-pulse {
             animation: none !important;
-            opacity: 1 !important;
             transform: none !important;
           }
         }
