@@ -18,7 +18,7 @@ Run `bun run packages:check` to build and then validate every publication direct
 
 Run `bun run packages:consumer-smoke` after the build to pack all 11 artifacts and install them into isolated temporary Bun consumers. The gate rejects workspace resolution, type-checks the complete public declaration surface, imports every public package, and requires one repeat-identical render under both Bun and Node. Local `overrides` bind unpublished exact internal versions to their tarballs; a separate registry install remains mandatory after publication.
 
-Run `bun run fixtures:check` to validate any checked-in editor exports and their provenance. The manual publish workflow additionally runs `bun run fixtures:release`, which fails until the corpus contains licensed, redistributable Microsoft Word and Google Docs exports covering all 15 fixture scenarios in the project brief. A publicly downloadable sample, private template, or synthetic OOXML builder does not satisfy this gate.
+Run `bun run fixtures:check` to validate any checked-in editor exports and their provenance. `bun run fixtures:release` remains the gate for complete cross-editor compatibility claims and any stable release: it fails until the corpus contains licensed, redistributable Microsoft Word and Google Docs exports covering all 15 fixture scenarios in the project brief. A publicly downloadable sample, private template, or synthetic OOXML builder does not satisfy that gate. The `next` prerelease workflow deliberately relies on the full deterministic CI, package, consumer, and security suites instead; prerelease documentation must not imply that the complete editor corpus has passed.
 
 ## Version workflow
 

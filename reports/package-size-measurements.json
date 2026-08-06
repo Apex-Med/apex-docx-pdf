@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
-  "measuredAt": "2026-08-06T16:13:43.301Z",
+  "measuredAt": "2026-08-06T17:16:22.052Z",
   "basis": "npm pack --dry-run measurements from the current publishable dist directories",
   "packages": {
     "apex-docx-pdf": {
       "directory": "packages/apex-docx-pdf/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 6981,
-      "unpackedBytes": 18024,
+      "packedBytes": 7002,
+      "unpackedBytes": 18113,
       "entryCount": 6,
       "javascriptBytes": 203,
       "declarationBytes": 136,
@@ -17,14 +17,14 @@
         "maxPackedBytes": 8000,
         "maxUnpackedBytes": 22000
       },
-      "remainingPackedBytes": 1019,
-      "remainingUnpackedBytes": 3976
+      "remainingPackedBytes": 998,
+      "remainingUnpackedBytes": 3887
     },
     "@apex-docx-pdf/browser": {
       "directory": "packages/browser/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 16433,
-      "unpackedBytes": 61150,
+      "packedBytes": 16444,
+      "unpackedBytes": 61239,
       "entryCount": 10,
       "javascriptBytes": 11867,
       "declarationBytes": 5425,
@@ -34,14 +34,14 @@
         "maxPackedBytes": 18000,
         "maxUnpackedBytes": 70000
       },
-      "remainingPackedBytes": 1567,
-      "remainingUnpackedBytes": 8850
+      "remainingPackedBytes": 1556,
+      "remainingUnpackedBytes": 8761
     },
     "@apex-docx-pdf/core": {
       "directory": "packages/core/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 15951,
-      "unpackedBytes": 56668,
+      "packedBytes": 15972,
+      "unpackedBytes": 56757,
       "entryCount": 6,
       "javascriptBytes": 2129,
       "declarationBytes": 26650,
@@ -51,14 +51,14 @@
         "maxPackedBytes": 17000,
         "maxUnpackedBytes": 65000
       },
-      "remainingPackedBytes": 1049,
-      "remainingUnpackedBytes": 8332
+      "remainingPackedBytes": 1028,
+      "remainingUnpackedBytes": 8243
     },
     "@apex-docx-pdf/devtools": {
       "directory": "packages/devtools/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 19003,
-      "unpackedBytes": 70988,
+      "packedBytes": 19021,
+      "unpackedBytes": 71077,
       "entryCount": 6,
       "javascriptBytes": 15734,
       "declarationBytes": 2292,
@@ -68,14 +68,14 @@
         "maxPackedBytes": 21000,
         "maxUnpackedBytes": 80000
       },
-      "remainingPackedBytes": 1997,
-      "remainingUnpackedBytes": 9012
+      "remainingPackedBytes": 1979,
+      "remainingUnpackedBytes": 8923
     },
     "@apex-docx-pdf/docx": {
       "directory": "packages/docx/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 125563,
-      "unpackedBytes": 644912,
+      "packedBytes": 125575,
+      "unpackedBytes": 645001,
       "entryCount": 6,
       "javascriptBytes": 196636,
       "declarationBytes": 9954,
@@ -85,14 +85,14 @@
         "maxPackedBytes": 140000,
         "maxUnpackedBytes": 720000
       },
-      "remainingPackedBytes": 14437,
-      "remainingUnpackedBytes": 75088
+      "remainingPackedBytes": 14425,
+      "remainingUnpackedBytes": 74999
     },
     "@apex-docx-pdf/engine": {
       "directory": "packages/engine/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 23662,
-      "unpackedBytes": 91289,
+      "packedBytes": 23680,
+      "unpackedBytes": 91378,
       "entryCount": 6,
       "javascriptBytes": 24192,
       "declarationBytes": 632,
@@ -102,14 +102,14 @@
         "maxPackedBytes": 26000,
         "maxUnpackedBytes": 105000
       },
-      "remainingPackedBytes": 2338,
-      "remainingUnpackedBytes": 13711
+      "remainingPackedBytes": 2320,
+      "remainingUnpackedBytes": 13622
     },
     "@apex-docx-pdf/fonts": {
       "directory": "packages/fonts/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 2067916,
-      "unpackedBytes": 4220410,
+      "packedBytes": 2067912,
+      "unpackedBytes": 4220499,
       "entryCount": 32,
       "javascriptBytes": 30307,
       "declarationBytes": 6440,
@@ -119,14 +119,14 @@
         "maxPackedBytes": 2300000,
         "maxUnpackedBytes": 4700000
       },
-      "remainingPackedBytes": 232084,
-      "remainingUnpackedBytes": 479590
+      "remainingPackedBytes": 232088,
+      "remainingUnpackedBytes": 479501
     },
     "@apex-docx-pdf/images": {
       "directory": "packages/images/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 32165,
-      "unpackedBytes": 126301,
+      "packedBytes": 32189,
+      "unpackedBytes": 126390,
       "entryCount": 6,
       "javascriptBytes": 32613,
       "declarationBytes": 1420,
@@ -136,14 +136,14 @@
         "maxPackedBytes": 38000,
         "maxUnpackedBytes": 160000
       },
-      "remainingPackedBytes": 5835,
-      "remainingUnpackedBytes": 33699
+      "remainingPackedBytes": 5811,
+      "remainingUnpackedBytes": 33610
     },
     "@apex-docx-pdf/layout": {
       "directory": "packages/layout/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 73323,
-      "unpackedBytes": 344587,
+      "packedBytes": 73341,
+      "unpackedBytes": 344676,
       "entryCount": 6,
       "javascriptBytes": 102041,
       "declarationBytes": 1748,
@@ -153,14 +153,14 @@
         "maxPackedBytes": 82000,
         "maxUnpackedBytes": 390000
       },
-      "remainingPackedBytes": 8677,
-      "remainingUnpackedBytes": 45413
+      "remainingPackedBytes": 8659,
+      "remainingUnpackedBytes": 45324
     },
     "@apex-docx-pdf/pdf": {
       "directory": "packages/pdf/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 32817,
-      "unpackedBytes": 131863,
+      "packedBytes": 32829,
+      "unpackedBytes": 131952,
       "entryCount": 6,
       "javascriptBytes": 35220,
       "declarationBytes": 884,
@@ -170,14 +170,14 @@
         "maxPackedBytes": 40000,
         "maxUnpackedBytes": 165000
       },
-      "remainingPackedBytes": 7183,
-      "remainingUnpackedBytes": 33137
+      "remainingPackedBytes": 7171,
+      "remainingUnpackedBytes": 33048
     },
     "@apex-docx-pdf/template": {
       "directory": "packages/template/dist",
       "version": "0.1.0-next.0",
-      "packedBytes": 50022,
-      "unpackedBytes": 231369,
+      "packedBytes": 50036,
+      "unpackedBytes": 231458,
       "entryCount": 6,
       "javascriptBytes": 63886,
       "declarationBytes": 2105,
@@ -187,19 +187,19 @@
         "maxPackedBytes": 52000,
         "maxUnpackedBytes": 260000
       },
-      "remainingPackedBytes": 1978,
-      "remainingUnpackedBytes": 28631
+      "remainingPackedBytes": 1964,
+      "remainingUnpackedBytes": 28542
     }
   },
   "aggregate": {
-    "packedBytes": 2463836,
-    "unpackedBytes": 5997561,
+    "packedBytes": 2464001,
+    "unpackedBytes": 5998540,
     "budget": {
       "maxPackedBytes": 2700000,
       "maxUnpackedBytes": 6600000
     },
-    "remainingPackedBytes": 236164,
-    "remainingUnpackedBytes": 602439
+    "remainingPackedBytes": 235999,
+    "remainingUnpackedBytes": 601460
   },
   "fontCatalog": {
     "families": [

@@ -45,6 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Prerelease publication no longer conflates the exhaustive licensed Word/Google compatibility corpus with package safety. The `next` workflow retains the complete deterministic CI, package, security, and isolated-consumer gates; `fixtures:release` remains mandatory for stable-release and broad cross-editor claims. Changesets now produces GitHub-linked package changelogs, and the release validator supports both pending and consumed prerelease Changesets.
 - Currency and English date text no longer depend on host ICU locale data. Canonical `en-US` and `en-ZA` profiles now produce identical symbols, grouping, decimal separators, minor-unit precision, month names, and day periods across supported Bun, Node, and browser runtimes; unsupported formatter locales fail explicitly.
 - PDF text baselines are converted to PDF coordinates without mirroring glyph outlines. Standard and embedded text now render upright, and y-up font offsets are normalized to y-down display-list coordinates.
 - Static CSS/OpenType font weights from 100 through 900 now remain distinct through alias resolution, nearest-weight matching, layout, browser specimens, and PDF embedding. The bundled Inter and Bricolage Grotesque catalogs include real Medium (500) and SemiBold (600) programs instead of collapsing those requests to Regular or Bold.
@@ -61,6 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Non-canonical image tags; image URL fetching; anchored/floating, cropped, rotated, or SVG images; tagged-PDF accessibility metadata; broad image-profile/color conversion; percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex-script shaping, variable-font axis instantiation, and CFF PDF embedding remain unsupported.
 - Continuous, odd-page, or even-page section breaks; first/even header variants; automatic numbering in headers/footers; and general Word field evaluation.
 - Broad licensed Microsoft Word and Google Docs-exported fixture coverage.
-- A persistent, authenticated hosted service or published npm prerelease. The current hosted playground is deliberately local-only; publication remains blocked by the licensed fixture gate.
+- A persistent, authenticated hosted service or published npm prerelease. The current hosted playground is deliberately local-only; prerelease publication still requires npm namespace and account-security bootstrap.
 
 No stable release has been cut.

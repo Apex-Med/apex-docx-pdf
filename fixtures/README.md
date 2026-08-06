@@ -18,14 +18,17 @@ For every fixture:
 4. record expected diagnostics, page count, searchable text, PDF hash, and
    layout-trace hash where applicable;
 5. run `bun run fixtures:check` while authoring;
-6. run `bun run fixtures:release` before claiming the original definition of
-   done or approving an npm prerelease.
+6. run `bun run fixtures:release` before claiming the complete cross-editor
+   compatibility profile or approving a stable release.
 
-The release check requires at least one genuine Microsoft Word export, one
-genuine Google Docs export, and aggregate coverage of all 15 scenarios named in
-the project brief. It validates file containment, DOCX magic bytes, manifest
+The compatibility check requires at least one genuine Microsoft Word export,
+one genuine Google Docs export, and aggregate coverage of all 15 scenarios named
+in the project brief. It validates file containment, DOCX magic bytes, manifest
 shape, uniqueness, provenance, redistribution permission, privacy declarations,
-and exact hashes. It does not infer a licence from a URL or editor.
+and exact hashes. It does not infer a licence from a URL or editor. This corpus
+is a stable-release and broad-compatibility claim gate; it does not block a
+clearly labelled `next` prerelease whose documentation states the narrower
+evidence boundary.
 
 The supplied K3 template and publicly downloadable third-party samples may be
 used as uncommitted compatibility evidence, but cannot enter this corpus unless

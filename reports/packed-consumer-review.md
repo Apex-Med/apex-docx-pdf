@@ -12,7 +12,7 @@ The first project declares only `apex-docx-pdf` and installs production
 dependencies. Prepublication `overrides` bind the umbrella package's exact
 internal versions to the corresponding local tarballs; after publication those
 same versions will resolve through the registry instead. The installed runtime
-tree measured 17,549,787 bytes across 1,012 files on this macOS arm64 machine.
+tree measured 17,550,588 bytes across 1,012 files on this macOS arm64 machine.
 That includes the engine's transitive runtime dependencies and the complete
 offline font catalog.
 
@@ -38,11 +38,11 @@ resource usage, and the requested layout trace.
 The second project installs all 11 tarballs plus React, React declarations, and
 TypeScript. It type-checks a strict JavaScript consumer with `skipLibCheck:
 false`, imports every public package, and repeats the Bun/Node render. This tree
-measured 43,862,302 bytes across 1,216 files, but it is deliberately not a
+measured 43,863,281 bytes across 1,216 files, but it is deliberately not a
 runtime-footprint claim because it includes React and TypeScript validation
 tooling.
 
-The local tarball set measured 2,463,836 compressed bytes. This evidence proves
+The local tarball set measured 2,464,001 compressed bytes. This evidence proves
 prepublication tarball installation, public declaration consumption, package
 exports, runtime loading, and one exact cross-runtime render on the recorded
 machine. It does not prove npm registry transfer/integrity/provenance, a

@@ -17,6 +17,7 @@ const PUBLIC_PACKAGES = [
 type ChangesetsConfig = Readonly<{
   access: string
   baseBranch: string
+  changelog: readonly [string, Readonly<{ repo: string }>]
   fixed: readonly (readonly string[])[]
   ignore: readonly string[]
 }>
@@ -60,17 +61,22 @@ if (expectedNames.some((name) => config.ignore.includes(name))) {
 if (prerelease.mode !== "pre" || prerelease.tag !== "next") {
   throw new Error("Changesets must remain in next prerelease mode")
 }
-if (!publishWorkflow.includes("run: bun run fixtures:release")) {
+if (
+  config.changelog[0] !== "@changesets/changelog-github" ||
+  config.changelog[1]?.repo !== "craig-bredenkamp/apex-docx-pdf"
+) {
   throw new Error(
-    "The npm prerelease workflow must enforce the licensed editor-fixture release gate"
+    "Changesets must generate GitHub-linked package changelogs for the version workflow"
   )
 }
 if (
+  !publishWorkflow.includes("run: bun run ci") ||
+  !rootManifest.scripts?.ci?.includes("bun run fixtures:check") ||
   !rootManifest.scripts?.ci?.includes("bun run packages:consumer-smoke") ||
   !ciWorkflow.includes("run: bun run packages:consumer-smoke")
 ) {
   throw new Error(
-    "CI and the release gate must execute the isolated packed-consumer smoke test"
+    "The prerelease workflow and CI must execute fixture structure and packed-consumer gates"
   )
 }
 
@@ -154,16 +160,24 @@ if (await Bun.file(initialChangesetPath).exists()) {
       "Initial prerelease Changeset must patch the complete public package set"
     )
   }
-  if (prerelease.changesets.length !== 0) {
+  const changesetConsumed = prerelease.changesets.includes(
+    "initial-prerelease-packaging"
+  )
+  if (
+    prerelease.changesets.length > 0 &&
+    (prerelease.changesets.length !== 1 || !changesetConsumed)
+  ) {
     throw new Error(
-      "Pending initial Changeset must not also be marked consumed"
+      "Prerelease state contains an unexpected consumed Changeset"
     )
   }
-  for (const [, name] of PUBLIC_PACKAGES) {
-    if (prerelease.initialVersions[name] !== lockstepVersion) {
-      throw new Error(
-        `${name}: initial prerelease version does not match package version`
-      )
+  if (!changesetConsumed) {
+    for (const [, name] of PUBLIC_PACKAGES) {
+      if (prerelease.initialVersions[name] !== lockstepVersion) {
+        throw new Error(
+          `${name}: initial prerelease version does not match package version`
+        )
+      }
     }
   }
 }

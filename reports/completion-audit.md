@@ -15,20 +15,24 @@ Mintlify documentation source, open-source packaging, CI, fuzz/property
 coverage, benchmarks, release tooling, and a verified Vercel deployment.
 
 The original definition of done remains intentionally **not complete** for the
-licensed editor corpus and registry-release requirements:
+licensed editor corpus, while the narrower npm prerelease is independently
+releaseable:
 
 1. `bun run fixtures:release` fails until legally redistributable Microsoft
    Word and Google Docs exports cover all 15 named fixture scenarios. The local
    machine has no Microsoft Word installation, and creating a Google Doc would
    write to an external account. Neither provenance nor permission is inferred.
 2. The approved Vercel deployment and hosted browser smoke are complete.
-   Convex remains intentionally undeployed for the local-only playground,
-   Mintlify has no canonical hosted origin yet, and npm publication cannot
-   proceed until item 1 passes.
+   Convex remains intentionally undeployed for the local-only playground and
+   Mintlify has no canonical hosted origin yet. The npm `next` prerelease may
+   publish without claiming that item 1 is complete; stable-release and broad
+   editor-compatibility claims may not.
 
-The manual npm publication workflow enforces the fixture release gate, so the
-repository cannot silently publish the current evidence as a completed editor
-compatibility promise.
+The manual npm publication workflow enforces the full deterministic CI,
+package, isolated-consumer, and security gates. The separate
+`fixtures:release` command stays red and documented until the genuine editor
+corpus exists, preventing the prerelease from being mistaken for a completed
+editor-compatibility certification.
 
 ## Repository structure
 
@@ -248,12 +252,13 @@ separate future action; Convex was intentionally not configured.
 
 Publication remains approval-gated. The manual `publish-next.yml` workflow
 requires `publish-next`, the protected `npm` environment, OIDC trusted
-publishing, the full CI gate, `fixtures:release`, lockstep prerelease validation,
-and the `next` tag. No `latest`, `1.0.0`, or npm publication is claimed.
+publishing, the full CI gate, lockstep prerelease validation, and the `next`
+tag. `fixtures:release` is separately required for stable-release or complete
+cross-editor claims. No `latest`, `1.0.0`, or npm publication is claimed.
 
 ## Prioritized remaining roadmap
 
-1. With explicit authority, create synthetic Apache-licensed documents in real
+1. Create synthetic Apache-licensed documents in real
    Microsoft Word and Google Docs, export them to DOCX, populate
    `fixtures/manifest.json`, and close all 15 scenarios.
 2. Deploy the canonical Mintlify origin when selected, then set
