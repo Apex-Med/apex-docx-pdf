@@ -595,6 +595,27 @@ function normalizeCellBorder(
   }
 }
 
+function normalizeTableBorders(value: unknown): SemanticTable["borders"] {
+  const empty: SemanticTable["borders"] = {
+    top: null,
+    right: null,
+    bottom: null,
+    left: null,
+    insideHorizontal: null,
+    insideVertical: null,
+  }
+  if (!value || typeof value !== "object") return empty
+  const borders = value as Record<string, unknown>
+  return {
+    top: normalizeCellBorder(borders.top),
+    right: normalizeCellBorder(borders.right),
+    bottom: normalizeCellBorder(borders.bottom),
+    left: normalizeCellBorder(borders.left),
+    insideHorizontal: normalizeCellBorder(borders.insideHorizontal),
+    insideVertical: normalizeCellBorder(borders.insideVertical),
+  }
+}
+
 function tableFromPm(
   node: PMNode,
   schema: Schema,
@@ -687,14 +708,7 @@ function tableFromPm(
         : "left",
     layout: (node.attrs.layout as "fixed" | "autofit") ?? "fixed",
     columnWidths,
-    borders: (node.attrs.borders as SemanticTable["borders"]) ?? {
-      top: null,
-      right: null,
-      bottom: null,
-      left: null,
-      insideHorizontal: null,
-      insideVertical: null,
-    },
+    borders: normalizeTableBorders(node.attrs.borders),
     cellPadding: (node.attrs.cellPadding as SemanticTable["cellPadding"]) ?? {
       top: twips(0),
       right: twips(108),

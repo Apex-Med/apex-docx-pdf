@@ -1,19 +1,12 @@
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
-import {
-  addColumnAfter,
-  addColumnBefore,
-  addRowAfter,
-  addRowBefore,
-  deleteColumn,
-  deleteRow,
-  deleteTable,
-  isInTable,
-} from "prosemirror-tables"
+import { deleteTable, isInTable } from "prosemirror-tables"
 
 import {
   setCellBorderStyle,
   setCellShading,
+  selectedTableCellPositions,
+  tableCommands,
   type CellBorderSide,
 } from "../commands"
 
@@ -28,43 +21,46 @@ type MenuItem = Readonly<{
   section?: string
 }>
 
+let menuCellPositions: readonly number[] = []
+
 const solid = (
   side: CellBorderSide,
   style: "none" | "single" | "double" | "dotted" | "dashed" = "single"
-) => setCellBorderStyle(side, style)
+) =>
+  setCellBorderStyle(side, style, "#000000", 15, menuCellPositions)
 
 const MENU_ITEMS: readonly MenuItem[] = [
   {
     id: "row-before",
     label: "Insert row above",
-    run: (state, dispatch) => addRowBefore(state, dispatch),
+    run: (state, dispatch) => tableCommands.addRowBefore(state, dispatch),
   },
   {
     id: "row-after",
     label: "Insert row below",
-    run: (state, dispatch) => addRowAfter(state, dispatch),
+    run: (state, dispatch) => tableCommands.addRowAfter(state, dispatch),
   },
   {
     id: "col-before",
     label: "Insert column left",
-    run: (state, dispatch) => addColumnBefore(state, dispatch),
+    run: (state, dispatch) => tableCommands.addColumnBefore(state, dispatch),
   },
   {
     id: "col-after",
     label: "Insert column right",
-    run: (state, dispatch) => addColumnAfter(state, dispatch),
+    run: (state, dispatch) => tableCommands.addColumnAfter(state, dispatch),
   },
   {
     id: "delete-row",
     label: "Delete row",
-    run: (state, dispatch) => deleteRow(state, dispatch),
+    run: (state, dispatch) => tableCommands.deleteRow(state, dispatch),
     danger: true,
     separatorBefore: true,
   },
   {
     id: "delete-col",
     label: "Delete column",
-    run: (state, dispatch) => deleteColumn(state, dispatch),
+    run: (state, dispatch) => tableCommands.deleteColumn(state, dispatch),
     danger: true,
   },
   {
@@ -120,14 +116,16 @@ const MENU_ITEMS: readonly MenuItem[] = [
   {
     id: "shade-light",
     label: "Shading: light gray",
-    run: (state, dispatch) => setCellShading("#f1f3f4")(state, dispatch),
+    run: (state, dispatch) =>
+      setCellShading("#f1f3f4", menuCellPositions)(state, dispatch),
     separatorBefore: true,
     section: "Shading",
   },
   {
     id: "shade-none",
     label: "Shading: none",
-    run: (state, dispatch) => setCellShading(null)(state, dispatch),
+    run: (state, dispatch) =>
+      setCellShading(null, menuCellPositions)(state, dispatch),
     section: "Shading",
   },
 ]
@@ -166,6 +164,7 @@ export function createTableContextMenuPlugin(): Plugin {
   ): void => {
     dismiss()
     activeView = view
+    menuCellPositions = selectedTableCellPositions(view.state)
     if (!isInTable(view.state)) return
 
     const root =

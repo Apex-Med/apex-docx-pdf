@@ -23,18 +23,21 @@ import {
 } from "prosemirror-commands"
 import { redo, undo } from "prosemirror-history"
 import { keymap } from "prosemirror-keymap"
+import type { Node as PMNode } from "prosemirror-model"
 import type { Command, EditorState, Transaction } from "prosemirror-state"
 import {
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
   addRowBefore,
+  type CellSelection,
   deleteColumn,
   deleteRow,
   deleteTable,
   goToNextCell,
   mergeCells,
   splitCell,
+  TableMap,
 } from "prosemirror-tables"
 
 /** Transaction meta key for newly registered image assets (Editor merges into document.assets). */
@@ -53,6 +56,149 @@ function findNodeDepth(
   let depth = $from.depth
   while (depth > 0 && $from.node(depth).type.name !== name) depth -= 1
   return depth
+}
+
+export type CellBorderSpec = Readonly<{
+  style: "none" | "single" | "double" | "dotted" | "dashed"
+  color: string
+  /** Border thickness in twips (default ~15 ≈ 0.75pt). */
+  width: number
+}>
+
+export type CellBorderSide = "top" | "right" | "bottom" | "left" | "all"
+
+/** Word/Google-style grid used when the user inserts a table. */
+export const DEFAULT_INSERTED_TABLE_BORDER: CellBorderSpec = Object.freeze({
+  style: "single",
+  color: "#000000",
+  width: 15,
+})
+
+type TableBorderAttrs = Readonly<{
+  top: ReturnType<typeof toTableBorder>
+  right: ReturnType<typeof toTableBorder>
+  bottom: ReturnType<typeof toTableBorder>
+  left: ReturnType<typeof toTableBorder>
+  insideHorizontal: ReturnType<typeof toTableBorder>
+  insideVertical: ReturnType<typeof toTableBorder>
+}>
+
+function toTableBorder(spec: CellBorderSpec | null) {
+  if (!spec || spec.style === "none") return null
+  const width = Number.isSafeInteger(spec.width)
+    ? spec.width
+    : Math.round(Number(spec.width) || 15)
+  return {
+    style: spec.style,
+    color: spec.color,
+    width: twips(Math.max(0, width)),
+    space: twips(0),
+  }
+}
+
+function gridTableBorders(spec: CellBorderSpec | null): TableBorderAttrs {
+  const border = toTableBorder(spec)
+  return {
+    top: border,
+    right: border,
+    bottom: border,
+    left: border,
+    insideHorizontal: border,
+    insideVertical: border,
+  }
+}
+
+function borderSpecFromAttr(value: unknown): CellBorderSpec | null {
+  if (!value || typeof value !== "object") return null
+  const border = value as {
+    style?: string
+    color?: string
+    width?: number
+  }
+  if (
+    border.style !== "single" &&
+    border.style !== "double" &&
+    border.style !== "dotted" &&
+    border.style !== "dashed"
+  ) {
+    return null
+  }
+  const width = Number(border.width ?? 15)
+  return {
+    style: border.style,
+    color: String(border.color ?? "#000000"),
+    width: Number.isSafeInteger(width) ? width : Math.round(width) || 15,
+  }
+}
+
+function cellHasDirectBorders(attrs: Record<string, unknown>): boolean {
+  return (
+    attrs.borderTop != null ||
+    attrs.borderRight != null ||
+    attrs.borderBottom != null ||
+    attrs.borderLeft != null
+  )
+}
+
+function paintEmptyCellsFromTableBorders(
+  tr: Transaction,
+  tablePos: number
+): Transaction {
+  const table = tr.doc.nodeAt(tablePos)
+  if (table?.type.name !== "table") return tr
+  const borders = table.attrs.borders as TableBorderAttrs | null
+  if (!borders) return tr
+  const map = TableMap.get(table)
+  table.forEach((rowNode, rowOffset) => {
+    if (rowNode.type.name !== "table_row") return
+    rowNode.forEach((cellNode, cellOffset) => {
+      if (
+        cellNode.type.name !== "table_cell" &&
+        cellNode.type.name !== "table_header"
+      ) {
+        return
+      }
+      if (cellHasDirectBorders(cellNode.attrs)) return
+      const cellPosition = rowOffset + 1 + cellOffset
+      let rect: { left: number; right: number; top: number; bottom: number }
+      try {
+        rect = map.findCell(cellPosition)
+      } catch {
+        return
+      }
+      tr.setNodeMarkup(tablePos + 1 + cellPosition, undefined, {
+        ...cellNode.attrs,
+        borderTop: borderSpecFromAttr(
+          rect.top === 0 ? borders.top : borders.insideHorizontal
+        ),
+        borderRight: borderSpecFromAttr(
+          rect.right === map.width ? borders.right : borders.insideVertical
+        ),
+        borderBottom: borderSpecFromAttr(
+          rect.bottom === map.height ? borders.bottom : borders.insideHorizontal
+        ),
+        borderLeft: borderSpecFromAttr(
+          rect.left === 0 ? borders.left : borders.insideVertical
+        ),
+      })
+    })
+  })
+  return tr
+}
+
+function withInheritedTableCellBorders(command: Command): Command {
+  return (state, dispatch) => {
+    if (!dispatch) return command(state)
+    const depth = findNodeDepth(state.selection.$from, "table")
+    if (state.selection.$from.node(depth).type.name !== "table") {
+      return command(state, dispatch)
+    }
+    const tablePos = state.selection.$from.before(depth)
+    return command(state, (tr) => {
+      paintEmptyCellsFromTableBorders(tr, tr.mapping.map(tablePos))
+      dispatch(tr)
+    })
+  }
 }
 
 function updateTextStyle(attrs: Record<string, unknown>): Command {
@@ -712,29 +858,34 @@ export function insertTable(
       !schema.nodes.table_cell
     )
       return false
-    const emptyParagraph = () => schema.nodes.paragraph!.create(null, undefined)
+    const emptyParagraph = () => schema.nodes.paragraph?.create(null, undefined)
     const cell = (columnIndex: number) =>
-      schema.nodes.table_cell!.create(
+      schema.nodes.table_cell?.create(
         {
           columnIndex,
           width: columnWidthTwips,
           colspan: 1,
           rowspan: 1,
+          borderTop: DEFAULT_INSERTED_TABLE_BORDER,
+          borderRight: DEFAULT_INSERTED_TABLE_BORDER,
+          borderBottom: DEFAULT_INSERTED_TABLE_BORDER,
+          borderLeft: DEFAULT_INSERTED_TABLE_BORDER,
         },
         emptyParagraph()
       )
     const rowNodes = Array.from({ length: rows }, (_, rowIndex) =>
-      schema.nodes.table_row!.create(
+      schema.nodes.table_row?.create(
         { nodeId: `table-row-${rowIndex}` },
         Array.from({ length: cols }, (_, col) => cell(col))
       )
     )
-    const table = schema.nodes.table!.create(
+    const table = schema.nodes.table?.create(
       {
         width: columnWidthTwips * cols,
         preferredWidth: columnWidthTwips * cols,
         layout: "fixed",
         columnWidths: Array.from({ length: cols }, () => columnWidthTwips),
+        borders: gridTableBorders(DEFAULT_INSERTED_TABLE_BORDER),
         repeatHeaderRowCount: 0,
       },
       rowNodes
@@ -826,72 +977,68 @@ export function setSectionColumns(
   }
 }
 
-export function setCellShading(fillColor: string | null): Command {
+export function setCellShading(
+  fillColor: string | null,
+  cellPositions?: readonly number[]
+): Command {
   return (state, dispatch) => {
-    const { $from } = state.selection
-    let depth = $from.depth
-    while (
-      depth > 0 &&
-      $from.node(depth).type.name !== "table_cell" &&
-      $from.node(depth).type.name !== "table_header"
-    ) {
-      depth -= 1
-    }
-    const node = $from.node(depth)
-    if (node.type.name !== "table_cell" && node.type.name !== "table_header") {
-      return false
-    }
-    const pos = $from.before(depth)
+    const cells = resolveTableCells(state, cellPositions)
+    if (cells.length === 0) return false
     if (dispatch) {
-      dispatch(
-        state.tr.setNodeMarkup(pos, undefined, {
-          ...node.attrs,
+      let tr = state.tr
+      for (const cell of cells) {
+        const mapped = tr.mapping.map(cell.pos)
+        const current = tr.doc.nodeAt(mapped) ?? cell.node
+        if (
+          current.type.name !== "table_cell" &&
+          current.type.name !== "table_header"
+        ) {
+          continue
+        }
+        tr = tr.setNodeMarkup(mapped, undefined, {
+          ...current.attrs,
           fillColor,
           background: fillColor,
         })
-      )
+      }
+      dispatch(tr)
     }
     return true
   }
 }
 
 export function setCellVerticalAlignment(
-  verticalAlignment: "top" | "center" | "bottom"
+  verticalAlignment: "top" | "center" | "bottom",
+  cellPositions?: readonly number[]
 ): Command {
   return (state, dispatch) => {
-    const { $from } = state.selection
-    const depth = findCellDepth($from)
-    const node = $from.node(depth)
-    if (node.type.name !== "table_cell" && node.type.name !== "table_header") {
-      return false
-    }
+    const cells = resolveTableCells(state, cellPositions)
+    if (cells.length === 0) return false
     if (dispatch) {
-      dispatch(
-        state.tr.setNodeMarkup($from.before(depth), undefined, {
-          ...node.attrs,
+      let tr = state.tr
+      for (const cell of cells) {
+        const mapped = tr.mapping.map(cell.pos)
+        const current = tr.doc.nodeAt(mapped) ?? cell.node
+        if (
+          current.type.name !== "table_cell" &&
+          current.type.name !== "table_header"
+        ) {
+          continue
+        }
+        tr = tr.setNodeMarkup(mapped, undefined, {
+          ...current.attrs,
           verticalAlignment,
         })
-      )
+      }
+      dispatch(tr)
     }
     return true
   }
 }
 
-export type CellBorderSpec = Readonly<{
-  style: "none" | "single" | "double" | "dotted" | "dashed"
-  color: string
-  /** Border thickness in twips (default ~15 ≈ 0.75pt). */
-  width: number
-}>
-
-export type CellBorderSide = "top" | "right" | "bottom" | "left" | "all"
-
 function findCellDepth($from: {
   depth: number
-  node: (d: number) => {
-    type: { name: string }
-    attrs: Record<string, unknown>
-  }
+  node: (d: number) => PMNode
   before: (d: number) => number
 }): number {
   let depth = $from.depth
@@ -905,34 +1052,196 @@ function findCellDepth($from: {
   return depth
 }
 
-export function setCellBorder(
+function cellBorderPatch(
   side: CellBorderSide,
   border: CellBorderSpec | null
+): Record<string, CellBorderSpec | null> {
+  if (side === "all") {
+    return {
+      borderTop: border,
+      borderRight: border,
+      borderBottom: border,
+      borderLeft: border,
+    }
+  }
+  const attrKey = `border${side[0]?.toUpperCase()}${side.slice(1)}`
+  return { [attrKey]: border }
+}
+
+function isTableCell(node: PMNode | null | undefined): node is PMNode {
+  return (
+    !!node &&
+    (node.type.name === "table_cell" || node.type.name === "table_header")
+  )
+}
+
+/** Duck-type CellSelection so a duplicated prosemirror-tables copy still works. */
+function isCellSelectionLike(
+  selection: EditorState["selection"]
+): selection is CellSelection {
+  return typeof (selection as CellSelection).forEachCell === "function"
+}
+
+function enclosingTable(
+  state: EditorState
+): { node: PMNode; pos: number } | null {
+  const selection = state.selection as CellSelection
+  if (typeof selection.$anchorCell?.node === "function") {
+    try {
+      const table = selection.$anchorCell.node(-1)
+      if (table?.type.name === "table") {
+        return { node: table, pos: selection.$anchorCell.start(-1) - 1 }
+      }
+    } catch {
+      /* Selection may not be a cell selection. */
+    }
+  }
+  const { $from } = state.selection
+  const depth = findNodeDepth($from, "table")
+  const node = $from.node(depth)
+  if (node.type.name === "table") {
+    return { node, pos: $from.before(depth) }
+  }
+  return null
+}
+
+function cellsInTable(
+  table: PMNode,
+  tablePos: number
+): { node: PMNode; pos: number; row: number; col: number }[] {
+  const cells: { node: PMNode; pos: number; row: number; col: number }[] = []
+  let row = 0
+  table.forEach((rowNode, rowOffset) => {
+    if (rowNode.type.name !== "table_row") return
+    let col = 0
+    rowNode.forEach((cellNode, cellOffset) => {
+      if (!isTableCell(cellNode)) return
+      cells.push({
+        node: cellNode,
+        pos: tablePos + 1 + rowOffset + 1 + cellOffset,
+        row,
+        col,
+      })
+      col += Number(cellNode.attrs.colspan ?? 1)
+    })
+    row += 1
+  })
+  return cells
+}
+
+function cellsAtPositions(
+  doc: PMNode,
+  positions: readonly number[]
+): { node: PMNode; pos: number }[] {
+  const cells: { node: PMNode; pos: number }[] = []
+  const seen = new Set<number>()
+  for (const pos of positions) {
+    if (seen.has(pos)) continue
+    const node = doc.nodeAt(pos)
+    if (!isTableCell(node)) continue
+    seen.add(pos)
+    cells.push({ node, pos })
+  }
+  return cells
+}
+
+function addCellAtResolved(
+  cells: { node: PMNode; pos: number }[],
+  seen: Set<number>,
+  $pos: { depth: number; node: (d: number) => PMNode; before: (d: number) => number }
+): void {
+  const depth = findCellDepth($pos)
+  const node = $pos.node(depth)
+  if (!isTableCell(node)) return
+  const pos = $pos.before(depth)
+  if (seen.has(pos)) return
+  seen.add(pos)
+  cells.push({ node, pos })
+}
+
+/**
+ * Cells in a CellSelection (including a duplicated-package instance), a
+ * multi-range selection, or the cell containing the caret.
+ */
+function selectedTableCells(
+  state: EditorState
+): ReadonlyArray<{ node: PMNode; pos: number }> {
+  const selection = state.selection
+  const cells: { node: PMNode; pos: number }[] = []
+  const seen = new Set<number>()
+
+  if (isCellSelectionLike(selection)) {
+    selection.forEachCell((node, pos) => {
+      if (!isTableCell(node) || seen.has(pos)) return
+      seen.add(pos)
+      cells.push({ node, pos })
+    })
+    if (cells.length > 0) return cells
+  }
+
+  for (const range of selection.ranges) {
+    addCellAtResolved(cells, seen, range.$from)
+    if (range.$from.pos === range.$to.pos) continue
+    state.doc.nodesBetween(range.$from.pos, range.$to.pos, (node, pos) => {
+      if (!isTableCell(node)) return true
+      if (!seen.has(pos)) {
+        seen.add(pos)
+        cells.push({ node, pos })
+      }
+      return false
+    })
+  }
+  if (cells.length > 0) return cells
+
+  addCellAtResolved(cells, seen, selection.$from)
+  return cells
+}
+
+export function selectedTableCellPositions(state: EditorState): number[] {
+  return selectedTableCells(state).map((cell) => cell.pos)
+}
+
+function resolveTableCells(
+  state: EditorState,
+  cellPositions?: readonly number[]
+): ReadonlyArray<{ node: PMNode; pos: number }> {
+  if (cellPositions && cellPositions.length > 0) {
+    const captured = cellsAtPositions(state.doc, cellPositions)
+    if (captured.length > 0) return captured
+  }
+  return selectedTableCells(state)
+}
+
+function applyBorderPatchToCells(
+  tr: Transaction,
+  cells: ReadonlyArray<{ node: PMNode; pos: number }>,
+  patch: Record<string, CellBorderSpec | null>
+): Transaction {
+  let next = tr
+  const ordered = [...cells].sort((a, b) => b.pos - a.pos)
+  for (const cell of ordered) {
+    const mapped = next.mapping.map(cell.pos)
+    const current = next.doc.nodeAt(mapped)
+    if (!isTableCell(current)) continue
+    next = next.setNodeMarkup(mapped, undefined, {
+      ...current.attrs,
+      ...patch,
+    })
+  }
+  return next
+}
+
+export function setCellBorder(
+  side: CellBorderSide,
+  border: CellBorderSpec | null,
+  cellPositions?: readonly number[]
 ): Command {
   return (state, dispatch) => {
-    const { $from } = state.selection
-    const depth = findCellDepth($from)
-    const node = $from.node(depth)
-    if (node.type.name !== "table_cell" && node.type.name !== "table_header") {
-      return false
-    }
-    const pos = $from.before(depth)
-    const patch: Record<string, unknown> = {}
-    if (side === "all") {
-      patch.borderTop = border
-      patch.borderRight = border
-      patch.borderBottom = border
-      patch.borderLeft = border
-    } else {
-      const attrKey = `border${side[0]!.toUpperCase()}${side.slice(1)}`
-      patch[attrKey] = border
-    }
+    const cells = resolveTableCells(state, cellPositions)
+    if (cells.length === 0) return false
     if (dispatch) {
       dispatch(
-        state.tr.setNodeMarkup(pos, undefined, {
-          ...node.attrs,
-          ...patch,
-        })
+        applyBorderPatchToCells(state.tr, cells, cellBorderPatch(side, border))
       )
     }
     return true
@@ -944,10 +1253,123 @@ export function setCellBorderStyle(
   side: CellBorderSide,
   style: CellBorderSpec["style"] = "single",
   color = "#000000",
-  widthTwips = 15
+  widthTwips = 15,
+  cellPositions?: readonly number[]
 ): Command {
-  if (style === "none") return setCellBorder(side, null)
-  return setCellBorder(side, { style, color, width: widthTwips })
+  if (style === "none") return setCellBorder(side, null, cellPositions)
+  return setCellBorder(
+    side,
+    { style, color, width: widthTwips },
+    cellPositions
+  )
+}
+
+function cellBorderPatchForSide(
+  side: CellBorderSide,
+  spec: CellBorderSpec | null,
+  rect: { left: number; right: number; top: number; bottom: number },
+  map: { width: number; height: number }
+): Record<string, CellBorderSpec | null> | null {
+  if (side === "all") {
+    return {
+      borderTop: spec,
+      borderRight: spec,
+      borderBottom: spec,
+      borderLeft: spec,
+    }
+  }
+  if (side === "top" && rect.top === 0) return { borderTop: spec }
+  if (side === "bottom" && rect.bottom === map.height)
+    return { borderBottom: spec }
+  if (side === "left" && rect.left === 0) return { borderLeft: spec }
+  if (side === "right" && rect.right === map.width) return { borderRight: spec }
+  return null
+}
+
+/**
+ * Apply a border style to selected cells, or to every cell in the enclosing
+ * table when the caret is in a single cell / no range was captured.
+ */
+export function setTableBorderStyle(
+  side: CellBorderSide,
+  style: CellBorderSpec["style"] = "single",
+  color = "#000000",
+  widthTwips = 15,
+  cellPositions?: readonly number[]
+): Command {
+  const width = Number.isSafeInteger(widthTwips)
+    ? widthTwips
+    : Math.round(Number(widthTwips) || 15)
+  const spec: CellBorderSpec | null =
+    style === "none" ? null : { style, color, width: Math.max(0, width) }
+  return (state, dispatch) => {
+    const tableInfo = enclosingTable(state)
+    if (!tableInfo) return false
+    const allCells = cellsInTable(tableInfo.node, tableInfo.pos)
+    if (allCells.length === 0) return false
+    const selected = resolveTableCells(state, cellPositions)
+    const targets = selected.length > 1 ? selected : allCells
+    const paintTableEdges = targets.length >= allCells.length
+    if (!dispatch) return true
+
+    let tr = state.tr
+    if (paintTableEdges) {
+      const current = (tableInfo.node.attrs.borders as TableBorderAttrs | null) ?? {
+        top: null,
+        right: null,
+        bottom: null,
+        left: null,
+        insideHorizontal: null,
+        insideVertical: null,
+      }
+      const tableBorder = toTableBorder(spec)
+      tr = tr.setNodeMarkup(tableInfo.pos, undefined, {
+        ...tableInfo.node.attrs,
+        borders:
+          side === "all"
+            ? gridTableBorders(spec)
+            : { ...current, [side]: tableBorder },
+      })
+    }
+
+    if (side === "all" || selected.length > 1) {
+      dispatch(applyBorderPatchToCells(tr, targets, cellBorderPatch(side, spec)))
+      return true
+    }
+
+    const colCount = Math.max(
+      ...allCells.map(
+        (cell) => cell.col + Number(cell.node.attrs.colspan ?? 1)
+      ),
+      1
+    )
+    const rowCount = tableInfo.node.childCount
+    for (const cell of allCells) {
+      const rowspan = Number(cell.node.attrs.rowspan ?? 1)
+      const colspan = Number(cell.node.attrs.colspan ?? 1)
+      const patch = cellBorderPatchForSide(
+        side,
+        spec,
+        {
+          left: cell.col,
+          right: cell.col + colspan,
+          top: cell.row,
+          bottom: cell.row + rowspan,
+        },
+        { width: colCount, height: rowCount }
+      )
+      if (!patch) continue
+      const mapped = tr.mapping.map(cell.pos)
+      const current = tr.doc.nodeAt(mapped)
+      if (!isTableCell(current)) continue
+      tr = tr.setNodeMarkup(mapped, undefined, {
+        ...current.attrs,
+        ...patch,
+      })
+    }
+    dispatch(tr)
+    return true
+  }
 }
 
 /** Merge partial attributes onto the enclosing table. */
@@ -1101,10 +1523,10 @@ export function createLinkKeymap(openLink: Command) {
 }
 
 export const tableCommands = {
-  addColumnAfter,
-  addColumnBefore,
-  addRowAfter,
-  addRowBefore,
+  addColumnAfter: withInheritedTableCellBorders(addColumnAfter),
+  addColumnBefore: withInheritedTableCellBorders(addColumnBefore),
+  addRowAfter: withInheritedTableCellBorders(addRowAfter),
+  addRowBefore: withInheritedTableCellBorders(addRowBefore),
   deleteColumn,
   deleteRow,
   deleteTable,

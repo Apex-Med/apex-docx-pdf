@@ -1,5 +1,5 @@
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state"
-import { CellSelection } from "prosemirror-tables"
+import type { CellSelection } from "prosemirror-tables"
 import { redoDepth, undoDepth } from "prosemirror-history"
 
 export type SelectionTextStyle = Readonly<{
@@ -172,14 +172,15 @@ function readSection(state: EditorState): SelectionSectionState | null {
 
 function readTable(state: EditorState): SelectionTableState {
   const sel = state.selection
-  if (sel instanceof CellSelection) {
-    const table = sel.$anchorCell.node(-1)
+  if (typeof (sel as CellSelection).forEachCell === "function") {
+    const cellSel = sel as CellSelection
+    const table = cellSel.$anchorCell.node(-1)
     return {
       inTable: true,
       rows: table.childCount,
       cols: table.firstChild?.childCount ?? 0,
-      cellFill: sel.$anchorCell.nodeAfter?.attrs.background
-        ? String(sel.$anchorCell.nodeAfter.attrs.background)
+      cellFill: cellSel.$anchorCell.nodeAfter?.attrs.background
+        ? String(cellSel.$anchorCell.nodeAfter.attrs.background)
         : null,
     }
   }

@@ -74,6 +74,8 @@ export {
   setCellVerticalAlignment,
   setCellBorder,
   setCellBorderStyle,
+  setTableBorderStyle,
+  selectedTableCellPositions,
   setTableAttrs,
   setRowAttrs,
   editorKeymap,
@@ -156,7 +158,6 @@ export {
   type EditorMountOptions,
   type EditorController,
 } from "./ui/Editor"
-export { Ribbon, type RibbonProps } from "./ui/Ribbon"
 export { MenuBar, type MenuBarProps } from "./ui/MenuBar"
 export { Toolbar, type ToolbarProps } from "./ui/Toolbar"
 export {
@@ -171,6 +172,7 @@ export type {
   EditorChromeResources,
   EditorChromeViewState,
   ParagraphAlignment,
+  ParagraphSpacingOptions,
 } from "./ui/chrome-types"
 export {
   ZOOM_PRESETS,

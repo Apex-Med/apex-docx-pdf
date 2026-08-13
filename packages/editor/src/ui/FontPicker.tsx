@@ -176,7 +176,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
     <div
       className={
         props.compact
-          ? "flex min-w-0 items-center"
+          ? "apex-editor-toolbar__font-wrap flex shrink-0 items-center overflow-hidden"
           : "flex min-w-0 flex-col gap-2"
       }
     >
@@ -185,11 +185,11 @@ export function FontPicker(props: FontPickerProps): ReactNode {
           render={
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="xs"
               className={
                 props.compact
-                  ? "apex-editor-toolbar__font h-8 w-[132px] justify-start truncate text-xs font-normal tracking-normal normal-case"
+                  ? "apex-editor-toolbar__font h-9 justify-start overflow-hidden text-sm font-normal tracking-normal normal-case"
                   : "max-w-[220px] justify-start truncate font-normal"
               }
               aria-label="Font family"
@@ -197,7 +197,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
           }
         >
           <span
-            className="truncate"
+            className="min-w-0 flex-1 truncate"
             style={{ fontFamily: `"${props.value}", system-ui, sans-serif` }}
           >
             {props.value || "Font"}

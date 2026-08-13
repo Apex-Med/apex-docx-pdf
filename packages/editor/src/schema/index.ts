@@ -1,10 +1,7 @@
 import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
 import { tableNodes } from "prosemirror-tables"
 
-import {
-  authoredColumnWidthsTwips,
-  authoredTableStyle,
-} from "./table-geometry"
+import { authoredColumnWidthsTwips, authoredTableStyle } from "./table-geometry"
 
 /**
  * ProseMirror schema isomorphic to SemanticDocument for Phase-1 authoring.
@@ -155,7 +152,7 @@ function borderCss(border: unknown, fallback: string): string {
     width?: number
   }
   if (b.style === "none") return "none"
-  const widthPt = Math.max(0.5, (Number(b.width) || 10) / 20)
+  const widthPt = (Number(b.width) || 10) / 20
   const style =
     b.style === "double"
       ? "double"
@@ -164,8 +161,14 @@ function borderCss(border: unknown, fallback: string): string {
         : b.style === "dashed"
           ? "dashed"
           : "solid"
+  const minPt =
+    style === "double"
+      ? 2.25
+      : style === "dotted" || style === "dashed"
+        ? 1
+        : 0.5
   const color = String(b.color ?? "#000000")
-  return `${widthPt}pt ${style} ${color}`
+  return `${Math.max(minPt, widthPt)}pt ${style} ${color}`
 }
 
 function cssCellVerticalAlign(value: unknown): string {

@@ -45,7 +45,6 @@ import {
   matchStyleToSelection,
   numberingDefinitionFromTransaction,
   removeLink,
-  setCellBorderStyle,
   setCellShading,
   setCellVerticalAlignment,
   setFontFamily,
@@ -59,7 +58,9 @@ import {
   setRowAttrs,
   setSectionColumns,
   setSectionPageSetup,
+  selectedTableCellPositions,
   setTableAttrs,
+  setTableBorderStyle,
   setTextColor,
   tableCommands,
   toggleBold,
@@ -190,19 +191,19 @@ function styleFromSelection(
     next: id,
     paragraph: paragraph
       ? {
-        alignment: paragraph.alignment,
-        spacingBefore: twips(paragraph.spacingBefore),
-        spacingAfter: twips(paragraph.spacingAfter),
-        lineSpacing: paragraph.lineSpacing as never,
-        indentStart: twips(paragraph.indentStart),
-        indentEnd: twips(paragraph.indentEnd),
-        firstLineIndent: twips(paragraph.firstLineIndent),
-        numbering: paragraph.numbering,
-        tabStops: paragraph.tabStops.map((stop) => ({
-          position: twips(stop.position),
-          alignment: stop.alignment,
-        })),
-      }
+          alignment: paragraph.alignment,
+          spacingBefore: twips(paragraph.spacingBefore),
+          spacingAfter: twips(paragraph.spacingAfter),
+          lineSpacing: paragraph.lineSpacing as never,
+          indentStart: twips(paragraph.indentStart),
+          indentEnd: twips(paragraph.indentEnd),
+          firstLineIndent: twips(paragraph.firstLineIndent),
+          numbering: paragraph.numbering,
+          tabStops: paragraph.tabStops.map((stop) => ({
+            position: twips(stop.position),
+            alignment: stop.alignment,
+          })),
+        }
       : null,
     text: {
       fontFamily: text.fontFamily,
@@ -412,6 +413,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const [findReplaceOpen, setFindReplaceOpen] = useState(false)
     const [lineSpacingOpen, setLineSpacingOpen] = useState(false)
     const [tablePropsOpen, setTablePropsOpen] = useState(false)
+    const lastTableCellPositionsRef = useRef<number[]>([])
+    const tablePropsCellPositionsRef = useRef<number[]>([])
     const [columnsOpen, setColumnsOpen] = useState(false)
     const [styleDialogOpen, setStyleDialogOpen] = useState(false)
     const [pageUnit, setPageUnit] = useState<PageSetupUnit>("in")
@@ -543,6 +546,10 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         dispatchTransaction(tr) {
           const next = view.state.apply(tr)
           view.updateState(next)
+          const tableCells = selectedTableCellPositions(next)
+          if (tableCells.length > 1) {
+            lastTableCellPositionsRef.current = tableCells
+          }
           const snap = getSelectionSnapshot(next)
           if (snap) setSelectionSnapshot(snap)
           if (
@@ -558,11 +565,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             const numbering = numberingDefinitionFromTransaction(tr)
             const numberingDefinitions = numbering
               ? [
-                ...current.numberingDefinitions.filter(
-                  (definition) => definition.id !== numbering.id
-                ),
-                numbering,
-              ]
+                  ...current.numberingDefinitions.filter(
+                    (definition) => definition.id !== numbering.id
+                  ),
+                  numbering,
+                ]
               : current.numberingDefinitions
             const semantic = toSemanticDocument(next.doc, {
               assets,
@@ -601,6 +608,17 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       const view = viewRef.current
       if (!view || readOnlyRef.current) return
       command(view.state, view.dispatch.bind(view))
+      const snap = getSelectionSnapshot(view.state)
+      if (snap) setSelectionSnapshot(snap)
+      view.focus()
+    }, [])
+
+    const runAll = useCallback((commands: readonly Command[]) => {
+      const view = viewRef.current
+      if (!view || readOnlyRef.current) return
+      for (const command of commands) {
+        command(view.state, view.dispatch.bind(view))
+      }
       const snap = getSelectionSnapshot(view.state)
       if (snap) setSelectionSnapshot(snap)
       view.focus()
@@ -725,30 +743,30 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const onNew = useCallback(() => {
       const metadata = documentRef.current.editorMetadata as
         | {
-          defaultPageSetup?: {
-            pageWidth: number
-            pageHeight: number
-            marginTop: number
-            marginRight: number
-            marginBottom: number
-            marginLeft: number
+            defaultPageSetup?: {
+              pageWidth: number
+              pageHeight: number
+              marginTop: number
+              marginRight: number
+              marginBottom: number
+              marginLeft: number
+            }
+            pageUnit?: PageSetupUnit
           }
-          pageUnit?: PageSetupUnit
-        }
         | undefined
       const defaults = metadata?.defaultPageSetup
       const blank = createBlankDocument(
         defaults
           ? {
-            pageWidth: defaults.pageWidth,
-            pageHeight: defaults.pageHeight,
-            margins: {
-              top: defaults.marginTop,
-              right: defaults.marginRight,
-              bottom: defaults.marginBottom,
-              left: defaults.marginLeft,
-            },
-          }
+              pageWidth: defaults.pageWidth,
+              pageHeight: defaults.pageHeight,
+              margins: {
+                top: defaults.marginTop,
+                right: defaults.marginRight,
+                bottom: defaults.marginBottom,
+                left: defaults.marginLeft,
+              },
+            }
           : undefined
       )
       loadDocument({
@@ -923,6 +941,10 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onHighlightColor: (color) => run(setHighlightColor(color)),
         onAlign: (alignment) => run(setParagraphAlignment(alignment)),
         onLineSpacing: () => setLineSpacingOpen(true),
+        onParagraphSpacing: (options) => {
+          run(setParagraphSpacing(options))
+          setStatus("Line spacing updated")
+        },
         onColumns: () => setColumnsOpen(true),
         onClearFormatting: () => run(clearFormatting()),
         onApplyStyle: applyStyleById,
@@ -965,8 +987,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             .flatMap((block) =>
               block.type === "paragraph"
                 ? block.children
-                  .filter((child) => child.type === "text")
-                  .map((child) => (child.type === "text" ? child.text : ""))
+                    .filter((child) => child.type === "text")
+                    .map((child) => (child.type === "text" ? child.text : ""))
                 : []
             )
             .join(" ")
@@ -982,7 +1004,17 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onTableDeleteColumn: () => run(tableCommands.deleteColumn),
         onTableMergeCells: () => run(tableCommands.mergeCells),
         onTableSplitCell: () => run(tableCommands.splitCell),
-        onTableProperties: () => setTablePropsOpen(true),
+        onTableProperties: () => {
+          const view = viewRef.current
+          if (view) {
+            const current = selectedTableCellPositions(view.state)
+            tablePropsCellPositionsRef.current =
+              current.length > 1
+                ? current
+                : lastTableCellPositionsRef.current
+          }
+          setTablePropsOpen(true)
+        },
         onMarginsChange: (options) => run(setSectionPageSetup(options)),
         onIndentsChange: (options) => run(setParagraphAttrs(options)),
         onTabStopsChange: (tabStops) => run(setParagraphAttrs({ tabStops })),
@@ -1167,16 +1199,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             spacingAfter: selectionSnapshot.paragraph?.spacingAfter,
             value240ths:
               selectionSnapshot.paragraph?.lineSpacing &&
-                typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
-                "value240ths" in
+              typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
+              "value240ths" in
                 (selectionSnapshot.paragraph.lineSpacing as object)
                 ? Number(
-                  (
-                    selectionSnapshot.paragraph.lineSpacing as {
-                      value240ths: number
-                    }
-                  ).value240ths
-                )
+                    (
+                      selectionSnapshot.paragraph.lineSpacing as {
+                        value240ths: number
+                      }
+                    ).value240ths
+                  )
                 : null,
           }}
           onApply={(options) => {
@@ -1216,27 +1248,34 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           open={tablePropsOpen}
           onOpenChange={setTablePropsOpen}
           onApply={(options) => {
-            run(
+            const positions = tablePropsCellPositionsRef.current
+            const captured = positions.length > 1 ? positions : undefined
+            runAll([
+              setTableBorderStyle(
+                options.applyBordersTo,
+                options.borderStyle,
+                options.borderColor,
+                options.borderWidth,
+                captured
+              ),
               setTableAttrs({
                 alignment: options.alignment,
                 columnWidths: options.columnWidths,
                 ...(options.columnWidths.length > 0
                   ? {
-                    width: options.columnWidths.reduce(
-                      (sum, value) => sum + value,
-                      0
-                    ),
-                    preferredWidth: options.columnWidths.reduce(
-                      (sum, value) => sum + value,
-                      0
-                    ),
-                  }
+                      width: options.columnWidths.reduce(
+                        (sum, value) => sum + value,
+                        0
+                      ),
+                      preferredWidth: options.columnWidths.reduce(
+                        (sum, value) => sum + value,
+                        0
+                      ),
+                    }
                   : {}),
                 cellPadding: options.cellPadding,
                 repeatHeaderRowCount: options.headerRowRepeat ? 1 : 0,
-              })
-            )
-            run(
+              }),
               setRowAttrs({
                 height:
                   options.rowHeight === null
@@ -1244,18 +1283,13 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                     : { rule: "atLeast", value: options.rowHeight },
                 allowBreakAcrossPages: options.allowBreakAcrossPages,
                 repeatAsHeader: options.headerRowRepeat,
-              })
-            )
-            run(
-              setCellBorderStyle(
-                options.applyBordersTo,
-                options.borderStyle,
-                options.borderColor,
-                options.borderWidth
-              )
-            )
-            run(setCellShading(options.cellShading))
-            run(setCellVerticalAlignment(options.cellVerticalAlignment))
+              }),
+              setCellShading(options.cellShading, captured),
+              setCellVerticalAlignment(
+                options.cellVerticalAlignment,
+                captured
+              ),
+            ])
             setStatus("Table properties applied")
           }}
         />
@@ -1413,9 +1447,9 @@ function mountEditorHeadless(
         const asset = imageAssetFromTransaction(tr)
         const assets = asset
           ? [
-            ...documentRef.current.assets.filter((a) => a.id !== asset.id),
-            asset,
-          ]
+              ...documentRef.current.assets.filter((a) => a.id !== asset.id),
+              asset,
+            ]
           : documentRef.current.assets
         const semantic = toSemanticDocument(next.doc, {
           assets,

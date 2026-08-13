@@ -3,6 +3,12 @@ import type { EditorSelectionSnapshot } from "../plugins/selection-state"
 
 export type ParagraphAlignment = "left" | "center" | "right" | "justify"
 
+export type ParagraphSpacingOptions = Readonly<{
+  spacingBefore?: number
+  spacingAfter?: number
+  lineSpacing?: Readonly<{ rule: "auto"; value240ths: number }> | null
+}>
+
 export type EditorChromeActions = Readonly<{
   onNew: () => void
   onOpenDocx: (file: File) => void
@@ -38,6 +44,7 @@ export type EditorChromeActions = Readonly<{
   onHighlightColor: (color: string) => void
   onAlign: (alignment: ParagraphAlignment) => void
   onLineSpacing: () => void
+  onParagraphSpacing: (options: ParagraphSpacingOptions) => void
   onColumns: () => void
   onClearFormatting: () => void
   onApplyStyle: (styleId: string | null) => void
@@ -123,12 +130,17 @@ export const ZOOM_PRESETS = [50, 75, 100, 125, 150, 200] as const
 export const TWIPS_PER_INCH = 1440
 
 export const FONT_SIZE_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  ["160", "8"],
   ["180", "9"],
   ["200", "10"],
   ["220", "11"],
   ["240", "12"],
   ["280", "14"],
-  ["320", "16"],
   ["360", "18"],
   ["480", "24"],
+  ["720", "36"],
+  ["960", "48"],
+  ["1200", "60"],
+  ["1440", "72"],
+  ["1920", "96"],
 ]

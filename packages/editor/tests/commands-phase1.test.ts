@@ -195,19 +195,17 @@ describe("Phase-1 commands end-to-end", () => {
     expect(p.styleId).toBe("Heading1")
   })
 
-  test("Ribbon and Editor use @workspace/ui primitives", () => {
-    const ribbon = readFileSync(
-      join(import.meta.dir, "../src/ui/Ribbon.tsx"),
+  test("Toolbar and Editor use @workspace/ui primitives", () => {
+    const toolbar = readFileSync(
+      join(import.meta.dir, "../src/ui/Toolbar.tsx"),
       "utf8"
     )
-    expect(ribbon).toContain("@workspace/ui/components/button")
-    expect(ribbon).toContain("@workspace/ui/components/select")
-    expect(ribbon).toContain("@workspace/ui/components/popover")
-    expect(ribbon).toContain("onInsertTable")
-    expect(ribbon).toContain("onInsertImage")
-    expect(ribbon).toContain("onPageSetup")
-    expect(ribbon).toContain("onMatchStyle")
-    expect(ribbon).toContain("onParagraphSpacing")
-    expect(ribbon).toContain("Style")
+    expect(toolbar).toContain("@workspace/ui/components/button")
+    expect(toolbar).toContain("@workspace/ui/components/select")
+    expect(toolbar).toContain("@workspace/ui/components/popover")
+    expect(toolbar).toContain("@workspace/ui/components/dropdown-menu")
+    expect(toolbar).toContain("onInsertImage")
+    expect(toolbar).toContain("onParagraphSpacing")
+    expect(toolbar).toContain("Normal text")
   })
 })

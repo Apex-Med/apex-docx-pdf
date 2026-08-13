@@ -237,7 +237,27 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 36px;
+}
+
+.apex-editor-toolbar__sep {
+  flex-shrink: 0;
+  align-self: center;
+  height: 24px;
+  margin-inline: 2px;
+}
+
+.apex-editor-toolbar__font-wrap,
+.apex-editor-toolbar__font {
+  width: 11rem;
+  min-width: 11rem;
+  max-width: 11rem;
+}
+
+.apex-editor-toolbar__font-size-input {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  max-width: 2.75rem;
 }
 
 .apex-editor-toolbar__more {
@@ -789,43 +809,6 @@
   to {
     visibility: hidden;
   }
-}
-
-/* ── Ribbon (chrome — theme adaptive) ── */
-.apex-editor-ribbon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  border-bottom: 1px solid var(--apex-chrome-border);
-  background: var(--apex-chrome-bg);
-  color: var(--apex-chrome-fg);
-  padding: 8px 12px;
-  flex-shrink: 0;
-}
-
-.apex-editor-ribbon__group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  flex-shrink: 0;
-}
-
-.apex-editor-ribbon__select {
-  min-width: 120px;
-  width: 140px;
-}
-
-.apex-editor-ribbon__select--size {
-  min-width: 72px;
-  width: 88px;
-}
-
-.apex-editor-ribbon__select--style {
-  min-width: 120px;
-  width: 130px;
 }
 
 /* ── Table context menu (chrome) ── */

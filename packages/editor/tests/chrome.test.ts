@@ -94,6 +94,7 @@ const noopActions: EditorChromeActions = {
   onHighlightColor: () => undefined,
   onAlign: () => undefined,
   onLineSpacing: () => undefined,
+  onParagraphSpacing: () => undefined,
   onColumns: () => undefined,
   onClearFormatting: () => undefined,
   onApplyStyle: () => undefined,
@@ -142,6 +143,13 @@ describe("editor chrome components", () => {
     expect(source).toContain("snapshot: EditorSelectionSnapshot")
     expect(source).toContain("clearFormatting")
     expect(source).toContain("onClearFormatting")
+    expect(source).toContain("onParagraphSpacing")
+    expect(source).toContain("variant=\"ghost\"")
+    expect(source).toContain("DropdownMenu")
+    expect(source).toContain("ParagraphSpacingIcon")
+    expect(source).toContain("apex-editor-toolbar__sep")
+    expect(source).toContain("canUndo")
+    expect(source).not.toContain("ToggleGroup")
     // Ensure the mock shape stays aligned with chrome actions.
     expect(Object.keys(noopActions).length).toBeGreaterThan(20)
     expect(snapshot.revision).toBe(0)
@@ -156,6 +164,9 @@ describe("editor chrome components", () => {
     expect(raw).toContain("apex-editor-chrome")
     expect(raw).toContain("apex-editor-ruler")
     expect(raw).toContain("apex-editor-ruler__tab-add")
+    expect(raw).toContain("apex-editor-toolbar__font")
+    expect(raw).toContain("min-width: 11rem")
+    expect(raw).toContain("apex-editor-toolbar__font-size-input")
     expect(EDITOR_CSS).toContain("flex-shrink: 0")
     // Manual page-break atom is a zero-size marker; spacers paint the sheet.
     expect(raw).toContain("apex-manual-page-break")
@@ -167,10 +178,17 @@ describe("editor chrome components", () => {
     const source = readFileSync(toolbarPath, "utf8")
     expect(source).toContain("Columns = hue families")
     expect(source).toContain("gridTemplateColumns")
-    expect(source).toContain("flex flex-col gap-1")
+    expect(source).toContain("gridAutoFlow")
+    expect(source).toContain("size-7")
+    expect(source).toContain("grid w-fit gap-1")
     // Overflow should not recompute on every selection revision (layout shift).
     expect(source).not.toContain("snapshot.revision, zoom")
-    expect(source).toContain("h-10 min-h-10")
+    expect(source).toContain("h-12 min-h-12")
+    expect(source).toContain("variant=\"ghost\"")
+    expect(source).toContain("FONT_SIZE_OPTIONS")
+    expect(source).toContain("FontSizeControl")
+    expect(source).toContain('event.key !== "Enter"')
+    expect(source).toContain("apex-editor-toolbar__font-size-input")
   })
 
   test("authored table grids are not overridden by browser cell minimums", () => {
@@ -247,6 +265,10 @@ describe("editor chrome components", () => {
     expect(menu).toContain("Update current style to match")
     expect(menu).toContain("Dark pages")
     expect(menu).toContain("onToggleDarkPages")
+    expect(menu).toContain("Align &amp; indent")
+    expect(menu).toContain("Bullets &amp; numbering")
+    expect(menu).toContain("PDF Document (.pdf)")
+    expect(menu).not.toContain("Download as PDF")
   })
 
   test("file menu actions use native labels instead of cancelled nested clicks", () => {

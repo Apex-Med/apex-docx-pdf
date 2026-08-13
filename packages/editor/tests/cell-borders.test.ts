@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import { createBlankDocument } from "@apexmed/core"
 import { TextSelection } from "prosemirror-state"
+import { CellSelection } from "prosemirror-tables"
 
 import {
   applyCommandToSemantic,
   createEditorStateFromDocument,
   insertTable,
+  selectedTableCellPositions,
   setCellBorderStyle,
   setCellShading,
+  setTableBorderStyle,
   toSemanticDocument,
 } from "../src/index"
 
@@ -26,6 +29,34 @@ function placeInFirstCell(
   if (cellPos === null) throw new Error("no cell")
   return state.apply(
     state.tr.setSelection(TextSelection.create(state.doc, cellPos + 1))
+  )
+}
+
+function cellPositions(
+  state: ReturnType<typeof createEditorStateFromDocument>
+): number[] {
+  const positions: number[] = []
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === "table_cell" || node.type.name === "table_header") {
+      positions.push(pos)
+    }
+  })
+  return positions
+}
+
+function selectCellRange(
+  state: ReturnType<typeof createEditorStateFromDocument>,
+  fromIndex: number,
+  toIndex: number
+) {
+  const positions = cellPositions(state)
+  const from = positions[fromIndex]
+  const to = positions[toIndex]
+  if (from === undefined || to === undefined) {
+    throw new Error("missing cells")
+  }
+  return state.apply(
+    state.tr.setSelection(CellSelection.create(state.doc, from, to))
   )
 }
 
@@ -200,6 +231,18 @@ describe("individual cell borders", () => {
                   insideHorizontal: tableBorder,
                   insideVertical: tableBorder,
                 },
+                rows: block.rows.map((row) => ({
+                  ...row,
+                  cells: row.cells.map((cell) => ({
+                    ...cell,
+                    borders: {
+                      top: null,
+                      right: null,
+                      bottom: null,
+                      left: null,
+                    },
+                  })),
+                })),
               }
             : block
         ),
@@ -230,5 +273,184 @@ describe("individual cell borders", () => {
     state = placeInFirstCell(state)
     const shaded = applyCommandToSemantic(state, setCellShading("#fde68a"))
     expect(shaded.applied).toBe(true)
+  })
+
+  test("insertTable paints a default grid on cells and table borders", () => {
+    const state = createEditorStateFromDocument(createBlankDocument())
+    const inserted = applyCommandToSemantic(state, insertTable(2, 2))
+    expect(inserted.applied).toBe(true)
+
+    let cellCount = 0
+    inserted.state.doc.descendants((node) => {
+      if (node.type.name !== "table_cell") return
+      cellCount += 1
+      expect(node.attrs.borderTop).toMatchObject({
+        style: "single",
+        color: "#000000",
+        width: 15,
+      })
+      expect(node.attrs.borderRight).toMatchObject({ style: "single" })
+      const serialized = JSON.stringify(node.type.spec.toDOM?.(node))
+      expect(serialized).toContain("border-top:")
+      expect(serialized).toContain("solid")
+      expect(serialized).not.toContain("border-top:none")
+    })
+    expect(cellCount).toBe(4)
+
+    const semantic = toSemanticDocument(inserted.state.doc)
+    const table = semantic.sections[0]?.blocks.find(
+      (block) => block.type === "table"
+    )
+    expect(table?.type).toBe("table")
+    if (table?.type !== "table") return
+    expect(table.borders.top).toMatchObject({
+      style: "single",
+      color: "#000000",
+    })
+    expect(table.borders.insideVertical).toMatchObject({ style: "single" })
+  })
+
+  test("setTableBorderStyle applies to every cell and table-level edges", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+    state = placeInFirstCell(state)
+
+    const dashed = applyCommandToSemantic(
+      state,
+      setTableBorderStyle("all", "dashed", "#336699", 20)
+    )
+    expect(dashed.applied).toBe(true)
+
+    let cellCount = 0
+    dashed.state.doc.descendants((node) => {
+      if (node.type.name === "table") {
+        expect(node.attrs.borders).toMatchObject({
+          top: { style: "dashed", color: "#336699" },
+          insideHorizontal: { style: "dashed" },
+          insideVertical: { style: "dashed" },
+        })
+      }
+      if (node.type.name !== "table_cell") return
+      cellCount += 1
+      expect(node.attrs.borderTop).toMatchObject({
+        style: "dashed",
+        color: "#336699",
+        width: 20,
+      })
+      expect(node.attrs.borderLeft).toMatchObject({ style: "dashed" })
+      expect(JSON.stringify(node.type.spec.toDOM?.(node))).toContain("dashed")
+    })
+    expect(cellCount).toBe(4)
+
+    state = placeInFirstCell(dashed.state)
+    const cleared = applyCommandToSemantic(
+      state,
+      setTableBorderStyle("all", "none")
+    )
+    expect(cleared.applied).toBe(true)
+    cleared.state.doc.descendants((node) => {
+      if (node.type.name === "table") {
+        expect(node.attrs.borders).toMatchObject({
+          top: null,
+          insideHorizontal: null,
+          insideVertical: null,
+        })
+      }
+      if (node.type.name === "table_cell") {
+        expect(node.attrs.borderTop).toBeNull()
+        expect(node.attrs.borderRight).toBeNull()
+      }
+    })
+  })
+
+  test("setCellBorderStyle applies to every cell in a CellSelection", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+    state = selectCellRange(state, 0, 3)
+
+    const dashed = applyCommandToSemantic(
+      state,
+      setCellBorderStyle("all", "dashed", "#003366", 20)
+    )
+    expect(dashed.applied).toBe(true)
+
+    const styles: unknown[] = []
+    dashed.state.doc.descendants((node) => {
+      if (node.type.name === "table_cell") {
+        styles.push(node.attrs.borderTop)
+        expect(node.attrs.borderTop).toMatchObject({
+          style: "dashed",
+          color: "#003366",
+          width: 20,
+        })
+        expect(node.attrs.borderLeft).toMatchObject({ style: "dashed" })
+      }
+    })
+    expect(styles).toHaveLength(4)
+  })
+
+  test("setTableBorderStyle with a partial CellSelection only changes those cells", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+    state = selectCellRange(state, 0, 1)
+
+    const dotted = applyCommandToSemantic(
+      state,
+      setTableBorderStyle("all", "dotted", "#990000", 18)
+    )
+    expect(dotted.applied).toBe(true)
+
+    const styles: unknown[] = []
+    dotted.state.doc.descendants((node) => {
+      if (node.type.name === "table_cell") {
+        styles.push(node.attrs.borderTop?.style)
+      }
+    })
+    expect(styles).toEqual(["dotted", "dotted", "single", "single"])
+  })
+
+  test("setTableBorderStyle uses captured cell positions after the selection collapses", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+    state = selectCellRange(state, 0, 3)
+    const positions = selectedTableCellPositions(state)
+    expect(positions).toHaveLength(4)
+
+    state = placeInFirstCell(state)
+    const dashed = applyCommandToSemantic(
+      state,
+      setTableBorderStyle("all", "dashed", "#003366", 20, positions)
+    )
+    expect(dashed.applied).toBe(true)
+
+    const styles: unknown[] = []
+    dashed.state.doc.descendants((node) => {
+      if (node.type.name === "table_cell") {
+        styles.push(node.attrs.borderTop?.style)
+      }
+    })
+    expect(styles).toEqual(["dashed", "dashed", "dashed", "dashed"])
+  })
+
+  test("setCellBorderStyle applies via selection.ranges on a CellSelection", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+    state = selectCellRange(state, 0, 3)
+    expect(state.selection.ranges.length).toBe(4)
+    expect(selectedTableCellPositions(state)).toHaveLength(4)
+
+    const dotted = applyCommandToSemantic(
+      state,
+      setCellBorderStyle("all", "dotted", "#111111", 18)
+    )
+    expect(dotted.applied).toBe(true)
+
+    const styles: unknown[] = []
+    dotted.state.doc.descendants((node) => {
+      if (node.type.name === "table_cell") {
+        styles.push(node.attrs.borderTop?.style)
+      }
+    })
+    expect(styles).toEqual(["dotted", "dotted", "dotted", "dotted"])
   })
 })

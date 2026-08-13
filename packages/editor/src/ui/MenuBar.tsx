@@ -45,9 +45,9 @@ export function MenuBar({
 
   return (
     <>
-      <Menubar className="apex-editor-menubar h-8 border-0 border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-2">
+      <Menubar className="apex-editor-menubar h-9 border-0 border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-2">
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             File
           </MenubarTrigger>
           <MenubarContent>
@@ -63,20 +63,25 @@ export function MenuBar({
               Save
               <MenubarShortcut>⌘S</MenubarShortcut>
             </MenubarItem>
-            <MenubarItem onClick={actions.onExportPdf}>
-              Download as PDF
-            </MenubarItem>
+            <MenubarSub>
+              <MenubarSubTrigger>Download</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem onClick={actions.onExportPdf}>
+                  PDF Document (.pdf)
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+            <MenubarSeparator />
+            <MenubarItem onClick={actions.onPageSetup}>Page setup…</MenubarItem>
             <MenubarItem onClick={actions.onPrint}>
               Print
               <MenubarShortcut>⌘P</MenubarShortcut>
             </MenubarItem>
-            <MenubarSeparator />
-            <MenubarItem onClick={actions.onPageSetup}>Page setup…</MenubarItem>
           </MenubarContent>
         </MenubarMenu>
 
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             Edit
           </MenubarTrigger>
           <MenubarContent>
@@ -114,7 +119,7 @@ export function MenuBar({
         </MenubarMenu>
 
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             View
           </MenubarTrigger>
           <MenubarContent>
@@ -167,7 +172,7 @@ export function MenuBar({
         </MenubarMenu>
 
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             Insert
           </MenubarTrigger>
           <MenubarContent>
@@ -184,41 +189,47 @@ export function MenuBar({
                 <TableGridPicker onInsert={actions.onInsertTable} />
               </MenubarSubContent>
             </MenubarSub>
-            <MenubarItem onClick={actions.onInsertPageBreak}>
-              Page break
-              <MenubarShortcut>⌘↵</MenubarShortcut>
-            </MenubarItem>
+            <MenubarSub>
+              <MenubarSubTrigger>Break</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem onClick={actions.onInsertPageBreak}>
+                  Page break
+                  <MenubarShortcut>⌘↵</MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem onClick={actions.onInsertColumnBreak}>
+                  Column break
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
             <MenubarItem onClick={actions.onInsertLink}>Link…</MenubarItem>
-            <MenubarItem onClick={actions.onInsertColumnBreak}>
-              Column break
-            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
 
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             Format
           </MenubarTrigger>
           <MenubarContent>
-            <MenubarItem onClick={actions.onBold}>
-              Bold
-              <MenubarShortcut>⌘B</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem onClick={actions.onItalic}>
-              Italic
-              <MenubarShortcut>⌘I</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem onClick={actions.onUnderline}>
-              Underline
-              <MenubarShortcut>⌘U</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem onClick={actions.onStrikethrough}>
-              Strikethrough
-              <MenubarShortcut>⌘⇧X</MenubarShortcut>
-            </MenubarItem>
             <MenubarSub>
               <MenubarSubTrigger>Text</MenubarSubTrigger>
               <MenubarSubContent>
+                <MenubarItem onClick={actions.onBold}>
+                  Bold
+                  <MenubarShortcut>⌘B</MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem onClick={actions.onItalic}>
+                  Italic
+                  <MenubarShortcut>⌘I</MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem onClick={actions.onUnderline}>
+                  Underline
+                  <MenubarShortcut>⌘U</MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem onClick={actions.onStrikethrough}>
+                  Strikethrough
+                  <MenubarShortcut>⌘⇧X</MenubarShortcut>
+                </MenubarItem>
+                <MenubarSeparator />
                 <MenubarItem
                   onClick={() => actions.onVerticalAlignment("superscript")}
                 >
@@ -236,39 +247,6 @@ export function MenuBar({
                 </MenubarItem>
               </MenubarSubContent>
             </MenubarSub>
-            <MenubarSeparator />
-            <MenubarItem onClick={() => actions.onTextColor("#000000")}>
-              Text color…
-            </MenubarItem>
-            <MenubarItem onClick={() => actions.onHighlightColor("#ffff00")}>
-              Highlight color…
-            </MenubarItem>
-            <MenubarSeparator />
-            <MenubarSub>
-              <MenubarSubTrigger>Align</MenubarSubTrigger>
-              <MenubarSubContent>
-                <MenubarItem onClick={() => actions.onAlign("left")}>
-                  Left
-                </MenubarItem>
-                <MenubarItem onClick={() => actions.onAlign("center")}>
-                  Center
-                </MenubarItem>
-                <MenubarItem onClick={() => actions.onAlign("right")}>
-                  Right
-                </MenubarItem>
-                <MenubarItem onClick={() => actions.onAlign("justify")}>
-                  Justify
-                </MenubarItem>
-              </MenubarSubContent>
-            </MenubarSub>
-            <MenubarItem onClick={actions.onLineSpacing}>
-              Line &amp; paragraph spacing
-            </MenubarItem>
-            <MenubarItem onClick={actions.onColumns}>Columns…</MenubarItem>
-            <MenubarItem onClick={actions.onClearFormatting}>
-              Clear formatting
-            </MenubarItem>
-            <MenubarSeparator />
             <MenubarSub>
               <MenubarSubTrigger>Paragraph styles</MenubarSubTrigger>
               <MenubarSubContent>
@@ -277,7 +255,7 @@ export function MenuBar({
                     key={style.id}
                     onClick={() => actions.onApplyStyle(style.id)}
                   >
-                    {style.name}
+                    {style.name === "Normal" ? "Normal text" : style.name}
                   </MenubarItem>
                 ))}
                 <MenubarSeparator />
@@ -295,11 +273,117 @@ export function MenuBar({
                 </MenubarItem>
               </MenubarSubContent>
             </MenubarSub>
+            <MenubarSub>
+              <MenubarSubTrigger>Align &amp; indent</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem onClick={() => actions.onAlign("left")}>
+                  Left
+                </MenubarItem>
+                <MenubarItem onClick={() => actions.onAlign("center")}>
+                  Center
+                </MenubarItem>
+                <MenubarItem onClick={() => actions.onAlign("right")}>
+                  Right
+                </MenubarItem>
+                <MenubarItem onClick={() => actions.onAlign("justify")}>
+                  Justify
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem onClick={actions.onIndentDecrease}>
+                  Decrease indent
+                </MenubarItem>
+                <MenubarItem onClick={actions.onIndentIncrease}>
+                  Increase indent
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+            <MenubarItem onClick={actions.onLineSpacing}>
+              Line &amp; paragraph spacing
+            </MenubarItem>
+            <MenubarItem onClick={actions.onColumns}>Columns…</MenubarItem>
+            <MenubarSub>
+              <MenubarSubTrigger>Bullets &amp; numbering</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem onClick={actions.onBulletList}>
+                  Bulleted list
+                </MenubarItem>
+                <MenubarItem onClick={actions.onNumberedList}>
+                  Numbered list
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+            <MenubarItem onClick={actions.onClearFormatting}>
+              Clear formatting
+            </MenubarItem>
+            <MenubarSeparator />
+            <MenubarSub>
+              <MenubarSubTrigger>Table</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableAddRowBefore}
+                >
+                  Insert row above
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableAddRowAfter}
+                >
+                  Insert row below
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableAddColumnBefore}
+                >
+                  Insert column left
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableAddColumnAfter}
+                >
+                  Insert column right
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem disabled={!inTable} onClick={actions.onTableDeleteRow}>
+                  Delete row
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableDeleteColumn}
+                >
+                  Delete column
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableMergeCells}
+                >
+                  Merge cells
+                </MenubarItem>
+                <MenubarItem disabled={!inTable} onClick={actions.onTableSplitCell}>
+                  Split cell
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableProperties}
+                >
+                  Table properties…
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+            <MenubarSeparator />
+            <MenubarItem onClick={() => actions.onTextColor("#000000")}>
+              Text color…
+            </MenubarItem>
+            <MenubarItem onClick={() => actions.onHighlightColor("#ffff00")}>
+              Highlight color…
+            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
 
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             Tools
           </MenubarTrigger>
           <MenubarContent>
@@ -309,70 +393,7 @@ export function MenuBar({
         </MenubarMenu>
 
         <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
-            Table
-          </MenubarTrigger>
-          <MenubarContent>
-            <MenubarItem onClick={() => actions.onInsertTable(2, 2)}>
-              Insert table
-            </MenubarItem>
-            <MenubarSeparator />
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableAddRowBefore}
-            >
-              Insert row above
-            </MenubarItem>
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableAddRowAfter}
-            >
-              Insert row below
-            </MenubarItem>
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableAddColumnBefore}
-            >
-              Insert column left
-            </MenubarItem>
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableAddColumnAfter}
-            >
-              Insert column right
-            </MenubarItem>
-            <MenubarSeparator />
-            <MenubarItem disabled={!inTable} onClick={actions.onTableDeleteRow}>
-              Delete row
-            </MenubarItem>
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableDeleteColumn}
-            >
-              Delete column
-            </MenubarItem>
-            <MenubarSeparator />
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableMergeCells}
-            >
-              Merge cells
-            </MenubarItem>
-            <MenubarItem disabled={!inTable} onClick={actions.onTableSplitCell}>
-              Split cell
-            </MenubarItem>
-            <MenubarSeparator />
-            <MenubarItem
-              disabled={!inTable}
-              onClick={actions.onTableProperties}
-            >
-              Table properties…
-            </MenubarItem>
-          </MenubarContent>
-        </MenubarMenu>
-
-        <MenubarMenu>
-          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[13px] font-normal tracking-normal normal-case">
+          <MenubarTrigger className="apex-editor-menubar__trigger px-2.5 py-1 text-[14px] font-normal tracking-normal normal-case">
             Help
           </MenubarTrigger>
           <MenubarContent>
@@ -450,8 +471,8 @@ function TableGridPicker({
               render={<button type="button" />}
               aria-label={`${rows} rows by ${columns} columns`}
               className={`size-5 min-h-5 rounded-sm border p-0 ${active
-                  ? "border-primary bg-primary/20"
-                  : "border-border bg-background"
+                ? "border-primary bg-primary/20"
+                : "border-border bg-background"
                 } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring`}
               onPointerEnter={() => setHovered({ rows, columns })}
               onFocus={() => setHovered({ rows, columns })}

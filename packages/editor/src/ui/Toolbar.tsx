@@ -11,6 +11,7 @@ import {
   MinusSignIcon,
   MoreHorizontalIcon,
   PaintBrush01Icon,
+  ParagraphSpacingIcon,
   PlusSignIcon,
   PrinterIcon,
   Redo02Icon,
@@ -25,6 +26,16 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Button } from "@workspace/ui/components/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
@@ -35,15 +46,13 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
+import { Separator } from "@workspace/ui/components/separator"
 import { Toggle } from "@workspace/ui/components/toggle"
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@workspace/ui/components/toggle-group"
 import {
   Tooltip,
   TooltipContent,
@@ -52,6 +61,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -62,9 +72,10 @@ import {
 import type { CustomPalette, FontIndex, GoogleFontCatalog } from "../fonts"
 import { GOOGLE_FONT_CATALOG_FALLBACK } from "../fonts"
 import type { EditorSelectionSnapshot } from "../plugins/selection-state"
-import type { EditorChromeActions } from "./chrome-types"
-import { ZOOM_PRESETS } from "./chrome-types"
+import type { EditorChromeActions, ParagraphAlignment } from "./chrome-types"
+import { FONT_SIZE_OPTIONS, ZOOM_PRESETS } from "./chrome-types"
 import { FontPicker } from "./FontPicker"
+import { LINE_SPACING_PRESETS } from "./LineSpacingDialog"
 
 export type ToolbarProps = Readonly<{
   actions: EditorChromeActions
@@ -85,22 +96,38 @@ const FALLBACK_FONT_CATALOG: GoogleFontCatalog = Object.freeze({
   source: "fallback",
 })
 
+const SPACE_BEFORE_AFTER_TWIPS = 200
+
+const ALIGN_ICONS = {
+  left: AlignLeftIcon,
+  center: TextAlignCenterIcon,
+  right: TextAlignRightIcon,
+  justify: TextAlignJustifyCenterIcon,
+} as const
+
 type ToolbarItemId =
   | "undo"
   | "redo"
   | "print"
   | "paintFormat"
+  | "sep-undo"
   | "zoom"
+  | "sep-zoom"
   | "styles"
+  | "sep-styles"
   | "fontFamily"
+  | "sep-font"
   | "fontSize"
+  | "sep-size"
   | "bold"
   | "italic"
   | "underline"
   | "textColor"
   | "highlight"
+  | "sep-marks"
   | "link"
   | "image"
+  | "sep-insert"
   | "align"
   | "lineSpacing"
   | "bulletList"
@@ -114,17 +141,24 @@ const TOOLBAR_ORDER: readonly ToolbarItemId[] = [
   "redo",
   "print",
   "paintFormat",
+  "sep-undo",
   "zoom",
+  "sep-zoom",
   "styles",
+  "sep-styles",
   "fontFamily",
+  "sep-font",
   "fontSize",
+  "sep-size",
   "bold",
   "italic",
   "underline",
   "textColor",
   "highlight",
+  "sep-marks",
   "link",
   "image",
+  "sep-insert",
   "align",
   "lineSpacing",
   "bulletList",
@@ -134,12 +168,116 @@ const TOOLBAR_ORDER: readonly ToolbarItemId[] = [
   "clearFormatting",
 ]
 
+function isSeparator(id: ToolbarItemId): boolean {
+  return id.startsWith("sep-")
+}
+
 function twipsToPoints(twips: number): number {
   return Math.round(twips / 20)
 }
 
 function pointsToTwips(points: number): number {
   return Math.max(40, Math.round(points * 20))
+}
+
+function styleDisplayName(name: string): string {
+  return name === "Normal" ? "Normal text" : name
+}
+
+function lineSpacingValue240ths(lineSpacing: unknown): number | null {
+  if (
+    lineSpacing &&
+    typeof lineSpacing === "object" &&
+    "value240ths" in lineSpacing &&
+    typeof (lineSpacing as { value240ths: unknown }).value240ths === "number"
+  ) {
+    return (lineSpacing as { value240ths: number }).value240ths
+  }
+  return null
+}
+
+function matchLineSpacingPresetId(value240ths: number | null): string {
+  if (value240ths == null) return "single"
+  const preset = LINE_SPACING_PRESETS.find(
+    (entry) => entry.value240ths === value240ths
+  )
+  return preset?.id ?? ""
+}
+
+function FontSizeControl({
+  fontSizeTwips,
+  onFontSize,
+}: {
+  fontSizeTwips: number
+  onFontSize: (twips: number) => void
+}): ReactNode {
+  const listId = useId()
+  const points = twipsToPoints(fontSizeTwips)
+  const [draft, setDraft] = useState(String(points))
+  const focusedRef = useRef(false)
+
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(String(points))
+  }, [points])
+
+  const commit = () => {
+    const next = Number(draft)
+    if (!Number.isFinite(next) || next <= 0) {
+      setDraft(String(points))
+      return
+    }
+    onFontSize(pointsToTwips(next))
+    setDraft(String(twipsToPoints(pointsToTwips(next))))
+  }
+
+  return (
+    <div className="apex-editor-toolbar__font-size flex shrink-0 items-center gap-0.5">
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Decrease font size"
+        onClick={() => onFontSize(pointsToTwips(points - 1))}
+      >
+        <HugeiconsIcon icon={MinusSignIcon} strokeWidth={2} />
+      </Button>
+      <Input
+        list={listId}
+        inputMode="decimal"
+        aria-label="Font size"
+        value={draft}
+        onFocus={() => {
+          focusedRef.current = true
+        }}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          focusedRef.current = false
+          commit()
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return
+          event.preventDefault()
+          commit()
+          event.currentTarget.blur()
+        }}
+        className="apex-editor-toolbar__font-size-input h-9 px-1 text-center text-sm font-normal tracking-normal normal-case tabular-nums"
+      />
+      <datalist id={listId}>
+        {FONT_SIZE_OPTIONS.map(([twips, pt]) => (
+          <option key={twips} value={pt} />
+        ))}
+      </datalist>
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Increase font size"
+        onClick={() => onFontSize(pointsToTwips(points + 1))}
+      >
+        <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
+      </Button>
+    </div>
+  )
 }
 
 function ToolbarIconButton({
@@ -155,23 +293,35 @@ function ToolbarIconButton({
   pressed?: boolean
   disabled?: boolean
 }): ReactNode {
+  const trigger =
+    pressed === undefined ? (
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={onClick}
+        className="apex-editor-toolbar__icon-btn"
+      />
+    ) : (
+      <Toggle
+        type="button"
+        size="sm"
+        variant="default"
+        aria-label={label}
+        title={label}
+        pressed={pressed}
+        disabled={disabled}
+        onClick={onClick}
+        className="apex-editor-toolbar__icon-btn size-9 min-w-9 px-0"
+      />
+    )
+
   return (
     <Tooltip>
-      <TooltipTrigger
-        render={
-          <Toggle
-            type="button"
-            size="sm"
-            variant="outline"
-            aria-label={label}
-            title={label}
-            pressed={pressed}
-            disabled={disabled}
-            onClick={onClick}
-            className="apex-editor-toolbar__icon-btn size-8 min-w-8 px-0"
-          />
-        }
-      >
+      <TooltipTrigger render={trigger}>
         <HugeiconsIcon icon={icon} strokeWidth={2} />
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
@@ -259,10 +409,28 @@ export function Toolbar({
   const alignment = snapshot.paragraph?.alignment ?? "left"
   const fontSizeTwips = snapshot.textStyle.fontSize
   const styleId = snapshot.paragraph?.styleId ?? snapshot.textStyle.styleId
-
+  const spacingBefore = snapshot.paragraph?.spacingBefore ?? 0
+  const spacingAfter = snapshot.paragraph?.spacingAfter ?? 0
+  const lineSpacingPreset = matchLineSpacingPresetId(
+    lineSpacingValue240ths(snapshot.paragraph?.lineSpacing)
+  )
   const renderItem = useCallback(
     (id: ToolbarItemId, inOverflow = false): ReactNode => {
       const key = inOverflow ? `overflow-${id}` : id
+      if (isSeparator(id)) {
+        return (
+          <div
+            key={key}
+            data-toolbar-id={id}
+            className="apex-editor-toolbar__item"
+          >
+            <Separator
+              orientation="vertical"
+              className="apex-editor-toolbar__sep"
+            />
+          </div>
+        )
+      }
       switch (id) {
         case "undo":
           return (
@@ -274,6 +442,7 @@ export function Toolbar({
               <ToolbarIconButton
                 label="Undo"
                 icon={Undo02Icon}
+                disabled={!snapshot.canUndo}
                 onClick={actions.onUndo}
               />
             </div>
@@ -288,6 +457,7 @@ export function Toolbar({
               <ToolbarIconButton
                 label="Redo"
                 icon={Redo02Icon}
+                disabled={!snapshot.canRedo}
                 onClick={actions.onRedo}
               />
             </div>
@@ -335,17 +505,19 @@ export function Toolbar({
               >
                 <SelectTrigger
                   size="sm"
-                  className="apex-editor-toolbar__zoom h-8 w-[72px] text-xs font-normal tracking-normal normal-case"
+                  className="apex-editor-toolbar__zoom h-9 w-[4.75rem] text-sm font-normal tracking-normal normal-case"
                   aria-label="Zoom"
                 >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ZOOM_PRESETS.map((preset) => (
-                    <SelectItem key={preset} value={String(preset)}>
-                      {preset}%
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    {ZOOM_PRESETS.map((preset) => (
+                      <SelectItem key={preset} value={String(preset)}>
+                        {preset}%
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
@@ -366,18 +538,20 @@ export function Toolbar({
               >
                 <SelectTrigger
                   size="sm"
-                  className="apex-editor-toolbar__style h-8 w-[120px] text-xs font-normal tracking-normal normal-case"
+                  className="apex-editor-toolbar__style h-9 w-[9.5rem] text-sm font-normal tracking-normal normal-case"
                   aria-label="Paragraph style"
                 >
-                  <SelectValue placeholder="Style" />
+                  <SelectValue placeholder="Normal text" />
                 </SelectTrigger>
                 <SelectContent>
-                  {styleNames.map((style) => (
-                    <SelectItem key={style.id} value={style.id}>
-                      {style.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="__none__">Clear style</SelectItem>
+                  <SelectGroup>
+                    {styleNames.map((style) => (
+                      <SelectItem key={style.id} value={style.id}>
+                        {styleDisplayName(style.name)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__none__">Clear style</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
@@ -405,45 +579,12 @@ export function Toolbar({
             <div
               key={key}
               data-toolbar-id={id}
-              className="apex-editor-toolbar__item apex-editor-toolbar__font-size flex items-center gap-0.5"
+              className="apex-editor-toolbar__item"
             >
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="outline"
-                aria-label="Decrease font size"
-                onClick={() =>
-                  actions.onFontSize(
-                    pointsToTwips(twipsToPoints(fontSizeTwips) - 1)
-                  )
-                }
-              >
-                <HugeiconsIcon icon={MinusSignIcon} strokeWidth={2} />
-              </Button>
-              <Input
-                className="h-8 w-10 px-1 text-center text-xs"
-                aria-label="Font size"
-                value={String(twipsToPoints(fontSizeTwips))}
-                onChange={(event) => {
-                  const next = Number(event.target.value)
-                  if (!Number.isNaN(next) && next > 0) {
-                    actions.onFontSize(pointsToTwips(next))
-                  }
-                }}
+              <FontSizeControl
+                fontSizeTwips={fontSizeTwips}
+                onFontSize={actions.onFontSize}
               />
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="outline"
-                aria-label="Increase font size"
-                onClick={() =>
-                  actions.onFontSize(
-                    pointsToTwips(twipsToPoints(fontSizeTwips) + 1)
-                  )
-                }
-              >
-                <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
-              </Button>
             </div>
           )
         case "bold":
@@ -503,8 +644,8 @@ export function Toolbar({
                   render={
                     <Button
                       type="button"
-                      size="icon-xs"
-                      variant="outline"
+                      size="icon-sm"
+                      variant="ghost"
                       aria-label="Text color"
                       className="apex-editor-toolbar__color-btn"
                     />
@@ -539,8 +680,8 @@ export function Toolbar({
                   render={
                     <Button
                       type="button"
-                      size="icon-xs"
-                      variant="outline"
+                      size="icon-sm"
+                      variant="ghost"
                       aria-label="Highlight color"
                       className="apex-editor-toolbar__color-btn"
                     />
@@ -597,39 +738,61 @@ export function Toolbar({
               data-toolbar-id={id}
               className="apex-editor-toolbar__item"
             >
-              <ToggleGroup
-                variant="outline"
-                size="sm"
-                value={[alignment]}
-                onValueChange={(value) => {
-                  const next = Array.isArray(value) ? value[0] : value
-                  if (
-                    next === "left" ||
-                    next === "center" ||
-                    next === "right" ||
-                    next === "justify"
-                  ) {
-                    actions.onAlign(next)
-                  }
-                }}
-                className="apex-editor-toolbar__align"
-              >
-                <ToggleGroupItem value="left" aria-label="Align left">
-                  <HugeiconsIcon icon={AlignLeftIcon} strokeWidth={2} />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="center" aria-label="Align center">
-                  <HugeiconsIcon icon={TextAlignCenterIcon} strokeWidth={2} />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="right" aria-label="Align right">
-                  <HugeiconsIcon icon={TextAlignRightIcon} strokeWidth={2} />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="justify" aria-label="Justify">
-                  <HugeiconsIcon
-                    icon={TextAlignJustifyCenterIcon}
-                    strokeWidth={2}
-                  />
-                </ToggleGroupItem>
-              </ToggleGroup>
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="Align"
+                            className="apex-editor-toolbar__icon-btn"
+                          />
+                        }
+                      />
+                    }
+                  >
+                    <HugeiconsIcon
+                      icon={ALIGN_ICONS[alignment]}
+                      strokeWidth={2}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Align</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" className="min-w-40">
+                  <DropdownMenuRadioGroup
+                    value={alignment}
+                    onValueChange={(value) => {
+                      if (
+                        value === "left" ||
+                        value === "center" ||
+                        value === "right" ||
+                        value === "justify"
+                      ) {
+                        actions.onAlign(value satisfies ParagraphAlignment)
+                      }
+                    }}
+                  >
+                    <DropdownMenuGroup>
+                      <DropdownMenuRadioItem value="left">
+                        Left
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="center">
+                        Center
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="right">
+                        Right
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="justify">
+                        Justify
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )
         case "lineSpacing":
@@ -639,15 +802,88 @@ export function Toolbar({
               data-toolbar-id={id}
               className="apex-editor-toolbar__item"
             >
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                className="h-8 text-xs font-normal tracking-normal normal-case"
-                onClick={actions.onLineSpacing}
-              >
-                Spacing
-              </Button>
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="Line & paragraph spacing"
+                            className="apex-editor-toolbar__icon-btn"
+                          />
+                        }
+                      />
+                    }
+                  >
+                    <HugeiconsIcon icon={ParagraphSpacingIcon} strokeWidth={2} />
+                  </TooltipTrigger>
+                  <TooltipContent>Line & paragraph spacing</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" className="min-w-52">
+                  <DropdownMenuRadioGroup
+                    value={lineSpacingPreset}
+                    onValueChange={(value) => {
+                      const preset = LINE_SPACING_PRESETS.find(
+                        (entry) => entry.id === value
+                      )
+                      if (preset?.value240ths == null) return
+                      actions.onParagraphSpacing({
+                        lineSpacing: {
+                          rule: "auto",
+                          value240ths: preset.value240ths,
+                        },
+                      })
+                    }}
+                  >
+                    <DropdownMenuGroup>
+                      {LINE_SPACING_PRESETS.filter(
+                        (entry) => entry.value240ths != null
+                      ).map((entry) => (
+                        <DropdownMenuRadioItem key={entry.id} value={entry.id}>
+                          {entry.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuGroup>
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        actions.onParagraphSpacing({
+                          spacingBefore:
+                            spacingBefore > 0 ? 0 : SPACE_BEFORE_AFTER_TWIPS,
+                        })
+                      }
+                    >
+                      {spacingBefore > 0
+                        ? "Remove space before paragraph"
+                        : "Add space before paragraph"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        actions.onParagraphSpacing({
+                          spacingAfter:
+                            spacingAfter > 0 ? 0 : SPACE_BEFORE_AFTER_TWIPS,
+                        })
+                      }
+                    >
+                      {spacingAfter > 0
+                        ? "Remove space after paragraph"
+                        : "Add space after paragraph"}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={actions.onLineSpacing}>
+                      Custom spacing…
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )
         case "bulletList":
@@ -729,16 +965,21 @@ export function Toolbar({
       alignment,
       customPalettes,
       fontSizeTwips,
+      lineSpacingPreset,
       onCustomPalettesChange,
       palettes,
       pickerCatalog,
       snapshot.bold,
+      snapshot.canRedo,
+      snapshot.canUndo,
       snapshot.italic,
       snapshot.textStyle.color,
       snapshot.textStyle.fontFamily,
       snapshot.textStyle.fontWeight,
       snapshot.textStyle.highlightColor,
       snapshot.underline,
+      spacingAfter,
+      spacingBefore,
       styleId,
       styleNames,
       zoom,
@@ -773,7 +1014,7 @@ export function Toolbar({
       if (used + width <= containerWidth) {
         nextVisible.add(id)
         used += width
-      } else {
+      } else if (!isSeparator(id)) {
         nextOverflow.push(id)
       }
     }
@@ -822,34 +1063,45 @@ export function Toolbar({
     return () => observer.disconnect()
   }, [recomputeOverflow])
 
+  const shownItems = TOOLBAR_ORDER.filter((id) => {
+    if (!visibleItems.has(id)) return false
+    if (!isSeparator(id)) return true
+    const index = TOOLBAR_ORDER.indexOf(id)
+    const prev = TOOLBAR_ORDER.slice(0, index)
+      .reverse()
+      .find((item) => !isSeparator(item) && visibleItems.has(item))
+    const next = TOOLBAR_ORDER.slice(index + 1).find(
+      (item) => !isSeparator(item) && visibleItems.has(item)
+    )
+    return Boolean(prev && next)
+  })
+
   return (
     <div
       ref={containerRef}
-      className="apex-editor-toolbar relative flex h-10 min-h-10 items-center gap-1 overflow-hidden border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-2"
+      className="apex-editor-toolbar relative flex h-12 min-h-12 items-center gap-1 overflow-hidden border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-2"
       role="toolbar"
       aria-label="Formatting toolbar"
     >
       <div
         ref={measureRef}
-        className="pointer-events-none absolute top-0 left-0 -z-50 flex h-10 items-center gap-1 opacity-0"
+        className="pointer-events-none absolute top-0 left-0 -z-50 flex h-12 items-center gap-1 opacity-0"
         aria-hidden
       >
         {TOOLBAR_ORDER.map((id) => renderItem(id))}
       </div>
 
-      {TOOLBAR_ORDER.filter((id) => visibleItems.has(id)).map((id) =>
-        renderItem(id)
-      )}
+      {shownItems.map((id) => renderItem(id))}
 
-      <div className="ml-auto flex h-8 w-9 shrink-0 items-center justify-end">
+      <div className="ml-auto flex h-9 w-10 shrink-0 items-center justify-end">
         {overflowItems.length > 0 ? (
           <Popover>
             <PopoverTrigger
               render={
                 <Button
                   type="button"
-                  size="icon-xs"
-                  variant="outline"
+                  size="icon-sm"
+                  variant="ghost"
                   aria-label="More tools"
                   className="apex-editor-toolbar__more"
                 />
@@ -863,6 +1115,44 @@ export function Toolbar({
           </Popover>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+function ColorSwatchGrid({
+  columns,
+  onPick,
+}: {
+  columns: ReadonlyArray<readonly [string, readonly string[]]>
+  onPick: (color: string) => void
+}): ReactNode {
+  const shadeCount = Math.max(
+    1,
+    ...columns.map(([, colors]) => colors.length)
+  )
+  return (
+    <div
+      className="grid w-fit gap-1"
+      style={{
+        // Columns = hue families; rows = light → dark shades
+        gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, auto)`,
+        gridTemplateRows: `repeat(${shadeCount}, auto)`,
+        gridAutoFlow: "column",
+      }}
+    >
+      {columns.flatMap(([name, colors]) =>
+        colors.map((color) => (
+          <button
+            key={`${name}-${color}`}
+            type="button"
+            title={`${name} ${color}`}
+            aria-label={`${name} ${color}`}
+            className="size-7 rounded-sm border border-border"
+            style={{ background: color }}
+            onClick={() => onPick(color)}
+          />
+        ))
+      )}
     </div>
   )
 }
@@ -913,29 +1203,7 @@ function ColorPalette({
       <div className="mb-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
         Colors
       </div>
-      {/* Columns = hue families; rows = light → dark shades */}
-      <div
-        className="grid gap-x-1.5 gap-y-1"
-        style={{
-          gridTemplateColumns: `repeat(${Math.max(groups.length, 1)}, minmax(0, 1fr))`,
-        }}
-      >
-        {groups.map(([name, colors]) => (
-          <div key={name} className="flex flex-col gap-1" title={name}>
-            {colors.map((color) => (
-              <button
-                key={`${name}-${color}`}
-                type="button"
-                title={`${name} ${color}`}
-                aria-label={`${name} ${color}`}
-                className="aspect-square min-h-5 w-full rounded-sm border border-border"
-                style={{ background: color }}
-                onClick={() => onPick(color)}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      <ColorSwatchGrid columns={groups} onPick={onPick} />
       <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
         <Label htmlFor="apex-toolbar-palette-name" className="sr-only">
           Palette name
@@ -970,16 +1238,11 @@ function ColorPalette({
         </Button>
       </div>
       {customPalettes.length > 0 ? (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 flex flex-col gap-2">
           <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Custom palettes
           </div>
-          <div
-            className="grid gap-x-1.5 gap-y-1"
-            style={{
-              gridTemplateColumns: `repeat(${Math.max(customPalettes.length, 1)}, minmax(0, 1fr))`,
-            }}
-          >
+          <div className="flex flex-col gap-2">
             {customPalettes.map((palette) => (
               <div key={palette.id} className="flex flex-col gap-1">
                 <div className="flex min-w-0 items-center justify-between gap-1">
@@ -1001,17 +1264,19 @@ function ColorPalette({
                     ×
                   </button>
                 </div>
-                {palette.colors.map((color) => (
-                  <button
-                    key={`${palette.id}-${color}`}
-                    type="button"
-                    title={`${palette.name} ${color}`}
-                    aria-label={`${palette.name} ${color}`}
-                    className="aspect-square min-h-5 w-full rounded-sm border border-border"
-                    style={{ background: color }}
-                    onClick={() => onPick(color)}
-                  />
-                ))}
+                <div className="flex flex-wrap gap-1">
+                  {palette.colors.map((color) => (
+                    <button
+                      key={`${palette.id}-${color}`}
+                      type="button"
+                      title={`${palette.name} ${color}`}
+                      aria-label={`${palette.name} ${color}`}
+                      className="size-7 rounded-sm border border-border"
+                      style={{ background: color }}
+                      onClick={() => onPick(color)}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
