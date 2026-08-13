@@ -4,6 +4,8 @@ import type {
   StyleDefinition,
 } from "@apexmed/core"
 import { twips } from "@apexmed/core"
+
+import { initialNumberingLabel } from "../model/list-label"
 import {
   baseKeymap,
   chainCommands,
@@ -286,6 +288,7 @@ export function clearFormatting(): Command {
         indentEnd: 0,
         firstLineIndent: 0,
         numbering: null,
+        numberingLabel: null,
         styleId: null,
       })
       if (textStyle) {
@@ -359,6 +362,7 @@ function applyListNumbering(
         .setNodeMarkup(pos, undefined, {
           ...$from.node(depth).attrs,
           numbering: { definitionId: definition.id, level: 0 },
+          numberingLabel: initialNumberingLabel(definition, 0),
           indentStart,
           firstLineIndent,
         })

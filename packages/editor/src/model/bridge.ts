@@ -28,6 +28,10 @@ import {
 } from "prosemirror-model"
 import { TableMap } from "prosemirror-tables"
 
+import {
+  numberingLabelForParagraph,
+  type NumberingLabelState,
+} from "./list-label"
 import { editorSchema } from "../schema"
 
 type BridgeContext = Readonly<{
@@ -967,7 +971,11 @@ function pmInlinesFromSemantic(
 function pmParagraphFromSemantic(
   schema: Schema,
   paragraph: SemanticParagraph,
-  assets: readonly SemanticImageAsset[]
+  assets: readonly SemanticImageAsset[],
+  numbering?: Readonly<{
+    definitions: SemanticDocument["numberingDefinitions"]
+    counters: NumberingLabelState
+  }>
 ): PMNode {
   const content = pmInlinesFromSemantic(schema, paragraph.children, assets)
   return schema.nodes.paragraph!.create(
@@ -985,6 +993,13 @@ function pmParagraphFromSemantic(
       widowControl: paragraph.properties.widowControl,
       pageBreakBefore: paragraph.properties.pageBreakBefore,
       numbering: paragraph.properties.numbering,
+      numberingLabel: numbering
+        ? numberingLabelForParagraph(
+            paragraph.properties.numbering,
+            numbering.definitions,
+            numbering.counters
+          )
+        : null,
       tabStops: paragraph.properties.tabStops ?? [],
       styleId: paragraph.styleId ?? null,
       paragraphMarkStyle: paragraph.paragraphMarkStyle ?? null,
@@ -1029,7 +1044,11 @@ function collapseVMergeToRowspan(
 function pmTableFromSemantic(
   schema: Schema,
   table: SemanticTable,
-  assets: readonly SemanticImageAsset[]
+  assets: readonly SemanticImageAsset[],
+  numbering?: Readonly<{
+    definitions: SemanticDocument["numberingDefinitions"]
+    counters: NumberingLabelState
+  }>
 ): PMNode {
   const collapsed = collapseVMergeToRowspan(table.rows)
   const rowNodes = collapsed.map((cells, rowIndex) => {
@@ -1061,7 +1080,7 @@ function pmTableFromSemantic(
           ? schema.nodes.table_header
           : schema.nodes.table_cell
       const content = cell.blocks.map((block) =>
-        pmParagraphFromSemantic(schema, block, assets)
+        pmParagraphFromSemantic(schema, block, assets, numbering)
       )
       return type!.create(
         {
@@ -1117,11 +1136,16 @@ function pmTableFromSemantic(
 function pmBlockFromSemantic(
   schema: Schema,
   block: SemanticBlock,
-  assets: readonly SemanticImageAsset[]
+  assets: readonly SemanticImageAsset[],
+  numbering?: Readonly<{
+    definitions: SemanticDocument["numberingDefinitions"]
+    counters: NumberingLabelState
+  }>
 ): PMNode {
   if (block.type === "paragraph")
-    return pmParagraphFromSemantic(schema, block, assets)
-  if (block.type === "table") return pmTableFromSemantic(schema, block, assets)
+    return pmParagraphFromSemantic(schema, block, assets, numbering)
+  if (block.type === "table")
+    return pmTableFromSemantic(schema, block, assets, numbering)
   return schema.nodes.horizontal_rule!.create({
     nodeId: String(block.id),
     height: block.height,
@@ -1147,9 +1171,13 @@ export function fromSemanticDocument(
   options: Readonly<{ schema?: Schema }> = {}
 ): PMNode {
   const schema = options.schema ?? editorSchema
+  const numbering = {
+    definitions: document.numberingDefinitions,
+    counters: new Map() as NumberingLabelState,
+  }
   const sections = document.sections.map((section) => {
     const blocks = section.blocks.map((block) =>
-      pmBlockFromSemantic(schema, block, document.assets)
+      pmBlockFromSemantic(schema, block, document.assets, numbering)
     )
     const content =
       blocks.length > 0 ? blocks : [schema.nodes.paragraph!.createAndFill()!]

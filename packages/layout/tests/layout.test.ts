@@ -790,6 +790,84 @@ describe("paragraph layout", () => {
     ).toEqual(["•", "1", "a", "A", "i", "I"])
   })
 
+  test("preserves authored bullet glyphs from numbering level text", () => {
+    const listed = paragraph(
+      [{ text: "Assessment" }],
+      { numbering: { definitionId: "list", level: 0 } },
+      "listed"
+    )
+    const result = layoutDocument(
+      numberedDocument(
+        [listed],
+        [
+          {
+            id: "list",
+            levels: [
+              numberingLevel(0, {
+                format: "bullet",
+                levelText: "●",
+                alignment: "left",
+              }),
+            ],
+          },
+        ]
+      ),
+      { metrics: fixedMetrics }
+    )
+    expect(labelsFor(result, ["listed"])).toEqual(["●"])
+  })
+
+  test("places hanging bullet labels inside table cells from the cell content origin", () => {
+    const listed = paragraph(
+      [{ text: "Assessment" }],
+      {
+        numbering: { definitionId: "list", level: 0 },
+        indentStart: twips(200),
+        firstLineIndent: twips(-100),
+      },
+      "listed"
+    )
+    const grid = table([["x"]])
+    const row = tableRow(grid)
+    const cell = tableCell(row)
+    const numberedTable: ResolvedTable = {
+      ...grid,
+      rows: [
+        {
+          ...row,
+          cells: [{ ...cell, blocks: [listed] }],
+        },
+      ],
+    }
+    const result = layoutDocument(
+      numberedDocument(
+        [numberedTable],
+        [
+          {
+            id: "list",
+            levels: [
+              numberingLevel(0, {
+                format: "bullet",
+                levelText: "●",
+                alignment: "left",
+                indentStart: twips(200),
+                firstLineIndent: twips(-100),
+              }),
+            ],
+          },
+        ]
+      ),
+      { metrics: fixedMetrics, includeTrace: true }
+    )
+    expect(labelsFor(result, ["listed"])).toEqual(["●"])
+    expect(
+      glyphRuns(result).find((run) => run.sourceNodeId === "listed")?.x
+    ).toBe(twips(220))
+    expect(
+      glyphRuns(result).find((run) => run.sourceNodeId === "listed-text-0")?.x
+    ).toBe(twips(320))
+  })
+
   test("applies start values, multilevel legal formatting, and configured restarts", () => {
     const definition: NumberingDefinition = {
       id: "outline",

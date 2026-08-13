@@ -172,8 +172,19 @@ describe("editor chrome components", () => {
 
   test("authored table grids are not overridden by browser cell minimums", () => {
     expect(EDITOR_CSS).toContain("min-width: 0")
-    expect(EDITOR_CSS).toContain("overflow-wrap: anywhere")
-    expect(EDITOR_CSS).toContain("word-break: break-word")
+    expect(EDITOR_CSS).toContain("overflow-wrap: break-word")
+    expect(EDITOR_CSS).toContain("word-break: normal")
+    expect(EDITOR_CSS).not.toContain("overflow-wrap: anywhere")
+    expect(EDITOR_CSS).not.toContain("word-break: break-word")
+    expect(EDITOR_CSS).toContain("margin-top: 0")
+    expect(EDITOR_CSS).toContain("margin-bottom: 0")
+    expect(EDITOR_CSS).not.toContain("margin: 8px 0")
+    expect(EDITOR_CSS).toContain("width: auto")
+    expect(EDITOR_CSS).toContain("--apex-row-height")
+    expect(EDITOR_CSS).toContain("data-list-marker")
+    expect(EDITOR_CSS).toContain("tableWrapper")
+    expect(EDITOR_CSS).toContain("min-height: 0")
+    expect(EDITOR_CSS).toContain("ProseMirror-trailingBreak:not(:only-child)")
   })
 
   test("page sheets use content-visibility for offscreen paint skipping", () => {

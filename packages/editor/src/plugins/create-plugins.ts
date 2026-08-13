@@ -7,6 +7,7 @@ import { columnResizing, tableEditing } from "prosemirror-tables"
 
 import { createLinkKeymap, editorKeymap } from "../commands"
 import { toSemanticDocument } from "../model/bridge"
+import { ApexTableView } from "../node-views/table"
 import {
   createLayoutClient,
   type LayoutClient,
@@ -43,7 +44,12 @@ export function createEditorPlugins(
     editorKeymap,
     createNodeIdentityPlugin(),
     createSelectionStatePlugin(),
-    columnResizing({ handleWidth: 6, cellMinWidth: 48 }),
+    columnResizing({
+      handleWidth: 6,
+      cellMinWidth: 48,
+      defaultCellMinWidth: 1,
+      View: ApexTableView,
+    }),
     tableEditing({ allowTableNodeSelection: true }),
     createTableContextMenuPlugin(),
     createImagePasteDropPlugin(),

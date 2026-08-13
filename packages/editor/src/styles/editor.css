@@ -340,39 +340,85 @@
   pointer-events: none;
 }
 
-/* ── Tables (on paper) ── */
+/* ── Tables (on paper) ──
+ * Authored width, indent, and cell borders come from inline styles.
+ * Do not add vertical table margins or default grey borders — those
+ * shift every grid relative to the Google Docs page geometry.
+ */
 .apex-editor-surface .ProseMirror table {
   border-collapse: collapse;
   table-layout: fixed;
-  width: 100%;
-  margin: 8px 0;
+  width: auto;
+  margin-top: 0;
+  margin-bottom: 0;
   overflow: visible;
+}
+
+.apex-editor-surface .ProseMirror .tableWrapper {
+  overflow: visible;
+  width: max-content;
+  max-width: none;
+}
+
+.apex-editor-surface .ProseMirror col {
+  box-sizing: border-box;
 }
 
 .apex-editor-surface .ProseMirror td,
 .apex-editor-surface .ProseMirror th {
   min-width: 0;
-  padding: var(--apex-cell-pad-top, 4px) var(--apex-cell-pad-right, 8px)
-    var(--apex-cell-pad-bottom, 4px) var(--apex-cell-pad-left, 8px);
+  height: var(--apex-row-height, auto);
+  padding: var(--apex-cell-pad-top, 0pt) var(--apex-cell-pad-right, 0pt)
+    var(--apex-cell-pad-bottom, 0pt) var(--apex-cell-pad-left, 0pt);
   vertical-align: top;
   position: relative;
   box-sizing: border-box;
   background: var(--apex-page-bg);
-  border: 1px solid var(--apex-table-border);
+  border: none;
   color: var(--apex-page-fg);
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* Wrap whole words only. `anywhere` / break-word mid-glyph shifts
+     label/value columns away from the authored Google Docs grid. */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .apex-editor-surface .ProseMirror td p,
 .apex-editor-surface .ProseMirror th p {
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* Body paragraphs use 1.35em so empty lines match Google Docs. Cells
+     must not: that extra box sits below top-aligned glyphs and makes
+     bordered rows like ADMISSION look top-heavy. */
+  min-height: 0;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
+/* Trailing caret br must not add a second line box inside a cell. */
+.apex-editor-surface .ProseMirror td p > br.ProseMirror-trailingBreak:not(:only-child),
+.apex-editor-surface .ProseMirror th p > br.ProseMirror-trailingBreak:not(:only-child) {
+  display: none;
+}
+
+/* Header-row cells use <th> but must stay on print-white paper. */
 .apex-editor-surface .ProseMirror th {
-  font-weight: 600;
-  background: var(--apex-table-header-bg);
+  font-weight: inherit;
+  background: var(--apex-page-bg);
+}
+
+/*
+ * List markers occupy the hanging-indent box so body text stays at
+ * indentStart, matching Word/Google Docs numbering in and out of tables.
+ */
+.apex-editor-surface .ProseMirror p[data-list-marker]::before {
+  content: attr(data-list-marker);
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--apex-list-hanging, 18pt);
+  max-width: var(--apex-list-hanging, 18pt);
+  text-indent: 0;
+  text-align: left;
+  white-space: pre;
+  vertical-align: top;
+  pointer-events: none;
 }
 
 .apex-editor-surface .ProseMirror .selectedCell::after {
@@ -410,20 +456,20 @@
  */
 .apex-editor-surface .ProseMirror [data-page-break="true"],
 .apex-editor-surface .ProseMirror .apex-manual-page-break {
-  display: inline-block !important;
-  width: 0 !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
   overflow: hidden;
   position: relative;
   pointer-events: none;
   user-select: none;
   box-sizing: border-box;
-  background: transparent !important;
-  box-shadow: none !important;
+  background: transparent;
+  box-shadow: none;
   vertical-align: top;
 }
 
@@ -697,10 +743,10 @@
   .apex-editor-root *,
   .apex-editor-root *::before,
   .apex-editor-root *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
   }
 }
 

@@ -131,6 +131,17 @@ describe("dialogs and commands (phase 5 / 8)", () => {
           definition.levels[0]?.format === "bullet"
       )
     ).toBe(true)
+    let numberingLabel: unknown
+    let markerDom: unknown
+    result.state.doc.descendants((node) => {
+      if (node.type.name !== "paragraph") return true
+      numberingLabel = node.attrs.numberingLabel
+      markerDom = node.type.spec.toDOM?.(node)
+      return false
+    })
+    expect(numberingLabel).toBe("•")
+    expect(JSON.stringify(markerDom)).toContain("data-list-marker")
+    expect(JSON.stringify(markerDom)).toContain("•")
   })
 
   test("applyDefinedParagraphStyle applies named paragraph and text formatting", () => {
@@ -187,6 +198,15 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     expect(table?.type).toBe("table")
     if (table?.type !== "table") return
     expect(table.alignment).toBe("center")
+    let tableDom = ""
+    centered.state.doc.descendants((node) => {
+      if (node.type.name !== "table") return true
+      tableDom = JSON.stringify(node.type.spec.toDOM?.(node))
+      return false
+    })
+    expect(tableDom).toContain("colgroup")
+    expect(tableDom).toContain("margin-left:auto")
+    expect(tableDom).not.toContain("width:100%")
   })
 
   test("unit conversion helpers use twips/in/cm/pt", () => {

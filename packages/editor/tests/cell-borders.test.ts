@@ -117,6 +117,22 @@ describe("individual cell borders", () => {
     expect(JSON.stringify(dom)).toContain("background-color:#eeeeee")
   })
 
+  test("cell toDOM maps Word center alignment and authored width", () => {
+    const { editorSchema } =
+      require("../src/schema") as typeof import("../src/schema")
+    const cell = editorSchema.nodes.table_cell!.create(
+      {
+        verticalAlignment: "center",
+        width: 2085,
+      },
+      editorSchema.nodes.paragraph!.createAndFill()!
+    )
+    const serialized = JSON.stringify(cell.type.spec.toDOM?.(cell))
+    expect(serialized).toContain("vertical-align:middle")
+    expect(serialized).not.toContain("vertical-align:center")
+    expect(serialized).toContain("width:104.25pt")
+  })
+
   test("cell toDOM preserves table span and authored column-width metadata", () => {
     const { editorSchema } =
       require("../src/schema") as typeof import("../src/schema")

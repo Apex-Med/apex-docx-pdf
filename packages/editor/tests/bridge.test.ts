@@ -356,4 +356,145 @@ describe("model bridge", () => {
       left: twips(40),
     })
   })
+
+  test("fromSemantic paints authored bullet glyphs on table-cell paragraphs", () => {
+    const blank = createBlankDocument()
+    const source = blank.source
+    const listed: Extract<
+      SemanticDocument["sections"][0]["blocks"][0],
+      { type: "paragraph" }
+    > = {
+      type: "paragraph",
+      id: nodeId("listed"),
+      source,
+      properties: {
+        alignment: "left",
+        spacingBefore: twips(0),
+        spacingAfter: twips(0),
+        lineSpacing: null,
+        indentStart: twips(720),
+        indentEnd: twips(0),
+        firstLineIndent: twips(-360),
+        keepWithNext: false,
+        keepLinesTogether: false,
+        widowControl: true,
+        pageBreakBefore: false,
+        numbering: { definitionId: "n1", level: 0 },
+        tabStops: [],
+      },
+      children: [
+        {
+          type: "text",
+          id: nodeId("listed-t"),
+          source,
+          text: "Assessment",
+          style: baseStyle,
+        },
+      ],
+    }
+    const table: SemanticTable = {
+      type: "table",
+      id: nodeId("tbl-list"),
+      source,
+      width: twips(2880),
+      preferredWidth: twips(2880),
+      layout: "fixed",
+      alignment: "left",
+      columnWidths: [twips(2880)],
+      borders: {
+        top: null,
+        right: null,
+        bottom: null,
+        left: null,
+        insideHorizontal: null,
+        insideVertical: null,
+      },
+      cellPadding: {
+        top: twips(0),
+        right: twips(108),
+        bottom: twips(0),
+        left: twips(108),
+      },
+      repeatHeaderRowCount: 0,
+      rows: [
+        {
+          type: "tableRow",
+          id: nodeId("r-list"),
+          source,
+          repeatAsHeader: false,
+          allowBreakAcrossPages: true,
+          height: { rule: "atLeast", value: twips(344) },
+          cells: [
+            {
+              type: "tableCell",
+              id: nodeId("c-list"),
+              source,
+              columnIndex: 0,
+              width: twips(2880),
+              preferredWidth: twips(2880),
+              columnSpan: 1,
+              verticalMerge: "none",
+              verticalAlignment: "center",
+              fillColor: null,
+              borders: { top: null, right: null, bottom: null, left: null },
+              blocks: [listed],
+            },
+          ],
+        },
+      ],
+    }
+    const document: SemanticDocument = {
+      ...blank,
+      numberingDefinitions: [
+        {
+          id: "n1",
+          levels: [
+            {
+              level: 0,
+              startAt: 1,
+              format: "bullet",
+              levelText: "●",
+              suffix: "tab",
+              alignment: "left",
+              indentStart: twips(720),
+              firstLineIndent: twips(-360),
+              restartAfterLevel: null,
+              legal: false,
+            },
+          ],
+        },
+      ],
+      sections: blank.sections.map((section) => ({
+        ...section,
+        blocks: [table],
+      })),
+    }
+    const pm = fromSemanticDocument(document)
+    let numberingLabel: unknown
+    let markerDom: unknown
+    let hanging: unknown
+    let cellDom: unknown
+    let rowDom: unknown
+    pm.descendants((node) => {
+      if (node.type.name === "paragraph" && numberingLabel === undefined) {
+        numberingLabel = node.attrs.numberingLabel
+        markerDom = node.type.spec.toDOM?.(node)
+        hanging = node.attrs.firstLineIndent
+      }
+      if (node.type.name === "table_cell" && cellDom === undefined) {
+        cellDom = node.type.spec.toDOM?.(node)
+      }
+      if (node.type.name === "table_row" && rowDom === undefined) {
+        rowDom = node.type.spec.toDOM?.(node)
+      }
+    })
+    expect(numberingLabel).toBe("●")
+    expect(hanging).toBe(twips(-360))
+    expect(JSON.stringify(markerDom)).toContain("data-list-marker")
+    expect(JSON.stringify(markerDom)).toContain("●")
+    expect(JSON.stringify(markerDom)).toContain("--apex-list-hanging:18pt")
+    expect(JSON.stringify(cellDom)).toContain("vertical-align:middle")
+    expect(JSON.stringify(cellDom)).toContain("width:144pt")
+    expect(JSON.stringify(rowDom)).toContain("--apex-row-height:17.2pt")
+  })
 })

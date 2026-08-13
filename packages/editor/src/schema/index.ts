@@ -1,6 +1,11 @@
 import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
 import { tableNodes } from "prosemirror-tables"
 
+import {
+  authoredColumnWidthsTwips,
+  authoredTableStyle,
+} from "./table-geometry"
+
 /**
  * ProseMirror schema isomorphic to SemanticDocument for Phase-1 authoring.
  * NodeId is carried as a node attr; table cells are isolating.
@@ -163,6 +168,14 @@ function borderCss(border: unknown, fallback: string): string {
   return `${widthPt}pt ${style} ${color}`
 }
 
+function cssCellVerticalAlign(value: unknown): string {
+  if (value === "center") return "middle"
+  if (value === "bottom" || value === "top" || value === "middle") {
+    return String(value)
+  }
+  return ""
+}
+
 function cellDomAttrs(node: {
   attrs: Record<string, unknown>
 }): Record<string, string> {
@@ -175,18 +188,19 @@ function cellDomAttrs(node: {
     | Readonly<{ top: number; right: number; bottom: number; left: number }>
     | null
     | undefined
+  const widthTwips = Number(node.attrs.width ?? 0)
+  const verticalAlign = cssCellVerticalAlign(node.attrs.verticalAlignment)
   const style = [
     fill ? `background-color:${String(fill)}` : "",
     `border-top:${top}`,
     `border-right:${right}`,
     `border-bottom:${bottom}`,
     `border-left:${left}`,
-    node.attrs.verticalAlignment
-      ? `vertical-align:${String(node.attrs.verticalAlignment)}`
-      : "",
+    verticalAlign ? `vertical-align:${verticalAlign}` : "",
     padding
       ? `padding:${Number(padding.top) / 20}pt ${Number(padding.right) / 20}pt ${Number(padding.bottom) / 20}pt ${Number(padding.left) / 20}pt`
       : "",
+    widthTwips > 0 ? `width:${widthTwips / 20}pt` : "",
   ]
     .filter(Boolean)
     .join(";")
@@ -214,7 +228,10 @@ function paragraphLineHeight(value: unknown): string | null {
     value?: number
   }
   if (spacing.rule === "auto" && Number.isFinite(spacing.value240ths)) {
-    return String(Math.max(1, Number(spacing.value240ths)) / 240)
+    const ratio = Math.max(1, Number(spacing.value240ths)) / 240
+    // Word/Google single spacing (240/240) uses the face's line metrics,
+    // not CSS `line-height: 1` (1em), which sits glyphs too high in the cell.
+    return ratio === 1 ? "normal" : String(ratio)
   }
   if (
     (spacing.rule === "exact" || spacing.rule === "atLeast") &&
@@ -339,34 +356,47 @@ const nodes: Record<string, NodeSpec> = {
       widowControl: { default: true },
       pageBreakBefore: { default: false },
       numbering: { default: null },
+      numberingLabel: { default: null },
       tabStops: { default: [] },
       styleId: { default: null },
       paragraphMarkStyle: { default: null },
     },
     parseDOM: [{ tag: "p" }],
-    toDOM: (node) => [
-      "p",
-      {
-        "data-node-id": node.attrs.nodeId ?? "",
-        "data-style-id": node.attrs.styleId ?? "",
-        style: [
-          `text-align:${node.attrs.alignment}`,
-          `margin-top:${Number(node.attrs.spacingBefore) / 20}pt`,
-          `margin-bottom:${Number(node.attrs.spacingAfter) / 20}pt`,
-          `padding-left:${Number(node.attrs.indentStart) / 20}pt`,
-          `padding-right:${Number(node.attrs.indentEnd) / 20}pt`,
-          `text-indent:${Number(node.attrs.firstLineIndent) / 20}pt`,
-          paragraphLineHeight(node.attrs.lineSpacing)
-            ? `line-height:${paragraphLineHeight(node.attrs.lineSpacing)}`
-            : "",
-          node.attrs.pageBreakBefore ? "break-before:page" : "",
-          node.attrs.paragraphMarkStyle
-            ? `font-family:${String(node.attrs.paragraphMarkStyle.fontFamily)};font-size:${Number(node.attrs.paragraphMarkStyle.fontSize) / 20}pt;font-weight:${Number(node.attrs.paragraphMarkStyle.fontWeight)};font-style:${String(node.attrs.paragraphMarkStyle.fontStyle)};color:${String(node.attrs.paragraphMarkStyle.color)}`
-            : "",
-        ].join(";"),
-      },
-      0,
-    ],
+    toDOM: (node) => {
+      const hangingTwips = Math.abs(Number(node.attrs.firstLineIndent ?? 0))
+      const marker =
+        typeof node.attrs.numberingLabel === "string" &&
+        node.attrs.numberingLabel.length > 0
+          ? node.attrs.numberingLabel
+          : ""
+      return [
+        "p",
+        {
+          "data-node-id": node.attrs.nodeId ?? "",
+          "data-style-id": node.attrs.styleId ?? "",
+          ...(marker.length > 0 ? { "data-list-marker": marker } : {}),
+          style: [
+            `text-align:${node.attrs.alignment}`,
+            `margin-top:${Number(node.attrs.spacingBefore) / 20}pt`,
+            `margin-bottom:${Number(node.attrs.spacingAfter) / 20}pt`,
+            `padding-left:${Number(node.attrs.indentStart) / 20}pt`,
+            `padding-right:${Number(node.attrs.indentEnd) / 20}pt`,
+            `text-indent:${Number(node.attrs.firstLineIndent) / 20}pt`,
+            hangingTwips > 0
+              ? `--apex-list-hanging:${hangingTwips / 20}pt`
+              : "",
+            paragraphLineHeight(node.attrs.lineSpacing)
+              ? `line-height:${paragraphLineHeight(node.attrs.lineSpacing)}`
+              : "",
+            node.attrs.pageBreakBefore ? "break-before:page" : "",
+            node.attrs.paragraphMarkStyle
+              ? `font-family:${String(node.attrs.paragraphMarkStyle.fontFamily)};font-size:${Number(node.attrs.paragraphMarkStyle.fontSize) / 20}pt;font-weight:${Number(node.attrs.paragraphMarkStyle.fontWeight)};font-style:${String(node.attrs.paragraphMarkStyle.fontStyle)};color:${String(node.attrs.paragraphMarkStyle.color)}`
+              : "",
+          ].join(";"),
+        },
+        0,
+      ]
+    },
   },
   horizontal_rule: {
     group: "block",
@@ -412,28 +442,24 @@ const nodes: Record<string, NodeSpec> = {
       repeatHeaderRowCount: { default: 0 },
     },
     toDOM: (node) => {
-      const alignment = String(node.attrs.alignment ?? "left")
-      const width = Number(node.attrs.preferredWidth ?? node.attrs.width ?? 0)
-      const indentStart = Number(node.attrs.indentStart ?? 0)
-      const padding = (node.attrs.cellPadding ?? {}) as Record<string, number>
+      const columnWidths = authoredColumnWidthsTwips(node.attrs)
+      const colgroup =
+        columnWidths.length > 0
+          ? [
+              "colgroup",
+              ...columnWidths.map((columnWidth) => [
+                "col",
+                { style: `width:${columnWidth / 20}pt` },
+              ]),
+            ]
+          : null
       return [
         "table",
         {
           "data-node-id": node.attrs.nodeId ?? "",
-          style: [
-            width > 0 ? `width:${width / 20}pt` : "width:100%",
-            `table-layout:${node.attrs.layout === "autofit" ? "auto" : "fixed"}`,
-            alignment === "center"
-              ? "margin-left:auto;margin-right:auto"
-              : alignment === "right"
-                ? "margin-left:auto;margin-right:0"
-                : `margin-left:${indentStart / 20}pt;margin-right:auto`,
-            `--apex-cell-pad-top:${Number(padding.top ?? 0) / 20}pt`,
-            `--apex-cell-pad-right:${Number(padding.right ?? 108) / 20}pt`,
-            `--apex-cell-pad-bottom:${Number(padding.bottom ?? 0) / 20}pt`,
-            `--apex-cell-pad-left:${Number(padding.left ?? 108) / 20}pt`,
-          ].join(";"),
+          style: authoredTableStyle(node.attrs),
         },
+        ...(colgroup ? [colgroup] : []),
         ["tbody", 0],
       ]
     },
@@ -452,14 +478,17 @@ const nodes: Record<string, NodeSpec> = {
         rule?: string
         value?: number
       } | null
+      const heightPt =
+        height && Number.isFinite(height.value)
+          ? `${Number(height.value) / 20}pt`
+          : ""
       return [
         "tr",
         {
           "data-node-id": node.attrs.nodeId ?? "",
-          style:
-            height && Number.isFinite(height.value)
-              ? `${height.rule === "exact" ? "height" : "min-height"}:${Number(height.value) / 20}pt`
-              : "",
+          style: heightPt
+            ? `height:${heightPt};--apex-row-height:${heightPt}`
+            : "",
         },
         0,
       ]
