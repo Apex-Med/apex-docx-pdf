@@ -102,30 +102,32 @@ describe("individual cell borders", () => {
   test("cell toDOM emits per-side border CSS", () => {
     const { editorSchema } =
       require("../src/schema") as typeof import("../src/schema")
-    const cell = editorSchema.nodes.table_cell!.create(
+    const cell = editorSchema.nodes.table_cell?.create(
       {
         borderTop: { style: "single", color: "#00ff00", width: 20 },
         borderLeft: { style: "none", color: "#000", width: 0 },
         fillColor: "#eeeeee",
       },
-      editorSchema.nodes.paragraph!.createAndFill()!
+      editorSchema.nodes.paragraph?.createAndFill()!
     )
     const dom = cell.type.spec.toDOM?.(cell)
     expect(JSON.stringify(dom)).toContain("border-top:")
     expect(JSON.stringify(dom)).toContain("#00ff00")
     expect(JSON.stringify(dom)).toContain("border-left:none")
     expect(JSON.stringify(dom)).toContain("background-color:#eeeeee")
+    expect(JSON.stringify(dom)).toContain("data-fill-color")
+    expect(JSON.stringify(dom)).toContain("#eeeeee")
   })
 
   test("cell toDOM maps Word center alignment and authored width", () => {
     const { editorSchema } =
       require("../src/schema") as typeof import("../src/schema")
-    const cell = editorSchema.nodes.table_cell!.create(
+    const cell = editorSchema.nodes.table_cell?.create(
       {
         verticalAlignment: "center",
         width: 2085,
       },
-      editorSchema.nodes.paragraph!.createAndFill()!
+      editorSchema.nodes.paragraph?.createAndFill()!
     )
     const serialized = JSON.stringify(cell.type.spec.toDOM?.(cell))
     expect(serialized).toContain("vertical-align:middle")
@@ -165,9 +167,9 @@ describe("individual cell borders", () => {
   test("default cells are borderless and inherit authored table borders", () => {
     const { editorSchema } =
       require("../src/schema") as typeof import("../src/schema")
-    const empty = editorSchema.nodes.table_cell!.create(
+    const empty = editorSchema.nodes.table_cell?.create(
       null,
-      editorSchema.nodes.paragraph!.createAndFill()!
+      editorSchema.nodes.paragraph?.createAndFill()!
     )
     expect(JSON.stringify(empty.type.spec.toDOM?.(empty))).toContain(
       "border-top:none"

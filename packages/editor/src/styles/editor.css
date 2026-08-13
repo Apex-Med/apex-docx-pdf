@@ -1,5 +1,6 @@
 /* Apex editor — Google Docs-like page desk + tables + images
- * Theme: chrome/desk follow host `.dark`; page paper stays print-white. */
+ * Theme: chrome/desk follow host `.dark`. Paper stays print-white unless
+ * View → Dark pages is on (`[data-apex-dark-pages]`). Print stays white. */
 
 /* ── Design tokens (light defaults; overridden under .dark) ── */
 :root,
@@ -27,17 +28,22 @@
   --apex-label-border: #dadce0;
   --apex-table-border: #dadce0;
   --apex-table-header-bg: #f8f9fa;
+  --apex-ruler-margin: color-mix(
+    in oklab,
+    var(--apex-page-fg) 12%,
+    var(--apex-page-bg)
+  );
   --apex-selection-fill: rgba(26, 115, 232, 0.12);
   color-scheme: light;
 }
 
-/* Host theme class (ThemeProvider on <html>) */
+/* Host theme class (ThemeProvider on <html>). Keep this list free of :host
+ * selectors — some engines drop the whole rule when :host appears in a
+ * document stylesheet, even inside :is(). Paper stays print-white here. */
 .dark,
 .dark .apex-editor-root {
-  /* Paper stays white for WYSIWYG / print fidelity */
   --apex-page-bg: #ffffff;
   --apex-page-fg: #202124;
-  /* Desk + chrome track dark UI */
   --apex-desk: #1c1c1e;
   --apex-page-shadow:
     0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -56,15 +62,84 @@
   --apex-label-bg: #2d2e30;
   --apex-label-fg: #e8eaed;
   --apex-label-border: #5f6368;
-  --apex-table-border: #dadce0; /* on white paper */
+  --apex-table-border: #dadce0;
   --apex-table-header-bg: #f8f9fa;
+  --apex-ruler-margin: color-mix(
+    in oklab,
+    var(--apex-page-fg) 12%,
+    var(--apex-page-bg)
+  );
   --apex-selection-fill: rgba(138, 180, 248, 0.2);
   color-scheme: dark;
+}
+
+/* View → Dark pages: dark paper + remapped default ink, chrome already dark. */
+.dark .apex-editor-root[data-apex-dark-pages] {
+  --apex-page-bg: #242426;
+  --apex-page-fg: #e8eaed;
+  --apex-table-border: #5f6368;
+  --apex-table-header-bg: #2d2e30;
+  --apex-ruler-margin: color-mix(
+    in oklab,
+    var(--apex-page-fg) 12%,
+    var(--apex-page-bg)
+  );
+}
+
+/* Shadow embed: ignored in document stylesheets, applied inside :host. */
+:host-context(.dark),
+:host(.dark),
+:host-context(.dark) .apex-editor-root,
+:host(.dark) .apex-editor-root {
+  --apex-page-bg: #ffffff;
+  --apex-page-fg: #202124;
+  --apex-desk: #1c1c1e;
+  --apex-page-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --apex-accent: #8ab4f8;
+  --apex-chrome-bg: var(--background, #212121);
+  --apex-chrome-fg: var(--foreground, #e8eaed);
+  --apex-chrome-muted: var(--muted-foreground, #9aa0a6);
+  --apex-chrome-border: var(--border, rgba(255, 255, 255, 0.12));
+  --apex-chrome-hover: var(--muted, #2d2e30);
+  --apex-chrome-danger: var(--destructive, #f28b82);
+  --apex-chrome-danger-bg: color-mix(
+    in oklab,
+    var(--apex-chrome-danger) 16%,
+    transparent
+  );
+  --apex-label-bg: #2d2e30;
+  --apex-label-fg: #e8eaed;
+  --apex-label-border: #5f6368;
+  --apex-table-border: #dadce0;
+  --apex-table-header-bg: #f8f9fa;
+  --apex-ruler-margin: color-mix(
+    in oklab,
+    var(--apex-page-fg) 12%,
+    var(--apex-page-bg)
+  );
+  --apex-selection-fill: rgba(138, 180, 248, 0.2);
+  color-scheme: dark;
+}
+
+:host-context(.dark) .apex-editor-root[data-apex-dark-pages],
+:host(.dark) .apex-editor-root[data-apex-dark-pages] {
+  --apex-page-bg: #242426;
+  --apex-page-fg: #e8eaed;
+  --apex-table-border: #5f6368;
+  --apex-table-header-bg: #2d2e30;
+  --apex-ruler-margin: color-mix(
+    in oklab,
+    var(--apex-page-fg) 12%,
+    var(--apex-page-bg)
+  );
 }
 
 /* Prefer system preference when host has not set .dark / .light yet */
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not(.dark) {
+    --apex-page-bg: #ffffff;
+    --apex-page-fg: #202124;
     --apex-desk: #1c1c1e;
     --apex-page-shadow:
       0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -79,8 +154,27 @@
     --apex-label-bg: #2d2e30;
     --apex-label-fg: #e8eaed;
     --apex-label-border: #5f6368;
+    --apex-table-border: #dadce0;
+    --apex-table-header-bg: #f8f9fa;
+    --apex-ruler-margin: color-mix(
+      in oklab,
+      var(--apex-page-fg) 12%,
+      var(--apex-page-bg)
+    );
     --apex-selection-fill: rgba(138, 180, 248, 0.2);
     color-scheme: dark;
+  }
+
+  :root:not(.light):not(.dark) .apex-editor-root[data-apex-dark-pages] {
+    --apex-page-bg: #242426;
+    --apex-page-fg: #e8eaed;
+    --apex-table-border: #5f6368;
+    --apex-table-header-bg: #2d2e30;
+    --apex-ruler-margin: color-mix(
+      in oklab,
+      var(--apex-page-fg) 12%,
+      var(--apex-page-bg)
+    );
   }
 }
 
@@ -96,10 +190,19 @@
   min-height: 0;
   background: var(--apex-desk);
   padding: 24px 16px 64px;
-  color-scheme: light; /* document canvas stays light paper */
+  color-scheme: light;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--apex-chrome-muted) transparent;
+}
+
+.dark .apex-editor-root[data-apex-dark-pages] .apex-editor-surface {
+  color-scheme: dark;
+}
+
+:host-context(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface,
+:host(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface {
+  color-scheme: dark;
 }
 
 /* ── Google Docs-style chrome ── */
@@ -168,6 +271,9 @@
 }
 
 .apex-editor-ruler-wrap {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
   background: var(--apex-chrome-bg);
 }
 
@@ -176,9 +282,13 @@
   overflow: hidden;
 }
 
+.apex-editor-ruler__tab-add {
+  position: absolute;
+}
+
 .apex-editor-ruler__track {
   position: relative;
-  background: #ffffff;
+  background: var(--apex-page-bg);
   border: 1px solid var(--apex-chrome-border);
   box-sizing: border-box;
   cursor: crosshair;
@@ -189,7 +299,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: #e8eaed;
+  background: var(--apex-ruler-margin);
   pointer-events: none;
 }
 
@@ -270,7 +380,7 @@
 }
 
 .apex-editor-ruler__marker--first-line {
-  background: #5f6368;
+  background: var(--apex-chrome-muted);
   clip-path: polygon(50% 0%, 0 100%, 100% 100%);
 }
 
@@ -278,7 +388,7 @@
   width: 8px;
   height: 8px;
   transform: translate(-50%, 14px);
-  background: #5f6368;
+  background: var(--apex-chrome-muted);
   clip-path: polygon(50% 100%, 0 0, 100% 0);
 }
 
@@ -300,6 +410,67 @@
 
 .apex-editor-surface .ProseMirror:focus {
   outline: none;
+}
+
+/*
+ * Authored default ink/paper (#000 / #fff) is stored on the document.
+ * Remap it only when Dark pages is on so black body text stays readable.
+ * Explicit colors (red, blue, tinted fills) are left as authored.
+ * Keep :host rules in their own blocks so document stylesheets do not drop
+ * the `.dark` selectors.
+ */
+.dark .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
+  [data-color="#000000" i],
+  [data-color="#000" i],
+  [data-color="black" i],
+  [data-color="rgb(0, 0, 0)" i],
+  [data-color="rgb(0,0,0)" i]
+) {
+  color: var(--apex-page-fg);
+}
+
+:host-context(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
+  [data-color="#000000" i],
+  [data-color="#000" i],
+  [data-color="black" i],
+  [data-color="rgb(0, 0, 0)" i],
+  [data-color="rgb(0,0,0)" i]
+),
+:host(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
+  [data-color="#000000" i],
+  [data-color="#000" i],
+  [data-color="black" i],
+  [data-color="rgb(0, 0, 0)" i],
+  [data-color="rgb(0,0,0)" i]
+) {
+  color: var(--apex-page-fg);
+}
+
+.dark .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
+  [data-fill-color="#ffffff" i],
+  [data-fill-color="#fff" i],
+  [data-fill-color="white" i],
+  [data-fill-color="rgb(255, 255, 255)" i],
+  [data-fill-color="rgb(255,255,255)" i]
+) {
+  background-color: var(--apex-page-bg);
+}
+
+:host-context(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
+  [data-fill-color="#ffffff" i],
+  [data-fill-color="#fff" i],
+  [data-fill-color="white" i],
+  [data-fill-color="rgb(255, 255, 255)" i],
+  [data-fill-color="rgb(255,255,255)" i]
+),
+:host(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
+  [data-fill-color="#ffffff" i],
+  [data-fill-color="#fff" i],
+  [data-fill-color="white" i],
+  [data-fill-color="rgb(255, 255, 255)" i],
+  [data-fill-color="rgb(255,255,255)" i]
+) {
+  background-color: var(--apex-page-bg);
 }
 
 /*
@@ -401,7 +572,7 @@
   display: none;
 }
 
-/* Header-row cells use <th> but must stay on print-white paper. */
+/* Header-row cells use <th> but stay on the themed page paper. */
 .apex-editor-surface .ProseMirror th {
   font-weight: inherit;
   background: var(--apex-page-bg);
@@ -803,4 +974,41 @@
   background: color-mix(in oklab, #f59e0b 12%, var(--apex-chrome-bg));
   border-top-color: color-mix(in oklab, #fbbf24 35%, var(--apex-chrome-border));
   color: color-mix(in oklab, #fde68a 80%, var(--apex-chrome-fg));
+}
+
+/* Print and PDF-style output stay on white paper with authored black ink. */
+@media print {
+  :root,
+  .apex-editor-root,
+  .dark,
+  .dark .apex-editor-root {
+    --apex-page-bg: #ffffff;
+    --apex-page-fg: #202124;
+    --apex-desk: #ffffff;
+    --apex-page-shadow: none;
+    --apex-table-border: #dadce0;
+    --apex-table-header-bg: #f8f9fa;
+    --apex-ruler-margin: #e8eaed;
+    color-scheme: light;
+  }
+
+  .apex-editor-surface .ProseMirror :is(
+    [data-color="#000000" i],
+    [data-color="#000" i],
+    [data-color="black" i],
+    [data-color="rgb(0, 0, 0)" i],
+    [data-color="rgb(0,0,0)" i]
+  ) {
+    color: #000000;
+  }
+
+  .apex-editor-surface .ProseMirror :is(
+    [data-fill-color="#ffffff" i],
+    [data-fill-color="#fff" i],
+    [data-fill-color="white" i],
+    [data-fill-color="rgb(255, 255, 255)" i],
+    [data-fill-color="rgb(255,255,255)" i]
+  ) {
+    background-color: #ffffff;
+  }
 }

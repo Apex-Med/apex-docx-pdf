@@ -6,7 +6,7 @@ import { EDITOR_CSS } from "../src/styles/editor-css"
 import type { EditorChromeActions } from "../src/ui/chrome-types"
 import { EditorChrome } from "../src/ui/EditorChrome"
 import { MenuBar } from "../src/ui/MenuBar"
-import { Ruler } from "../src/ui/Ruler"
+import { alignmentFromRects, Ruler } from "../src/ui/Ruler"
 import { Toolbar } from "../src/ui/Toolbar"
 import type { EditorSelectionSnapshot } from "../src/plugins/selection-state"
 
@@ -76,6 +76,7 @@ const noopActions: EditorChromeActions = {
   onSelectAll: () => undefined,
   onFindReplace: () => undefined,
   onToggleRuler: () => undefined,
+  onToggleDarkPages: () => undefined,
   onTogglePreview: () => undefined,
   onToggleDivergence: () => undefined,
   onZoomChange: () => undefined,
@@ -154,6 +155,8 @@ describe("editor chrome components", () => {
     const raw = readFileSync(cssPath, "utf8")
     expect(raw).toContain("apex-editor-chrome")
     expect(raw).toContain("apex-editor-ruler")
+    expect(raw).toContain("apex-editor-ruler__tab-add")
+    expect(EDITOR_CSS).toContain("flex-shrink: 0")
     // Manual page-break atom is a zero-size marker; spacers paint the sheet.
     expect(raw).toContain("apex-manual-page-break")
     expect(raw).toMatch(/\.apex-manual-page-break\s*\{[^}]*height:\s*0/s)
@@ -202,6 +205,31 @@ describe("editor chrome components", () => {
     expect(EDITOR_CSS).toContain(".apex-page-break-spacer__gap::after")
   })
 
+  test("editor host stays mounted across ruler conditional siblings", () => {
+    const chrome = readFileSync(
+      join(import.meta.dir, "../src/ui/EditorChrome.tsx"),
+      "utf8"
+    )
+    expect(chrome).toContain('key="apex-editor-pages"')
+    expect(chrome).toContain("pageHostRef={pagesRef}")
+  })
+
+  test("ruler aligns to the page sheet instead of self-centering with the tab button", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "../src/ui/Ruler.tsx"),
+      "utf8"
+    )
+    expect(source).toContain('transformOrigin: "top left"')
+    expect(source).not.toContain("justify-center")
+    expect(source).toContain("section[data-section]")
+    expect(source).toContain("apex-editor-ruler__tab-add")
+    expect(alignmentFromRects({ left: 120, width: 408 }, { left: 40 }, 816)).toEqual({
+      left: 80,
+      width: 408,
+      scale: 0.5,
+    })
+  })
+
   test("editor exposes application shortcuts, full font catalog, and style creation", () => {
     const editor = readFileSync(
       join(import.meta.dir, "../src/ui/Editor.tsx"),
@@ -217,6 +245,8 @@ describe("editor chrome components", () => {
     expect(editor).toContain("StyleDialog")
     expect(menu).toContain("TableGridPicker")
     expect(menu).toContain("Update current style to match")
+    expect(menu).toContain("Dark pages")
+    expect(menu).toContain("onToggleDarkPages")
   })
 
   test("file menu actions use native labels instead of cancelled nested clicks", () => {

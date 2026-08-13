@@ -9,6 +9,8 @@ export {
   mergeManualPageBreakPlacements,
   positionForParagraphOffset,
   paginationSignature,
+  decorationKeyForPlacement,
+  applyBreakSpacerGeometry,
   spacerSpecsFromPlacements,
   createBreakSpacerElement,
   detectOversizedNonSplittable,
@@ -157,7 +159,12 @@ export {
 export { Ribbon, type RibbonProps } from "./ui/Ribbon"
 export { MenuBar, type MenuBarProps } from "./ui/MenuBar"
 export { Toolbar, type ToolbarProps } from "./ui/Toolbar"
-export { Ruler, type RulerProps, type TabStop } from "./ui/Ruler"
+export {
+  Ruler,
+  alignmentFromRects,
+  type RulerProps,
+  type TabStop,
+} from "./ui/Ruler"
 export { EditorChrome, type EditorChromeProps } from "./ui/EditorChrome"
 export type {
   EditorChromeActions,
@@ -169,6 +176,9 @@ export {
   ZOOM_PRESETS,
   TWIPS_PER_INCH,
   FONT_SIZE_OPTIONS,
+  DARK_PAGES_STORAGE_KEY,
+  readDarkPagesPreference,
+  writeDarkPagesPreference,
 } from "./ui/chrome-types"
 export { FontPicker, type FontPickerProps } from "./ui/FontPicker"
 export { LinkDialog, type LinkDialogProps } from "./ui/LinkDialog"

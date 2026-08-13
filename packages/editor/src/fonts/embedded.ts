@@ -64,7 +64,7 @@ export function injectEmbeddedDocumentFonts(
         new Blob([Uint8Array.from(asset.bytes)], { type: "font/ttf" })
       )
       urls.push(url)
-      return `@font-face{font-family:'${cssString(asset.family)}';font-style:${asset.style};font-weight:${asset.weight};src:url('${url}') format('truetype');font-display:block;}`
+      return `@font-face{font-family:'${cssString(asset.family)}';font-style:${asset.style};font-weight:${asset.weight};src:url('${url}') format('truetype');font-display:swap;}`
     })
     .join("\n")
   if (typeof Document !== "undefined" && host instanceof Document) {

@@ -94,7 +94,11 @@ import { editorSchema } from "../schema"
 import { EDITOR_CSS } from "../styles/editor-css"
 import { DivergenceOverlay } from "./DivergenceOverlay"
 import { EditorChrome } from "./EditorChrome"
-import type { EditorChromeActions } from "./chrome-types"
+import {
+  readDarkPagesPreference,
+  writeDarkPagesPreference,
+  type EditorChromeActions,
+} from "./chrome-types"
 import { ColumnsDialog } from "./ColumnsDialog"
 import { FindReplaceDialog } from "./FindReplaceDialog"
 import { LinkDialog } from "./LinkDialog"
@@ -106,11 +110,15 @@ import { StyleDialog } from "./StyleDialog"
 
 function ensureEditorStyles(): void {
   if (typeof document === "undefined") return
-  if (document.getElementById("apex-editor-styles")) return
-  const style = document.createElement("style")
-  style.id = "apex-editor-styles"
-  style.textContent = EDITOR_CSS
-  document.head.appendChild(style)
+  let style = document.getElementById("apex-editor-styles")
+  if (!(style instanceof HTMLStyleElement)) {
+    style = document.createElement("style")
+    style.id = "apex-editor-styles"
+    document.head.appendChild(style)
+  }
+  if (style.textContent !== EDITOR_CSS) {
+    style.textContent = EDITOR_CSS
+  }
 }
 
 const EMPTY_SNAPSHOT: EditorSelectionSnapshot = {
@@ -182,19 +190,19 @@ function styleFromSelection(
     next: id,
     paragraph: paragraph
       ? {
-          alignment: paragraph.alignment,
-          spacingBefore: twips(paragraph.spacingBefore),
-          spacingAfter: twips(paragraph.spacingAfter),
-          lineSpacing: paragraph.lineSpacing as never,
-          indentStart: twips(paragraph.indentStart),
-          indentEnd: twips(paragraph.indentEnd),
-          firstLineIndent: twips(paragraph.firstLineIndent),
-          numbering: paragraph.numbering,
-          tabStops: paragraph.tabStops.map((stop) => ({
-            position: twips(stop.position),
-            alignment: stop.alignment,
-          })),
-        }
+        alignment: paragraph.alignment,
+        spacingBefore: twips(paragraph.spacingBefore),
+        spacingAfter: twips(paragraph.spacingAfter),
+        lineSpacing: paragraph.lineSpacing as never,
+        indentStart: twips(paragraph.indentStart),
+        indentEnd: twips(paragraph.indentEnd),
+        firstLineIndent: twips(paragraph.firstLineIndent),
+        numbering: paragraph.numbering,
+        tabStops: paragraph.tabStops.map((stop) => ({
+          position: twips(stop.position),
+          alignment: stop.alignment,
+        })),
+      }
       : null,
     text: {
       fontFamily: text.fontFamily,
@@ -392,7 +400,12 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     )
     const [previewOn, setPreviewOn] = useState(showPreview)
     const [divergenceOn, setDivergenceOn] = useState(showDivergence)
+    const previewOnRef = useRef(previewOn)
+    const divergenceOnRef = useRef(divergenceOn)
+    previewOnRef.current = previewOn
+    divergenceOnRef.current = divergenceOn
     const [rulerVisible, setRulerVisible] = useState(true)
+    const [darkPages, setDarkPages] = useState(readDarkPagesPreference)
     const [zoom, setZoom] = useState(100)
     const [pageSetupOpen, setPageSetupOpen] = useState(false)
     const [linkOpen, setLinkOpen] = useState(false)
@@ -423,20 +436,32 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const updateDocument = useCallback(
       (next: SemanticDocument) => {
+        const stylesChanged = next.styles !== documentRef.current.styles
+        const fontsChanged = next.fontAssets !== documentRef.current.fontAssets
         documentRef.current = next
-        setDocument(next)
         onDocumentChange?.(next)
+        // Typing must not push a new React document on every character —
+        // that re-ran layoutDocument during render and flashed the page.
+        if (
+          previewOnRef.current ||
+          divergenceOnRef.current ||
+          stylesChanged ||
+          fontsChanged
+        ) {
+          setDocument(next)
+        }
       },
       [onDocumentChange]
     )
 
     const layoutResult = useMemo(() => {
+      if (!previewOn && !divergenceOn) return null
       try {
         return layoutDocument(document, { includeTrace: true })
       } catch {
         return null
       }
-    }, [document])
+    }, [document, divergenceOn, previewOn])
 
     useEffect(() => {
       setReadOnlyState(readOnlyProp)
@@ -444,6 +469,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     useEffect(() => {
       ensureEditorStyles()
+    })
+
+    useEffect(() => {
       injectDomFontFaces(BUILTIN_FONT_INDEX)
       injectGoogleFontStylesheet(GOOGLE_FONT_FAMILIES)
       let cancelled = false
@@ -458,10 +486,13 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     useEffect(
       () =>
         injectEmbeddedDocumentFonts(
-          document,
+          {
+            ...documentRef.current,
+            fontAssets: document.fontAssets,
+          },
           portalContainer instanceof ShadowRoot ? portalContainer : undefined
         ),
-      [document, portalContainer]
+      [document.fontAssets, portalContainer]
     )
 
     useEffect(() => {
@@ -527,11 +558,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             const numbering = numberingDefinitionFromTransaction(tr)
             const numberingDefinitions = numbering
               ? [
-                  ...current.numberingDefinitions.filter(
-                    (definition) => definition.id !== numbering.id
-                  ),
-                  numbering,
-                ]
+                ...current.numberingDefinitions.filter(
+                  (definition) => definition.id !== numbering.id
+                ),
+                numbering,
+              ]
               : current.numberingDefinitions
             const semantic = toSemanticDocument(next.doc, {
               assets,
@@ -578,6 +609,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const loadDocument = useCallback(
       (next: SemanticDocument) => {
         updateDocument(next)
+        setDocument(next)
         const metadata = next.editorMetadata as
           | { customPalettes?: CustomPalette[]; pageUnit?: PageSetupUnit }
           | undefined
@@ -693,30 +725,30 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const onNew = useCallback(() => {
       const metadata = documentRef.current.editorMetadata as
         | {
-            defaultPageSetup?: {
-              pageWidth: number
-              pageHeight: number
-              marginTop: number
-              marginRight: number
-              marginBottom: number
-              marginLeft: number
-            }
-            pageUnit?: PageSetupUnit
+          defaultPageSetup?: {
+            pageWidth: number
+            pageHeight: number
+            marginTop: number
+            marginRight: number
+            marginBottom: number
+            marginLeft: number
           }
+          pageUnit?: PageSetupUnit
+        }
         | undefined
       const defaults = metadata?.defaultPageSetup
       const blank = createBlankDocument(
         defaults
           ? {
-              pageWidth: defaults.pageWidth,
-              pageHeight: defaults.pageHeight,
-              margins: {
-                top: defaults.marginTop,
-                right: defaults.marginRight,
-                bottom: defaults.marginBottom,
-                left: defaults.marginLeft,
-              },
-            }
+            pageWidth: defaults.pageWidth,
+            pageHeight: defaults.pageHeight,
+            margins: {
+              top: defaults.marginTop,
+              right: defaults.marginRight,
+              bottom: defaults.marginBottom,
+              left: defaults.marginLeft,
+            },
+          }
           : undefined
       )
       loadDocument({
@@ -845,8 +877,21 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onSelectAll: () => run(selectAll),
         onFindReplace: () => setFindReplaceOpen(true),
         onToggleRuler: () => setRulerVisible((value) => !value),
-        onTogglePreview: () => setPreviewOn((value) => !value),
-        onToggleDivergence: () => setDivergenceOn((value) => !value),
+        onToggleDarkPages: () => {
+          setDarkPages((value) => {
+            const next = !value
+            writeDarkPagesPreference(next)
+            return next
+          })
+        },
+        onTogglePreview: () => {
+          setDocument(documentRef.current)
+          setPreviewOn((value) => !value)
+        },
+        onToggleDivergence: () => {
+          setDocument(documentRef.current)
+          setDivergenceOn((value) => !value)
+        },
         onZoomChange: (percent) => setZoom(percent),
         onInsertImage: (file) => void onInsertImage(file),
         onInsertTable: (rows = 2, columns = 2) => {
@@ -920,8 +965,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             .flatMap((block) =>
               block.type === "paragraph"
                 ? block.children
-                    .filter((child) => child.type === "text")
-                    .map((child) => (child.type === "text" ? child.text : ""))
+                  .filter((child) => child.type === "text")
+                  .map((child) => (child.type === "text" ? child.text : ""))
                 : []
             )
             .join(" ")
@@ -1010,6 +1055,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             ? `apex-editor-root flex h-full min-h-[480px] flex-col bg-background text-foreground ${className}`
             : "apex-editor-root flex h-full min-h-[480px] flex-col bg-background text-foreground"
         }
+        {...(darkPages ? { "data-apex-dark-pages": "true" } : {})}
       >
         <EditorChrome
           actions={chromeActions}
@@ -1018,6 +1064,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             snapshot: selectionSnapshot,
             zoom,
             rulerVisible,
+            darkPages,
             previewOn,
             divergenceOn,
             printLayout: true,
@@ -1120,16 +1167,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             spacingAfter: selectionSnapshot.paragraph?.spacingAfter,
             value240ths:
               selectionSnapshot.paragraph?.lineSpacing &&
-              typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
-              "value240ths" in
+                typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
+                "value240ths" in
                 (selectionSnapshot.paragraph.lineSpacing as object)
                 ? Number(
-                    (
-                      selectionSnapshot.paragraph.lineSpacing as {
-                        value240ths: number
-                      }
-                    ).value240ths
-                  )
+                  (
+                    selectionSnapshot.paragraph.lineSpacing as {
+                      value240ths: number
+                    }
+                  ).value240ths
+                )
                 : null,
           }}
           onApply={(options) => {
@@ -1175,15 +1222,15 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                 columnWidths: options.columnWidths,
                 ...(options.columnWidths.length > 0
                   ? {
-                      width: options.columnWidths.reduce(
-                        (sum, value) => sum + value,
-                        0
-                      ),
-                      preferredWidth: options.columnWidths.reduce(
-                        (sum, value) => sum + value,
-                        0
-                      ),
-                    }
+                    width: options.columnWidths.reduce(
+                      (sum, value) => sum + value,
+                      0
+                    ),
+                    preferredWidth: options.columnWidths.reduce(
+                      (sum, value) => sum + value,
+                      0
+                    ),
+                  }
                   : {}),
                 cellPadding: options.cellPadding,
                 repeatHeaderRowCount: options.headerRowRepeat ? 1 : 0,
@@ -1366,9 +1413,9 @@ function mountEditorHeadless(
         const asset = imageAssetFromTransaction(tr)
         const assets = asset
           ? [
-              ...documentRef.current.assets.filter((a) => a.id !== asset.id),
-              asset,
-            ]
+            ...documentRef.current.assets.filter((a) => a.id !== asset.id),
+            asset,
+          ]
           : documentRef.current.assets
         const semantic = toSemanticDocument(next.doc, {
           assets,

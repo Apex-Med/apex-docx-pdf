@@ -398,8 +398,105 @@ export function paginationSignature(
     .join(",")}`
 }
 
+/**
+ * Widget identity that stays stable across rest-height / geometry tweaks.
+ * Including restTwips in the ProseMirror widget key recreates the whole page
+ * stack on every keystroke and flashes the sheet.
+ */
+export function decorationKeyForPlacement(
+  placement: PageBreakPlacement
+): string {
+  return placement.explicitPosition !== undefined
+    ? `manual-${placement.pageNumber}`
+    : `page-${placement.pageNumber}`
+}
+
 function twipToPx(twips: number): number {
   return twips / TWIPS_PER_PX
+}
+
+function overhangCss(
+  marginLeftPx: number,
+  marginRightPx: number
+): readonly string[] {
+  return [
+    `margin-left:-${marginLeftPx}px`,
+    `margin-right:-${marginRightPx}px`,
+    `width:calc(100% + ${marginLeftPx + marginRightPx}px)`,
+  ]
+}
+
+/** Mutate an existing spacer so pagination can update geometry without remounting. */
+export function applyBreakSpacerGeometry(
+  root: HTMLElement,
+  placement: PageBreakPlacement
+): void {
+  const restPx = Math.max(0, twipToPx(placement.restTwips))
+  const marginBottomPx = Math.max(0, twipToPx(placement.marginBottomTwips))
+  const marginTopPx = Math.max(0, twipToPx(placement.marginTopTwips))
+  const marginLeftPx = Math.max(0, twipToPx(placement.marginLeftTwips))
+  const marginRightPx = Math.max(0, twipToPx(placement.marginRightTwips))
+  const gapPx = DEFAULT_PAGE_GAP_PX
+  const totalHeight = restPx + marginBottomPx + gapPx + marginTopPx
+
+  root.setAttribute(
+    "data-page-break-spacer",
+    decorationKeyForPlacement(placement)
+  )
+  root.setAttribute("data-page-number", String(placement.pageNumber))
+  root.style.height = `${totalHeight}px`
+
+  const rest = root.querySelector(
+    ".apex-page-break-spacer__rest"
+  ) as HTMLElement | null
+  if (rest) rest.style.height = `${restPx}px`
+
+  const bottomMargin = root.querySelector(
+    ".apex-page-break-spacer__page-margin-bottom"
+  ) as HTMLElement | null
+  if (bottomMargin) {
+    bottomMargin.style.height = `${marginBottomPx}px`
+    bottomMargin.style.marginLeft = `-${marginLeftPx}px`
+    bottomMargin.style.marginRight = `-${marginRightPx}px`
+    bottomMargin.style.width = `calc(100% + ${marginLeftPx + marginRightPx}px)`
+  }
+
+  const gap = root.querySelector(
+    ".apex-page-break-spacer__gap"
+  ) as HTMLElement | null
+  if (gap) {
+    gap.style.height = `${gapPx}px`
+    gap.style.marginLeft = `-${marginLeftPx}px`
+    gap.style.marginRight = `-${marginRightPx}px`
+    gap.style.width = `calc(100% + ${marginLeftPx + marginRightPx}px)`
+  }
+
+  const topMargin = root.querySelector(
+    ".apex-page-break-spacer__page-margin-top"
+  ) as HTMLElement | null
+  if (topMargin) {
+    topMargin.style.height = `${marginTopPx}px`
+    topMargin.style.marginLeft = `-${marginLeftPx}px`
+    topMargin.style.marginRight = `-${marginRightPx}px`
+    topMargin.style.width = `calc(100% + ${marginLeftPx + marginRightPx}px)`
+  }
+
+  const label = root.querySelector(".apex-page-break-spacer__label")
+  if (label) label.textContent = `Page ${placement.pageNumber}`
+}
+
+export function applySpacerGeometryToDom(
+  root: ParentNode,
+  placements: readonly PageBreakPlacement[]
+): void {
+  if (typeof document === "undefined") return
+  for (const placement of placements) {
+    const key = decorationKeyForPlacement(placement)
+    const el = root.querySelector(
+      `[data-page-break-spacer="${key}"]`
+    ) as HTMLElement | null
+    if (el) applyBreakSpacerGeometry(el, placement)
+  }
 }
 
 /**
@@ -425,8 +522,6 @@ export function createBreakSpacerElement(
 
   const root = document.createElement("span")
   root.className = "apex-page-break-spacer"
-  root.setAttribute("data-page-break-spacer", placement.key)
-  root.setAttribute("data-page-number", String(placement.pageNumber))
   root.setAttribute("contenteditable", "false")
   root.style.cssText = [
     "display:block",
@@ -450,9 +545,7 @@ export function createBreakSpacerElement(
   bottomMargin.className = "apex-page-break-spacer__page-margin-bottom"
   bottomMargin.style.cssText = [
     `height:${marginBottomPx}px`,
-    `margin-left:-${marginLeftPx}px`,
-    `margin-right:-${marginRightPx}px`,
-    `width:calc(100% + ${marginLeftPx + marginRightPx}px)`,
+    ...overhangCss(marginLeftPx, marginRightPx),
     "background:var(--apex-page-bg,#fff)",
     /* Shadows are painted in the desk gutter, not on the margin strip. */
     "box-shadow:none",
@@ -464,9 +557,7 @@ export function createBreakSpacerElement(
   gap.className = "apex-page-break-spacer__gap"
   gap.style.cssText = [
     `height:${gapPx}px`,
-    `margin-left:-${marginLeftPx}px`,
-    `margin-right:-${marginRightPx}px`,
-    `width:calc(100% + ${marginLeftPx + marginRightPx}px)`,
+    ...overhangCss(marginLeftPx, marginRightPx),
     "background:var(--apex-desk,#e5e7eb)",
     "display:flex",
     "align-items:center",
@@ -477,7 +568,6 @@ export function createBreakSpacerElement(
   ].join(";")
   const label = document.createElement("span")
   label.className = "apex-page-break-spacer__label"
-  label.textContent = `Page ${placement.pageNumber}`
   gap.append(label)
 
   // 4) Top margin of next page (new white sheet starts)
@@ -485,9 +575,7 @@ export function createBreakSpacerElement(
   topMargin.className = "apex-page-break-spacer__page-margin-top"
   topMargin.style.cssText = [
     `height:${marginTopPx}px`,
-    `margin-left:-${marginLeftPx}px`,
-    `margin-right:-${marginRightPx}px`,
-    `width:calc(100% + ${marginLeftPx + marginRightPx}px)`,
+    ...overhangCss(marginLeftPx, marginRightPx),
     "background:var(--apex-page-bg,#fff)",
     "box-shadow:none",
     "box-sizing:border-box",
@@ -495,6 +583,7 @@ export function createBreakSpacerElement(
   ].join(";")
 
   root.append(rest, bottomMargin, gap, topMargin)
+  applyBreakSpacerGeometry(root, placement)
   return root
 }
 

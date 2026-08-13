@@ -9,8 +9,10 @@ import { Decoration, DecorationSet, type EditorView } from "prosemirror-view"
 
 import { toSemanticDocument } from "../model/bridge"
 import {
+  applySpacerGeometryToDom,
   createBreakSpacerElement,
   createTableBreakRowElement,
+  decorationKeyForPlacement,
   detectOversizedNonSplittable,
   mergeManualPageBreakPlacements,
   pageBreaksFromTrace,
@@ -134,7 +136,7 @@ export function decorationsFromPlacements(
         },
         {
           side: -1,
-          key: placement.key,
+          key: decorationKeyForPlacement(placement),
         }
       )
     )
@@ -300,6 +302,9 @@ export function createPaginationPlugin(
                 iteration: 0,
               })
               view.dispatch(tr)
+              // Stable widget keys reuse the existing spacer DOM; paint the
+              // new rest-height without tearing the page stack down.
+              applySpacerGeometryToDom(view.dom, placements)
             } catch (error) {
               if (layoutRevision !== documentRevision) return
               view.dom.dataset.apexPaginationStatus = "failed"

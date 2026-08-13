@@ -29,6 +29,7 @@ export function EditorChrome({
 }: EditorChromeProps): ReactNode {
   const portalRef = useRef<HTMLElement | ShadowRoot | null>(portalContainer ?? null)
   portalRef.current = portalContainer ?? null
+  const pagesRef = useRef<HTMLDivElement | null>(null)
 
   const section = view.snapshot.section
   const paragraph = view.snapshot.paragraph
@@ -67,12 +68,18 @@ export function EditorChrome({
               firstLineIndentTwips={paragraph?.firstLineIndent ?? 0}
               tabStops={paragraph?.tabStops ?? []}
               zoom={view.zoom}
+              pageHostRef={pagesRef}
               onMarginsChange={actions.onMarginsChange}
               onIndentsChange={actions.onIndentsChange}
               onTabStopsChange={actions.onTabStopsChange}
             />
           ) : null}
-          <div className="apex-editor-pages min-h-0 flex-1" style={pagesStyle}>
+          <div
+            ref={pagesRef}
+            key="apex-editor-pages"
+            className="apex-editor-pages min-h-0 flex-1"
+            style={pagesStyle}
+          >
             {children}
           </div>
         </div>

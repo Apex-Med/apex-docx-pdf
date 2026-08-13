@@ -11,6 +11,9 @@ import {
   pageBreaksFromTrace,
   pageGeometryFromDisplayList,
   paginationSignature,
+  decorationKeyForPlacement,
+  applyBreakSpacerGeometry,
+  createBreakSpacerElement,
   positionForParagraphOffset,
   spacerSpecsFromPlacements,
   type PageBreakPlacement,
@@ -123,6 +126,33 @@ describe("pagination regressions", () => {
     expect(paginationSignature([baseline], 2)).not.toBe(
       paginationSignature([remargined], 2)
     )
+  })
+
+  test("widget decoration keys stay stable when rest height changes", () => {
+    const baseline = placement({ restTwips: 1_200, key: "geo:1200" })
+    const reflowed = placement({ restTwips: 800, key: "geo:800" })
+    expect(decorationKeyForPlacement(baseline)).toBe("page-2")
+    expect(decorationKeyForPlacement(reflowed)).toBe(
+      decorationKeyForPlacement(baseline)
+    )
+    expect(decorationKeyForPlacement(baseline)).not.toBe(
+      decorationKeyForPlacement(
+        placement({ explicitPosition: 4, pageNumber: 2 })
+      )
+    )
+  })
+
+  test("spacer geometry can be updated in place without remounting", () => {
+    if (typeof document === "undefined") {
+      expect(typeof applyBreakSpacerGeometry).toBe("function")
+      return
+    }
+    const el = createBreakSpacerElement(placement({ restTwips: 1_500 }))
+    const beforeHeight = Number.parseFloat(el.style.height || "0")
+    applyBreakSpacerGeometry(el, placement({ restTwips: 3_000 }))
+    const afterHeight = Number.parseFloat(el.style.height || "0")
+    expect(afterHeight).toBeGreaterThan(beforeHeight)
+    expect(el.getAttribute("data-page-break-spacer")).toBe("page-2")
   })
 
   test("keeps exact-fit, zero-margin spacer geometry to the desk gap only", () => {

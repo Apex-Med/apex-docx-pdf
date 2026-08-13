@@ -213,6 +213,7 @@ function cellDomAttrs(node: {
     : []
   return {
     "data-node-id": node.attrs.nodeId ? String(node.attrs.nodeId) : "",
+    ...(fill ? { "data-fill-color": String(fill) } : {}),
     ...(colspan > 1 ? { colspan: String(colspan) } : {}),
     ...(rowspan > 1 ? { rowspan: String(rowspan) } : {}),
     ...(colwidth.length > 0 ? { "data-colwidth": colwidth.join(",") } : {}),
@@ -330,8 +331,8 @@ const nodes: Record<string, NodeSpec> = {
             : "",
           node.attrs.columnSeparator ? "column-rule:0.75pt solid #9aa0a6" : "",
           "box-sizing:border-box",
-          "background:white",
-          "box-shadow:0 1px 3px rgba(0,0,0,.12)",
+          "background:var(--apex-page-bg,#fff)",
+          "box-shadow:var(--apex-page-shadow)",
           "margin:0 auto var(--apex-page-gap,32px)",
           "position:relative",
         ].join(";"),

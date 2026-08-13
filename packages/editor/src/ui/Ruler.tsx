@@ -1,16 +1,19 @@
 import {
   useCallback,
+  useLayoutEffect,
   useMemo,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react"
 
 import { TWIPS_PER_INCH } from "./chrome-types"
 
 const RULER_HEIGHT_PX = 22
 const PIXELS_PER_INCH = 96
+const TAB_ADD_GUTTER_PX = 28
 
 export type TabStop = Readonly<{
   position: number
@@ -25,6 +28,8 @@ export type RulerProps = Readonly<{
   firstLineIndentTwips: number
   tabStops: readonly TabStop[]
   zoom: number
+  /** Scroll/zoom container that holds `section[data-section]` page sheets. */
+  pageHostRef?: RefObject<HTMLElement | null>
   onMarginsChange: (options: {
     marginLeft?: number
     marginRight?: number
@@ -72,6 +77,20 @@ function snapTwips(value: number, step = 90): number {
   return Math.round(value / step) * step
 }
 
+/** Map a page sheet's viewport box onto the ruler strip. */
+export function alignmentFromRects(
+  page: Pick<DOMRect, "left" | "width">,
+  wrap: Pick<DOMRect, "left">,
+  unscaledTrackWidth: number
+): { left: number; width: number; scale: number } {
+  const width = Math.max(0, page.width)
+  return {
+    left: page.left - wrap.left,
+    width,
+    scale: unscaledTrackWidth > 0 ? width / unscaledTrackWidth : 1,
+  }
+}
+
 export function Ruler({
   pageWidthTwips,
   marginLeftTwips,
@@ -80,16 +99,22 @@ export function Ruler({
   firstLineIndentTwips,
   tabStops,
   zoom,
+  pageHostRef,
   onMarginsChange,
   onIndentsChange,
   onTabStopsChange,
 }: RulerProps): ReactNode {
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const rulerRef = useRef<HTMLDivElement | null>(null)
+  const addBtnRef = useRef<HTMLButtonElement | null>(null)
   const trackRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
 
   const pageWidthInches = pageWidthTwips / TWIPS_PER_INCH
   const trackWidthPx = pageWidthInches * PIXELS_PER_INCH
   const scale = zoom / 100
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
 
   const tickMarks = useMemo(() => {
     const inches = Math.ceil(pageWidthInches)
@@ -98,6 +123,88 @@ export function Ruler({
 
   const contentRightTwips = pageWidthTwips - marginRightTwips
   const firstLineTwips = indentStartTwips + firstLineIndentTwips
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    const host = pageHostRef?.current ?? null
+    if (!wrap) return
+
+    const observed = new Set<Element>()
+    let ro: ResizeObserver
+    const observe = (el: Element | null | undefined) => {
+      if (!el || observed.has(el)) return
+      observed.add(el)
+      ro.observe(el)
+    }
+
+    const applyFallback = () => {
+      const ruler = rulerRef.current
+      const track = trackRef.current
+      scaleRef.current = scale
+      if (ruler) {
+        ruler.style.marginLeft = ""
+        ruler.style.width = `${trackWidthPx * scale}px`
+        ruler.style.visibility = "hidden"
+      }
+      if (track) {
+        track.style.transform = `scale(${scale})`
+        track.style.transformOrigin = "top left"
+      }
+      if (addBtnRef.current) {
+        addBtnRef.current.style.left = "4px"
+        addBtnRef.current.style.visibility = "hidden"
+      }
+    }
+
+    const sync = () => {
+      const ruler = rulerRef.current
+      const track = trackRef.current
+      const page = host?.querySelector<HTMLElement>("section[data-section]")
+      if (!ruler || !host || !page) {
+        applyFallback()
+        return
+      }
+      observe(page)
+      observe(host.querySelector(".apex-editor-surface"))
+      const align = alignmentFromRects(
+        page.getBoundingClientRect(),
+        wrap.getBoundingClientRect(),
+        trackWidthPx
+      )
+      scaleRef.current = align.scale
+      ruler.style.visibility = "visible"
+      ruler.style.marginLeft = `${align.left}px`
+      ruler.style.width = `${align.width}px`
+      if (track) {
+        track.style.transform = `scale(${align.scale})`
+        track.style.transformOrigin = "top left"
+      }
+      if (addBtnRef.current) {
+        addBtnRef.current.style.visibility = "visible"
+        addBtnRef.current.style.left = `${Math.max(4, align.left - TAB_ADD_GUTTER_PX)}px`
+      }
+    }
+
+    ro = new ResizeObserver(sync)
+    observe(wrap)
+    observe(host)
+    sync()
+    host?.addEventListener("scroll", sync, true)
+    window.addEventListener("resize", sync)
+    const mo = host ? new MutationObserver(sync) : null
+    // Direct children only — subtree would resync on every typed character.
+    if (host && mo) {
+      mo.observe(host, { childList: true })
+      const surface = host.querySelector(".apex-editor-surface")
+      if (surface) mo.observe(surface, { childList: true })
+    }
+    return () => {
+      ro.disconnect()
+      mo?.disconnect()
+      host?.removeEventListener("scroll", sync, true)
+      window.removeEventListener("resize", sync)
+    }
+  }, [pageHostRef, scale, trackWidthPx])
 
   const onPointerMoveRef = useRef<(event: PointerEvent) => void>(
     () => undefined
@@ -108,7 +215,7 @@ export function Ruler({
     const drag = dragRef.current
     const track = trackRef.current
     if (!drag || !track) return
-    const deltaPx = (event.clientX - drag.startClientX) / scale
+    const deltaPx = (event.clientX - drag.startClientX) / scaleRef.current
     const deltaTwips = pxToTwips(deltaPx, pageWidthTwips, trackWidthPx)
     const nextTwips = snapTwips(drag.startTwips + deltaTwips)
 
@@ -202,7 +309,7 @@ export function Ruler({
       const track = trackRef.current
       if (!track) return
       const rect = track.getBoundingClientRect()
-      const x = (event.clientX - rect.left) / scale
+      const x = (event.clientX - rect.left) / scaleRef.current
       const twips = snapTwips(pxToTwips(x, pageWidthTwips, trackWidthPx))
       if (twips < marginLeftTwips || twips > contentRightTwips) return
       onTabStopsChange([...tabStops, { position: twips, alignment: "left" }])
@@ -212,7 +319,6 @@ export function Ruler({
       marginLeftTwips,
       onTabStopsChange,
       pageWidthTwips,
-      scale,
       tabStops,
       trackWidthPx,
     ]
@@ -240,10 +346,15 @@ export function Ruler({
   }
 
   return (
-    <div className="apex-editor-ruler-wrap flex justify-center border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-4 py-1">
+    <div
+      ref={wrapRef}
+      className="apex-editor-ruler-wrap relative overflow-hidden border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) py-1"
+    >
       <button
+        ref={addBtnRef}
         type="button"
-        className="me-2 size-6 shrink-0 rounded-sm border border-(--apex-chrome-border) text-xs text-(--apex-chrome-muted) hover:bg-(--apex-chrome-hover)"
+        className="apex-editor-ruler__tab-add absolute top-1/2 z-10 size-6 -translate-y-1/2 rounded-sm border border-(--apex-chrome-border) text-xs text-(--apex-chrome-muted) hover:bg-(--apex-chrome-hover)"
+        style={{ left: 4, visibility: "hidden" }}
         aria-label="Add a tab stop at the midpoint"
         onClick={() => {
           const midpoint = snapTwips(
@@ -258,10 +369,12 @@ export function Ruler({
         +
       </button>
       <div
+        ref={rulerRef}
         className="apex-editor-ruler"
         style={{
           width: trackWidthPx * scale,
           height: RULER_HEIGHT_PX,
+          visibility: "hidden",
         }}
       >
         <div
@@ -271,7 +384,7 @@ export function Ruler({
             width: trackWidthPx,
             height: RULER_HEIGHT_PX,
             transform: `scale(${scale})`,
-            transformOrigin: "top center",
+            transformOrigin: "top left",
           }}
           onClick={handleTrackClick}
           onKeyDown={(event) => {

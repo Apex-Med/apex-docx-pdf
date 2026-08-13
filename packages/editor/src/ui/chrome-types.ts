@@ -18,6 +18,7 @@ export type EditorChromeActions = Readonly<{
   onSelectAll: () => void
   onFindReplace: () => void
   onToggleRuler: () => void
+  onToggleDarkPages: () => void
   onTogglePreview: () => void
   onToggleDivergence: () => void
   onZoomChange: (percent: number) => void
@@ -78,10 +79,34 @@ export type EditorChromeViewState = Readonly<{
   snapshot: EditorSelectionSnapshot
   zoom: number
   rulerVisible: boolean
+  darkPages: boolean
   previewOn: boolean
   divergenceOn: boolean
   printLayout: boolean
 }>
+
+export const DARK_PAGES_STORAGE_KEY = "apex-editor-dark-pages"
+
+export function readDarkPagesPreference(): boolean {
+  if (typeof localStorage === "undefined") return true
+  try {
+    const stored = localStorage.getItem(DARK_PAGES_STORAGE_KEY)
+    if (stored === "false") return false
+    if (stored === "true") return true
+  } catch {
+    // Ignore unavailable storage.
+  }
+  return true
+}
+
+export function writeDarkPagesPreference(enabled: boolean): void {
+  if (typeof localStorage === "undefined") return
+  try {
+    localStorage.setItem(DARK_PAGES_STORAGE_KEY, enabled ? "true" : "false")
+  } catch {
+    // Ignore quota errors.
+  }
+}
 
 export type EditorChromeResources = Readonly<{
   fonts: FontIndex

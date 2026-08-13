@@ -36,7 +36,7 @@ export function transformCssForShadowDom(css: string): ShadowCssTransformResult 
     const nameMatch = rule.match(/@property\s+(--[\w-]+)/u)
     const initialMatch = rule.match(/initial-value:\s*([^;]+);/u)
     if (nameMatch && initialMatch) {
-      twVars.push(`${nameMatch[1]}: ${initialMatch[1]!.trim()};`)
+      twVars.push(`${nameMatch[1]}: ${initialMatch[1]?.trim()};`)
     }
   }
 
@@ -47,7 +47,7 @@ export function transformCssForShadowDom(css: string): ShadowCssTransformResult 
   font-family: Calibri, Inter, system-ui, sans-serif;
   font-size: 11pt;
   line-height: normal;
-  color: #000000;
+  color: var(--apex-page-fg, #000000);
   -webkit-font-smoothing: antialiased;
   ${twVars.join("\n  ")}
 }

@@ -44,6 +44,28 @@ describe("layout worker wiring", () => {
     expect(pluginsSource).toContain("createPaginationPlugin")
   })
 
+  test("Editor does not re-layout the document on every React render while typing", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "../src/ui/Editor.tsx"),
+      "utf8"
+    )
+    expect(source).toContain("if (!previewOn && !divergenceOn) return null")
+    expect(source).toContain("previewOnRef.current")
+    expect(source).toContain("document.fontAssets")
+    expect(source).not.toMatch(
+      /useMemo\(\s*\(\)\s*=>\s*\{\s*try\s*\{\s*return layoutDocument\(document/
+    )
+  })
+
+  test("embedded document fonts use font-display swap to avoid FOIT flashes", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "../src/fonts/embedded.ts"),
+      "utf8"
+    )
+    expect(source).toContain("font-display:swap")
+    expect(source).not.toContain("font-display:block")
+  })
+
   test("falls back when a layout worker never responds", async () => {
     const silentWorker = {
       onmessage: null,
@@ -58,7 +80,7 @@ describe("layout worker wiring", () => {
     const layout = getLayoutAsync(client)
     expect(layout).not.toBeNull()
 
-    const result = await layout!(createBlankDocument(), {
+    const result = await layout?.(createBlankDocument(), {
       includeTrace: true,
     })
     expect(result?.type).toBe("success")

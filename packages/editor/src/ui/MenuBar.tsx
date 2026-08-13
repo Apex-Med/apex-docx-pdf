@@ -128,6 +128,12 @@ export function MenuBar({
               Show ruler
             </MenubarCheckboxItem>
             <MenubarCheckboxItem
+              checked={view.darkPages}
+              onCheckedChange={() => actions.onToggleDarkPages()}
+            >
+              Dark pages
+            </MenubarCheckboxItem>
+            <MenubarCheckboxItem
               checked={view.previewOn}
               onCheckedChange={() => actions.onTogglePreview()}
             >
@@ -443,11 +449,10 @@ function TableGridPicker({
               key={`${rows}-${columns}`}
               render={<button type="button" />}
               aria-label={`${rows} rows by ${columns} columns`}
-              className={`size-5 min-h-5 rounded-sm border p-0 ${
-                active
+              className={`size-5 min-h-5 rounded-sm border p-0 ${active
                   ? "border-primary bg-primary/20"
                   : "border-border bg-background"
-              } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring`}
+                } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring`}
               onPointerEnter={() => setHovered({ rows, columns })}
               onFocus={() => setHovered({ rows, columns })}
               onClick={() => onInsert(rows, columns)}

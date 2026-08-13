@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { EDITOR_CSS } from "../src/styles/editor-css"
+import {
+  DARK_PAGES_STORAGE_KEY,
+  readDarkPagesPreference,
+  writeDarkPagesPreference,
+} from "../src/ui/chrome-types"
 
 describe("dark mode adaptivity", () => {
   test("editor CSS defines light tokens and .dark overrides for chrome/desk", () => {
@@ -10,13 +15,36 @@ describe("dark mode adaptivity", () => {
     expect(EDITOR_CSS).toContain("--apex-chrome-bg:")
     expect(EDITOR_CSS).toContain(".dark")
     expect(EDITOR_CSS).toContain("prefers-color-scheme: dark")
-    // Paper stays white for print fidelity
     expect(EDITOR_CSS).toMatch(/--apex-page-bg:\s*#ffffff/)
-    // Dark desk is not the light gray
+    expect(EDITOR_CSS).toContain("--apex-page-bg: #242426")
+    expect(EDITOR_CSS).toContain("[data-apex-dark-pages]")
+    expect(EDITOR_CSS).toContain("--apex-page-fg: #e8eaed")
     expect(EDITOR_CSS).toContain("--apex-desk: #1c1c1e")
-    // Context menu and ribbon use chrome tokens
+    expect(EDITOR_CSS).toContain("--apex-ruler-margin:")
+    expect(EDITOR_CSS).toContain("background: var(--apex-page-bg)")
+    expect(EDITOR_CSS).toContain("background: var(--apex-ruler-margin)")
+    expect(EDITOR_CSS).not.toMatch(
+      /\.apex-editor-ruler__track\s*\{[^}]*background:\s*#ffffff/s
+    )
+    expect(EDITOR_CSS).not.toMatch(
+      /\.apex-editor-ruler__margin\s*\{[^}]*background:\s*#e8eaed/s
+    )
+    expect(EDITOR_CSS).toContain('[data-color="#000000" i]')
+    expect(EDITOR_CSS).toContain("[data-fill-color=")
+    expect(EDITOR_CSS).toContain("@media print")
+    expect(EDITOR_CSS).toContain(
+      ".apex-editor-surface .ProseMirror > section[data-section]"
+    )
     expect(EDITOR_CSS).toContain("background: var(--apex-chrome-bg)")
     expect(EDITOR_CSS).toContain("color: var(--apex-chrome-fg)")
+  })
+
+  test("EDITOR_CSS stays in sync with editor.css", () => {
+    const raw = readFileSync(
+      join(import.meta.dir, "../src/styles/editor.css"),
+      "utf8"
+    )
+    expect(EDITOR_CSS).toBe(raw)
   })
 
   test("React chrome components avoid hard-coded light-only colors", () => {
@@ -43,6 +71,8 @@ describe("dark mode adaptivity", () => {
     expect(preview).not.toContain('background: "#fff"')
     expect(editor).toContain("apex-editor-root")
     expect(editor).toContain("bg-background")
+    expect(editor).toContain("data-apex-dark-pages")
+    expect(editor).toContain("onToggleDarkPages")
     expect(route).toContain("bg-background")
     expect(route).toContain("text-foreground")
     expect(route).toContain("border-border")
@@ -60,5 +90,21 @@ describe("dark mode adaptivity", () => {
     expect(breaks).not.toContain("var(--apex-page-shadow")
     expect(EDITOR_CSS).toContain("var(--apex-page-shadow)")
     expect(EDITOR_CSS).toContain(".apex-page-break-spacer__gap::before")
+  })
+
+  test("section sheets do not hard-code white paper in toDOM", () => {
+    const schema = readFileSync(
+      join(import.meta.dir, "../src/schema/index.ts"),
+      "utf8"
+    )
+    expect(schema).toContain("background:var(--apex-page-bg,#fff)")
+    expect(schema).toContain("box-shadow:var(--apex-page-shadow)")
+    expect(schema).not.toContain('"background:white"')
+  })
+
+  test("dark pages preference defaults on when storage is unavailable", () => {
+    expect(readDarkPagesPreference()).toBe(true)
+    expect(() => writeDarkPagesPreference(false)).not.toThrow()
+    expect(DARK_PAGES_STORAGE_KEY).toBe("apex-editor-dark-pages")
   })
 })
