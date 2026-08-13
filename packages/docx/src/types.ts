@@ -1,5 +1,6 @@
 import type {
   Diagnostic,
+  DocumentStyles,
   FontStyle,
   FontWeight,
   NumberingFormat,
@@ -18,6 +19,8 @@ export type ParsedDocxText = Readonly<{
   text: string
   preserveSpace: boolean
   source: SourceLocation
+  href?: string
+  anchor?: string
 }>
 
 export type ParsedDocxImage = Readonly<{
@@ -30,6 +33,16 @@ export type ParsedDocxImage = Readonly<{
   pixelHeight: number
   intrinsicRatio: number
   preserveAspect: boolean
+  placement:
+    | Readonly<{ type: "inline" }>
+    | Readonly<{
+        type: "anchor"
+        offsetXTwips: number
+        offsetYTwips: number
+        horizontalRelative: "column"
+        verticalRelative: "paragraph"
+        wrap: "square"
+      }>
 }>
 
 export type ParsedDocxPageField = Readonly<{
@@ -42,7 +55,7 @@ export type ParsedDocxPageField = Readonly<{
 export type ParsedDocxBreak = Readonly<{
   type: "docx-break"
   source: SourceLocation
-  kind: "line" | "page"
+  kind: "line" | "page" | "column"
 }>
 
 export type ParsedDocxTab = Readonly<{
@@ -63,6 +76,7 @@ export type ParsedDocxRunProperties = Readonly<{
   fontWeight: FontWeight
   fontStyle: FontStyle
   underline: boolean
+  strikethrough?: boolean
   color: string
   highlightColor: string | null
   verticalAlignment: "baseline" | "superscript" | "subscript"
@@ -77,6 +91,10 @@ export type ParsedDocxRun = Readonly<{
   type: "docx-run"
   source: SourceLocation
   properties: ParsedDocxRunProperties
+  /** Named character style id before flattening, when present. */
+  styleId?: string | null
+  /** Direct run overrides (pre-merge) for round-trip fidelity. */
+  directProperties?: Partial<ParsedDocxRunProperties> | null
   inlines: readonly ParsedDocxInline[]
   texts: readonly ParsedDocxText[]
 }>
@@ -124,6 +142,12 @@ export type ParsedDocxParagraph = Readonly<{
   type: "docx-paragraph"
   source: SourceLocation
   properties: ParsedDocxParagraphProperties
+  /** Named paragraph style id before flattening, when present. */
+  styleId?: string | null
+  /** Direct paragraph overrides (pre-merge) for round-trip fidelity. */
+  directProperties?: Partial<ParsedDocxParagraphProperties> | null
+  /** Effective w:pPr/w:rPr formatting for the paragraph mark. */
+  paragraphMarkProperties?: ParsedDocxRunProperties | null
   runs: readonly ParsedDocxRun[]
 }>
 
@@ -163,6 +187,13 @@ export type ParsedDocxTableCell = Readonly<{
   verticalAlignment: "top" | "center" | "bottom"
   fillColor: string | null
   borders: ParsedDocxTableCellBorders
+  /** Direct `w:tcMar` override, or null to inherit the table cell margins. */
+  cellPadding: Readonly<{
+    top: number
+    right: number
+    bottom: number
+    left: number
+  }> | null
   paragraphs: readonly ParsedDocxParagraph[]
 }>
 
@@ -180,6 +211,10 @@ export type ParsedDocxTable = Readonly<{
   source: SourceLocation
   width: number
   preferredWidth: number | null
+  /** Authored `w:tblInd` distance from the leading writable edge. */
+  indentStart: number
+  /** Authored table justification. Absent values default to left. */
+  alignment: "left" | "center" | "right"
   layout: "fixed" | "autofit"
   columnWidths: readonly number[]
   borders: ParsedDocxTableBorders
@@ -204,6 +239,14 @@ export type ParsedDocxHorizontalRule = Readonly<{
 export type ParsedDocxBlock =
   ParsedDocxParagraph | ParsedDocxTable | ParsedDocxHorizontalRule
 
+export type ParsedDocxSectionColumns = Readonly<{
+  count: number
+  equalWidth: boolean
+  space: number
+  separator: boolean
+  widths: readonly number[] | null
+}>
+
 export type ParsedDocxSectionProperties = Readonly<{
   pageWidth: number
   pageHeight: number
@@ -214,6 +257,8 @@ export type ParsedDocxSectionProperties = Readonly<{
   orientation: "portrait" | "landscape"
   headerDistance: number
   footerDistance: number
+  /** Null when w:cols is absent (single-column default). */
+  columns: ParsedDocxSectionColumns | null
 }>
 
 export type ParsedDocxImageAsset = Readonly<{
@@ -225,6 +270,23 @@ export type ParsedDocxImageAsset = Readonly<{
   bytes: readonly number[]
   pixelWidth: number
   pixelHeight: number
+  rasterFallback?: Readonly<{
+    bytes: readonly number[]
+    pixelWidth: number
+    pixelHeight: number
+    packagePath?: string
+  }>
+}>
+
+export type ParsedDocxFontAsset = Readonly<{
+  type: "docx-font-asset"
+  id: string
+  source: SourceLocation
+  packagePath: string
+  family: string
+  weight: FontWeight
+  style: FontStyle
+  bytes: readonly number[]
 }>
 
 export type ParsedDocxHeaderFooter = Readonly<{
@@ -249,6 +311,7 @@ export type ParsedDocxDocument = Readonly<{
   source: SourceLocation
   documentPart: string
   assets: readonly ParsedDocxImageAsset[]
+  fontAssets: readonly ParsedDocxFontAsset[]
   headers: readonly ParsedDocxHeaderFooter[]
   footers: readonly ParsedDocxHeaderFooter[]
   numberingDefinitions: readonly ParsedDocxNumberingDefinition[]
@@ -257,6 +320,10 @@ export type ParsedDocxDocument = Readonly<{
   /** Convenience projection retained for paragraph-only consumers. */
   paragraphs: readonly ParsedDocxParagraph[]
   sectionProperties: ParsedDocxSectionProperties
+  /** Populated from word/styles.xml when present. */
+  styles?: DocumentStyles
+  /** Optional editor custom part payload (word/apexEditor.json). */
+  editorMetadata?: Readonly<Record<string, unknown>>
 }>
 
 export type DocxParseOptions = Readonly<{

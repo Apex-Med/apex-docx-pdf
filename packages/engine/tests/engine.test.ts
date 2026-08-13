@@ -263,11 +263,7 @@ describe("engine vertical slice", () => {
     const mediaBoxes = [...pdfSource.matchAll(/\/MediaBox \[([^\]]+)\]/gu)].map(
       (match) => match[1]
     )
-    expect(mediaBoxes).toEqual([
-      "0 0 595.35 841.95",
-      "0 0 841.95 595.35",
-      "0 0 595.35 841.95",
-    ])
+    expect(mediaBoxes).toEqual(["0 0 595 842", "0 0 842 595", "0 0 595 842"])
     const imageMatrices = [
       ...pdfSource.matchAll(
         /q\n([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm\n\/Im\d+ Do/gu

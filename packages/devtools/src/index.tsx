@@ -4,12 +4,13 @@ import type {
   LayoutTraceEvent,
   PageDisplayList,
   PageDisplayListPage,
+  SemanticImageMimeType,
 } from "@apexmed/core"
 import { useMemo, useState } from "react"
 
 export type DisplayListPreviewAsset = Readonly<{
   assetId: string
-  mimeType: "image/png" | "image/jpeg"
+  mimeType: SemanticImageMimeType
   bytes: Uint8Array
 }>
 

@@ -42,7 +42,6 @@ describe("bounded Word text profile", () => {
     for (const body of [
       `<w:p><w:pPr><w:tabs><w:tab w:val="center" w:pos="720"/></w:tabs></w:pPr><w:r><w:tab/></w:r></w:p>`,
       `<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="720" w:leader="dot"/></w:tabs></w:pPr><w:r><w:tab/></w:r></w:p>`,
-      `<w:p><w:r><w:br w:type="column"/></w:r></w:p>`,
       `<w:p><w:r><w:br w:clear="all"/></w:r></w:p>`,
       `<w:p><w:r><w:tab/></w:r></w:p>`,
       `<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="1000"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="1000"/></w:tcPr><w:p><w:r><w:br w:type="page"/></w:r></w:p></w:tc></w:tr></w:tbl>`,
@@ -65,6 +64,22 @@ describe("bounded Word text profile", () => {
         )
       ).toBe(true)
     }
+  })
+
+  test("accepts column breaks in body paragraphs", () => {
+    const result = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:p><w:r><w:br w:type="column"/><w:t>After</w:t></w:r></w:p></w:body></w:document>`,
+      })
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const paragraph = result.value.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(paragraph.children.some((c) => c.type === "break" && c.kind === "column")).toBe(
+      true
+    )
   })
 
   test("rejects unknown highlight and vertical alignment values", () => {

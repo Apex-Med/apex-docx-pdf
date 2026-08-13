@@ -27,6 +27,8 @@ import type {
   FontSubsetAdapter,
   ParsedFontFace,
 } from "./parser"
+import { getFontVariation as applyFontVariation } from "./fontkit-adapter"
+import type { FontVariationOptions } from "./variation"
 
 const asciiWhitespace = /[\t\n\f\r ]+/gu
 const latinText = /^[\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]*$/u
@@ -50,7 +52,12 @@ type StoredFace = Readonly<{
 }>
 
 export interface ManagedFontRegistry
-  extends FontRegistry, TextShaper, FontEmbeddingProvider {}
+  extends FontRegistry, TextShaper, FontEmbeddingProvider {
+  getFontVariation(
+    family: string,
+    options?: FontVariationOptions
+  ): ParsedFontFace
+}
 
 export type CreateFontRegistryOptions = Readonly<{
   parser?: FontParserAdapter
@@ -292,7 +299,8 @@ class Registry implements ManagedFontRegistry {
       return this.#match(
         exact,
         request.family,
-        requestedFamily === resolvedFamily ? "exact" : "alias"
+        requestedFamily === resolvedFamily ? "exact" : "alias",
+        effectiveRequest
       )
     }
     const faceFallback = this.#matchWithinFamily(
@@ -300,7 +308,12 @@ class Registry implements ManagedFontRegistry {
       effectiveRequest
     )
     if (faceFallback) {
-      return this.#match(faceFallback, request.family, "face-fallback")
+      return this.#match(
+        faceFallback,
+        request.family,
+        "face-fallback",
+        effectiveRequest
+      )
     }
 
     const fallback = this.#matchWithinFamily(
@@ -312,7 +325,12 @@ class Registry implements ManagedFontRegistry {
         "The required regular fallback face is missing"
       )
     }
-    return this.#match(fallback, request.family, "family-fallback")
+    return this.#match(
+      fallback,
+      request.family,
+      "family-fallback",
+      effectiveRequest
+    )
   }
 
   #matchWithinFamily(
@@ -348,11 +366,15 @@ class Registry implements ManagedFontRegistry {
         `Font face '${input.face.faceId}' does not belong to this registry`
       )
     }
+    const parsed =
+      input.variation !== undefined
+        ? applyFontVariation(stored.parsed, input.variation)
+        : stored.parsed
     for (const character of input.text) {
       const codePoint = character.codePointAt(0)
       if (
         codePoint === undefined ||
-        !stored.parsed.hasGlyphForCodePoint(codePoint)
+        !parsed.hasGlyphForCodePoint(codePoint)
       ) {
         throw new FontShapingError(
           "fonts/missing-glyph",
@@ -366,7 +388,7 @@ class Registry implements ManagedFontRegistry {
       }
     }
 
-    const run = stored.parsed.layout(input.text, {
+    const run = parsed.layout(input.text, {
       direction: "ltr",
       script: "latn",
       ...(input.language === undefined ? {} : { language: input.language }),
@@ -388,12 +410,12 @@ class Registry implements ManagedFontRegistry {
       const nextRoundedX = scaleMetric(
         rawX,
         input.fontSize,
-        stored.parsed.metrics.unitsPerEm
+        parsed.metrics.unitsPerEm
       )
       const nextRoundedY = scaleMetric(
         rawY,
         input.fontSize,
-        stored.parsed.metrics.unitsPerEm
+        parsed.metrics.unitsPerEm
       )
       const shaped = Object.freeze({
         glyphId: glyph.glyphId,
@@ -405,12 +427,12 @@ class Registry implements ManagedFontRegistry {
         offsetX: scaleMetric(
           glyph.offsetX,
           input.fontSize,
-          stored.parsed.metrics.unitsPerEm
+          parsed.metrics.unitsPerEm
         ),
         offsetY: scaleMetric(
           -glyph.offsetY,
           input.fontSize,
-          stored.parsed.metrics.unitsPerEm
+          parsed.metrics.unitsPerEm
         ),
       })
       roundedX = nextRoundedX
@@ -421,19 +443,19 @@ class Registry implements ManagedFontRegistry {
       glyphs: Object.freeze(glyphs),
       advanceX: twips(roundedX),
       ascent: scaleMetric(
-        stored.parsed.metrics.ascent,
+        parsed.metrics.ascent,
         input.fontSize,
-        stored.parsed.metrics.unitsPerEm
+        parsed.metrics.unitsPerEm
       ),
       descent: scaleMetric(
-        stored.parsed.metrics.descent,
+        parsed.metrics.descent,
         input.fontSize,
-        stored.parsed.metrics.unitsPerEm
+        parsed.metrics.unitsPerEm
       ),
       lineGap: scaleMetric(
-        stored.parsed.metrics.lineGap,
+        parsed.metrics.lineGap,
         input.fontSize,
-        stored.parsed.metrics.unitsPerEm
+        parsed.metrics.unitsPerEm
       ),
     })
   }
@@ -483,17 +505,60 @@ class Registry implements ManagedFontRegistry {
     })
   }
 
+  getFontVariation(
+    family: string,
+    options: FontVariationOptions = {}
+  ): ParsedFontFace {
+    const requestedFamily = normalizeFontFamily(family)
+    const alias = this.#aliases.get(requestedFamily)
+    const resolvedFamily = alias?.family ?? requestedFamily
+    const stored = this.#bestVariationBaseFace(resolvedFamily)
+    if (!stored) {
+      throw new FontConfigurationError(
+        `No registered font face found for family '${family}'`
+      )
+    }
+    return applyFontVariation(stored.parsed, options)
+  }
+
+  #bestVariationBaseFace(family: string): StoredFace | undefined {
+    const candidates = [...this.#byKey.entries()]
+      .filter(([key]) => key.startsWith(`${family}\u0000`))
+      .map(([, face]) => face)
+    if (candidates.length === 0) return undefined
+    const score = (face: StoredFace): number => {
+      let value = 0
+      if (face.resource.weight === 400) value += 4
+      if (face.resource.style === "normal") value += 2
+      if (face.resource.kind === "truetype") value += 1
+      return value
+    }
+    return candidates.sort((left, right) => score(right) - score(left))[0]
+  }
+
   #match(
     stored: StoredFace,
     requestedFamily: string,
-    kind: FontMatch["kind"]
+    kind: FontMatch["kind"],
+    request: FontFaceRequest
   ): FontMatch {
+    let metrics = stored.resource.metrics
+    // When the resolved static face weight differs from the request (common for
+    // variable fonts registered as a single Regular face), apply OpenType
+    // variation axes so callers see weight-accurate metrics.
+    if (request.weight !== stored.resource.weight) {
+      const varied = applyFontVariation(stored.parsed, {
+        wght: request.weight,
+        ...(request.style === "italic" ? { ital: 1 } : {}),
+      })
+      metrics = varied.metrics
+    }
     return Object.freeze({
       faceId: stored.resource.faceId,
       requestedFamily,
       resolvedFamily: stored.resource.family,
       kind,
-      metrics: stored.resource.metrics,
+      metrics,
     })
   }
 }

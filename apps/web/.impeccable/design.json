@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-11T00:00:00.000Z",
+  "title": "Design System: Apex DOCX PDF",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.89 0 0)", "oklch(1 0 0)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.145 0 0)",
+        "tonalRamp": ["oklch(0.145 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.89 0 0)", "oklch(0.985 0 0)"]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel Gray",
+        "canonical": "oklch(0.97 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.89 0 0)", "oklch(0.97 0 0)"]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "oklch(0.42 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.34 0 0)", "oklch(0.42 0 0)", "oklch(0.55 0 0)", "oklch(0.68 0 0)", "oklch(0.82 0 0)", "oklch(0.95 0 0)"]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.922 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.86 0 0)", "oklch(0.922 0 0)"]
+      },
+      "pipeline-blue": {
+        "role": "primary",
+        "displayName": "Pipeline Blue",
+        "canonical": "oklch(0.46 0.16 246)",
+        "tonalRamp": ["oklch(0.15 0.06 246)", "oklch(0.27 0.11 246)", "oklch(0.39 0.15 246)", "oklch(0.46 0.16 246)", "oklch(0.58 0.15 246)", "oklch(0.70 0.13 246)", "oklch(0.83 0.08 246)", "oklch(0.95 0.025 246)"]
+      },
+      "destructive": {
+        "role": "primary",
+        "displayName": "Destructive Red",
+        "canonical": "oklch(0.577 0.245 27.325)",
+        "tonalRamp": ["oklch(0.15 0.07 27.325)", "oklch(0.27 0.14 27.325)", "oklch(0.40 0.20 27.325)", "oklch(0.577 0.245 27.325)", "oklch(0.68 0.20 27.325)", "oklch(0.78 0.14 27.325)", "oklch(0.88 0.08 27.325)", "oklch(0.95 0.03 27.325)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Landing-page propositions and strongest product statements." },
+      "headline": { "displayName": "Headline", "purpose": "Major section openings and workflow milestones." },
+      "title": { "displayName": "Title", "purpose": "Panel titles and technical headings." },
+      "body": { "displayName": "Body", "purpose": "Explanations, task guidance, and application copy." },
+      "label": { "displayName": "Label", "purpose": "Controls, statuses, metadata, and compact instrumentation." }
+    },
+    "shadows": [
+      { "name": "work-surface", "value": "0 1px 2px rgb(0 0 0 / 0.05)", "purpose": "Quiet separation for cards and bounded task surfaces." },
+      { "name": "overlay", "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)", "purpose": "Menus, dialogs, and transient floating interfaces." },
+      { "name": "navigation-lift", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Mobile navigation when it must read above the page." }
+    ],
+    "motion": [
+      { "name": "state", "value": "150ms ease", "purpose": "Color, border, transform, and icon-state transitions." },
+      { "name": "overlay", "value": "100ms ease", "purpose": "Dialog and backdrop entry or exit." },
+      { "name": "reduced-motion", "value": "0.01ms", "purpose": "Global effective motion floor under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The strongest task action, used sparingly and labeled like an instrument control.",
+      "html": "<button class=\"ds-btn-primary\">OPEN PLAYGROUND</button>",
+      "css": ".ds-btn-primary { height: 2.5rem; padding: 0 1.5rem; border: 1px solid transparent; border-radius: 0; background: var(--primary, oklch(0.205 0 0)); color: var(--primary-foreground, oklch(0.985 0 0)); font: 600 0.75rem/1.3 'Geist Mono Variable', monospace; letter-spacing: 0.1em; text-transform: uppercase; transition: background-color 150ms ease, transform 150ms ease; } .ds-btn-primary:hover { background: color-mix(in oklch, var(--primary, oklch(0.205 0 0)), transparent 20%); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ring, oklch(0.708 0 0)); outline-offset: 2px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "A secondary action that preserves the neutral field and crisp Hairline structure.",
+      "html": "<button class=\"ds-btn-outline\">VIEW SUPPORT</button>",
+      "css": ".ds-btn-outline { height: 2.5rem; padding: 0 1.5rem; border: 1px solid var(--border, oklch(0.922 0 0)); border-radius: 0; background: transparent; color: var(--foreground, oklch(0.145 0 0)); font: 600 0.75rem/1.3 'Geist Mono Variable', monospace; letter-spacing: 0.1em; text-transform: uppercase; transition: background-color 150ms ease; } .ds-btn-outline:hover { background: var(--muted, oklch(0.97 0 0)); } .ds-btn-outline:focus-visible { outline: 2px solid var(--ring, oklch(0.708 0 0)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Line Input",
+      "kind": "input",
+      "refersTo": "input-line",
+      "description": "A low-chrome technical field whose bottom rule carries state.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">TEMPLATE NAME</span><input class=\"ds-input\" value=\"invoice.docx\" /></label>",
+      "css": ".ds-field { display: grid; gap: 0.5rem; color: var(--foreground, oklch(0.145 0 0)); } .ds-field-label { font: 600 0.625rem/1.3 'Geist Mono Variable', monospace; letter-spacing: 0.1em; text-transform: uppercase; } .ds-input { height: 2.5rem; padding: 0.25rem 0; border: 0; border-bottom: 1px solid var(--input, oklch(0.922 0 0)); border-radius: 0; background: transparent; color: inherit; font: 400 0.875rem/1.5 'Geist Mono Variable', monospace; outline: none; transition: border-color 150ms ease; } .ds-input:hover { border-bottom-color: var(--muted-foreground, oklch(0.42 0 0)); } .ds-input:focus-visible { border-bottom-color: var(--ring, oklch(0.708 0 0)); outline: 2px solid var(--ring, oklch(0.708 0 0)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "A terse text-only status marker that avoids decorative pill chrome.",
+      "html": "<span class=\"ds-badge\">PRERELEASE</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; border: 0; border-radius: 0; background: transparent; color: var(--muted-foreground, oklch(0.42 0 0)); font: 600 0.625rem/1.3 'Geist Mono Variable', monospace; letter-spacing: 0.1em; text-transform: uppercase; transition: color 150ms ease; } .ds-badge:hover { color: var(--foreground, oklch(0.145 0 0)); } .ds-badge:focus-visible { outline: 2px solid var(--ring, oklch(0.708 0 0)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Work Surface Card",
+      "kind": "card",
+      "refersTo": "card-work-surface",
+      "description": "A lightly lifted square work surface for bounded technical content.",
+      "html": "<section class=\"ds-card\"><p class=\"ds-card-label\">COMPILE</p><h3 class=\"ds-card-title\">Template contract</h3><p class=\"ds-card-body\">Inspect the manifest, schema, and source-linked diagnostics.</p></section>",
+      "css": ".ds-card { display: grid; gap: 0.75rem; padding: 2rem; border-radius: 0; background: var(--card, oklch(1 0 0)); color: var(--card-foreground, oklch(0.145 0 0)); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 0 0 1px color-mix(in oklch, currentColor, transparent 95%); } .ds-card-label { margin: 0; color: var(--muted-foreground, oklch(0.42 0 0)); font: 600 0.625rem/1.3 'Geist Mono Variable', monospace; letter-spacing: 0.1em; text-transform: uppercase; } .ds-card-title { margin: 0; font: 600 1.125rem/1.4 'Geist Mono Variable', monospace; letter-spacing: 0.05em; text-transform: uppercase; } .ds-card-body { margin: 0; color: var(--muted-foreground, oklch(0.42 0 0)); font: 400 0.875rem/1.6 'Geist Mono Variable', monospace; } .ds-card:hover { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.08); } .ds-card:focus-within { outline: 2px solid var(--ring, oklch(0.708 0 0)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Site Navigation",
+      "kind": "nav",
+      "description": "Quiet product navigation with a stronger operational action.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\">APEX DOCX PDF</a><a class=\"ds-nav-link\" href=\"#\">PRODUCT</a><a class=\"ds-nav-link\" href=\"#\">SUPPORT</a><a class=\"ds-nav-action\" href=\"#\">OPEN PLAYGROUND</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 1.75rem; min-height: 4rem; padding: 0 2rem; border-bottom: 1px solid var(--border, oklch(0.922 0 0)); background: color-mix(in oklch, var(--background, white), transparent 8%); color: var(--foreground, oklch(0.145 0 0)); font-family: 'Geist Mono Variable', monospace; } .ds-nav-brand { margin-right: auto; color: inherit; font-size: 0.875rem; font-weight: 600; text-decoration: none; } .ds-nav-link { color: var(--muted-foreground, oklch(0.42 0 0)); font-size: 0.75rem; text-decoration: none; transition: color 150ms ease; } .ds-nav-link:hover { color: var(--foreground, oklch(0.145 0 0)); } .ds-nav-link:focus-visible, .ds-nav-brand:focus-visible, .ds-nav-action:focus-visible { outline: 2px solid var(--ring, oklch(0.708 0 0)); outline-offset: 2px; } .ds-nav-action { padding: 0.75rem 1rem; border-radius: 0; background: var(--primary, oklch(0.205 0 0)); color: var(--primary-foreground, oklch(0.985 0 0)); font-size: 0.625rem; font-weight: 600; letter-spacing: 0.1em; text-decoration: none; } .ds-nav-action:hover { background: color-mix(in oklch, var(--primary, oklch(0.205 0 0)), transparent 20%); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Instrument Panel",
+    "overview": "Apex DOCX PDF should feel like a carefully typeset control surface for a deterministic engine: editorial in composition, rigorous in hierarchy, and quietly authoritative in tone. The interface exposes technical truth without becoming visually noisy. Its restraint makes diagnostics, source material, and output feel inspectable rather than abstract.\n\nThe system is precise and tool-like. Geist Mono gives prose, controls, code, and metadata a shared engineering cadence; strong typographic scale keeps that uniform voice from becoming flat. Ink-and-Paper neutrals carry nearly the entire interface, while Pipeline Blue is a scarce operational signal rather than decoration. Light elevation may separate work surfaces, menus, and overlays, but structure still begins with spacing, borders, and tonal contrast.",
+    "keyCharacteristics": [
+      "Monospaced, editorial typography with decisive scale changes.",
+      "Square controls and containers with crisp hairline structure.",
+      "Ink-and-Paper neutrals across both light and dark themes.",
+      "Pipeline Blue reserved for operational emphasis and diagnostic meaning.",
+      "Light, purposeful elevation on interactive or floating work surfaces.",
+      "Dense technical information made legible through rhythm, not ornament."
+    ],
+    "rules": [
+      { "name": "The Signal, Not Decoration Rule", "body": "Pipeline Blue marks meaning or action; it never becomes a colorful dashboard wash.", "section": "colors" },
+      { "name": "The Ink-and-Paper Rule", "body": "Establish hierarchy with neutral contrast first. Add hue only when the interface gains information from it.", "section": "colors" },
+      { "name": "The One Typeface Rule", "body": "Do not introduce a display face to manufacture personality; let Geist Mono's scale and spacing carry the hierarchy.", "section": "typography" },
+      { "name": "The Case Has Meaning Rule", "body": "Uppercase and wide tracking identify controls, statuses, and compact technical headings, not general prose.", "section": "typography" },
+      { "name": "The Structure Before Shadow Rule", "body": "A shadow may clarify an actual layer; it may not compensate for weak spacing, contrast, or borders.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build hierarchy with Ink-and-Paper contrast, type scale, whitespace, rules, and alignment before adding color.",
+      "Do reserve Pipeline Blue for meaningful operational emphasis, selected states, and diagnostic syntax.",
+      "Do keep controls square, compact, keyboard-visible, and mechanically aligned.",
+      "Do use light shadows to clarify genuine work surfaces and overlays.",
+      "Do preserve candid technical copy and make constraints as legible as capabilities."
+    ],
+    "donts": [
+      "Don't turn the interface into colorful dashboard styling or distribute accent hues across every metric and panel.",
+      "Don't introduce pill buttons, rounded SaaS cards, or soft ornamental containers as the default component language.",
+      "Don't use gradients, glass effects, or shadow-heavy depth as decoration.",
+      "Don't mix in a decorative display typeface or use uppercase for long-form prose.",
+      "Don't hide unsupported states or technical boundaries behind vague, friendly copy."
+    ]
+  }
+}

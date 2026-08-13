@@ -3,17 +3,37 @@ import type { SourceLocation } from "./diagnostics"
 import type { Insets, Twip } from "./units"
 import type { FontStyle, FontWeight } from "./fonts"
 
+export type StyleId = string
+
 export type TextStyle = Readonly<{
   fontFamily: string
   fontSize: Twip
   fontWeight: FontWeight
   fontStyle: FontStyle
   underline: boolean
+  strikethrough?: boolean
   color: string
   /** Solid RGB highlight behind the run, or null for no highlight. */
   highlightColor?: string | null
   /** Word run baseline positioning; layout applies the deterministic script presentation rule. */
   verticalAlignment?: "baseline" | "superscript" | "subscript"
+}>
+
+export type StyleDefinition = Readonly<{
+  id: StyleId
+  name: string
+  type: "paragraph" | "character"
+  basedOn: StyleId | null
+  next: StyleId | null
+  paragraph: Partial<ParagraphProperties> | null
+  text: Partial<TextStyle> | null
+}>
+
+export type DocumentStyles = Readonly<{
+  defaults: Readonly<{ text: TextStyle; paragraph: ParagraphProperties }>
+  definitions: readonly StyleDefinition[]
+  defaultParagraphStyleId: StyleId | null
+  defaultCharacterStyleId: StyleId | null
 }>
 
 export type ParagraphTabStop = Readonly<{
@@ -86,10 +106,38 @@ export type SemanticText = Readonly<{
   text: string
   /** Retains significant leading and trailing whitespace from `xml:space="preserve"`. */
   preserveSpace?: boolean
+  /** Fully resolved text style (defaults + style chain + direct overrides). */
   style: TextStyle
+  /** Named character style reference for round-trip; null/undefined means default. */
+  styleId?: StyleId | null
+  /** Direct run overrides applied on top of the named style chain. */
+  directStyle?: Partial<TextStyle> | null
+  /** External URL when this run is a hyperlink. */
+  href?: string | null
+  /** Internal bookmark target name when this run links in-document. */
+  anchor?: string | null
 }>
 
-export type SemanticImageMimeType = "image/png" | "image/jpeg"
+export type SemanticBookmark = Readonly<{
+  id: string
+  name: string
+}>
+
+export type SemanticImageMimeType =
+  | "image/png"
+  | "image/jpeg"
+  | "image/gif"
+  | "image/webp"
+  | "image/avif"
+  | "image/svg+xml"
+
+/** Optional PNG companion stored with SVG assets for DOCX blip fallback and PDF embed. */
+export type SemanticImageRasterFallback = Readonly<{
+  bytes: readonly number[]
+  pixelWidth: number
+  pixelHeight: number
+  packagePath?: string
+}>
 
 /** Package-owned bytes. Arrays, rather than typed arrays, make deep immutability enforceable. */
 export type SemanticImageAsset = Readonly<{
@@ -101,6 +149,21 @@ export type SemanticImageAsset = Readonly<{
   bytes: readonly number[]
   pixelWidth: number
   pixelHeight: number
+  /** Present for SVG (and optionally other formats) when a raster companion is known. */
+  rasterFallback?: SemanticImageRasterFallback
+}>
+
+/** Font program carried by a DOCX package and available to layout/PDF export. */
+export type SemanticFontAsset = Readonly<{
+  type: "fontAsset"
+  id: string
+  source: SourceLocation
+  packagePath: string
+  family: string
+  weight: FontWeight
+  style: FontStyle
+  /** De-obfuscated OpenType/TrueType bytes owned by the semantic document. */
+  bytes: readonly number[]
 }>
 
 export type SemanticImage = Readonly<{
@@ -119,6 +182,17 @@ export type SemanticImage = Readonly<{
   }>
   /** Author-provided alternative text for dynamic images, when available. */
   altText?: string
+  /** Floating placement retained from DrawingML; absent means inline. */
+  placement?:
+    | Readonly<{ type: "inline" }>
+    | Readonly<{
+        type: "anchor"
+        offsetX: Twip
+        offsetY: Twip
+        horizontalRelative: "column"
+        verticalRelative: "paragraph"
+        wrap: "square"
+      }>
 }>
 
 export type PageFieldKind = "PAGE" | "NUMPAGES"
@@ -132,13 +206,24 @@ export type SemanticPageField = Readonly<{
   displayText: string
   format: "decimal"
   style: TextStyle
+  styleId?: StyleId | null
+  directStyle?: Partial<TextStyle> | null
 }>
 
 export type SemanticBreak = Readonly<{
   type: "break"
   id: NodeId
   source: SourceLocation
-  kind: "line" | "page"
+  kind: "line" | "page" | "column"
+}>
+
+/** Section column layout. Null/undefined means a single full-width column. */
+export type SectionColumns = Readonly<{
+  count: number
+  equalWidth: boolean
+  space: Twip
+  separator: boolean
+  widths?: readonly Twip[] | null
 }>
 
 export type SemanticTab = Readonly<{
@@ -154,7 +239,18 @@ export type SemanticParagraph = Readonly<{
   type: "paragraph"
   id: NodeId
   source: SourceLocation
+  /** Fully resolved paragraph properties (defaults + style chain + direct overrides). */
   properties: ParagraphProperties
+  /** Named paragraph style reference for round-trip; null/undefined means default. */
+  styleId?: StyleId | null
+  /** Direct paragraph overrides applied on top of the named style chain. */
+  directProperties?: Partial<ParagraphProperties> | null
+  /**
+   * Effective formatting of the OOXML paragraph mark. Word uses this style to
+   * size an otherwise empty paragraph, so it remains layout-significant even
+   * when the paragraph has no text children.
+   */
+  paragraphMarkStyle?: TextStyle | null
   children: readonly SemanticInline[]
 }>
 
@@ -206,6 +302,8 @@ export type SemanticTableCell = Readonly<{
   fillColor: string | null
   /** Direct borders override the corresponding table or shared-grid edge. */
   borders: TableCellBorders
+  /** Direct cell padding override, or null to inherit `SemanticTable.cellPadding`. */
+  cellPadding?: Insets | null
   blocks: readonly SemanticParagraph[]
 }>
 
@@ -229,6 +327,10 @@ export type SemanticTable = Readonly<{
   width: Twip
   /** Declared `tblW`, or null when absent/auto. */
   preferredWidth: Twip | null
+  /** Distance from the leading writable edge. Defaults to zero for older callers. */
+  indentStart?: Twip
+  /** Table justification. Absent values default to left for older callers. */
+  alignment?: "left" | "center" | "right"
   layout: TableLayout
   columnWidths: readonly Twip[]
   borders: TableBorders
@@ -261,6 +363,11 @@ export type SectionProperties = Readonly<{
   headerDistance: Twip
   /** Distance from the page edge to the footer reference line. */
   footerDistance: Twip
+  /**
+   * Multi-column body layout. Null/undefined means one column spanning the
+   * writable page width.
+   */
+  columns?: SectionColumns | null
 }>
 
 export type HeaderFooterId = string
@@ -287,10 +394,21 @@ export type SemanticDocument = Readonly<{
   id: NodeId
   source: SourceLocation
   assets: readonly SemanticImageAsset[]
+  /** Embedded DOCX font faces. Absent on legacy/in-memory documents. */
+  fontAssets?: readonly SemanticFontAsset[]
   headers: readonly SemanticHeaderFooter[]
   footers: readonly SemanticHeaderFooter[]
   numberingDefinitions: readonly NumberingDefinition[]
   sections: readonly SemanticSection[]
+  /** Named style sheet. Absent on legacy documents that only carry resolved styles. */
+  styles?: DocumentStyles
+  /**
+   * Editor-owned custom palettes and metadata. Stored in a custom DOCX part
+   * (`word/apexEditor.json`) that Word ignores harmlessly.
+   */
+  editorMetadata?: Readonly<Record<string, unknown>>
+  /** Optional bookmark table for internal hyperlink targets. */
+  bookmarks?: readonly SemanticBookmark[]
 }>
 
 export type ResolvedText = SemanticText

@@ -12,6 +12,7 @@ import {
   type ResourceLimits,
   type DocumentFeatureInspection,
   type RequiredFontInspection,
+  type FontConfiguration,
   type SemanticBlock,
   type SemanticDocument,
   type SemanticInline,
@@ -20,10 +21,10 @@ import {
   type TemplateInspectionResult,
 } from "@apexmed/core"
 import { normaliseDocxBytes, normaliseDocxBytesWithUsage } from "@apexmed/docx"
-import { createFontRegistry } from "@apexmed/fonts"
+import { createFontRegistry, type ManagedFontRegistry } from "@apexmed/fonts"
 import {
   ImagePreparationError,
-  prepareImageAssets,
+  prepareImageAssetsAsync,
   type ImagePreparationProvider,
 } from "@apexmed/images"
 import { layoutDocument } from "@apexmed/layout"
@@ -60,8 +61,8 @@ export async function createDocxPdfEngine(
   const fontRegistry = options.fonts
     ? await createFontRegistry(options.fonts)
     : undefined
-  const textShaper = options.textShaper ?? fontRegistry
   const compiledTemplates = new WeakSet<object>()
+  const compiledFontRegistries = new WeakMap<object, ManagedFontRegistry>()
   const staticImages = new WeakMap<object, ImagePreparationProvider>()
   const packageUsage = new WeakMap<
     object,
@@ -107,15 +108,18 @@ export async function createDocxPdfEngine(
       throwForUnacceptableTemplateDiagnostics(normalised.diagnostics)
       let images: ImagePreparationProvider
       try {
-        images = prepareImageAssets(normalised.value.document.assets, {
-          limits: {
-            maxBytes: limits.maxImageBytes,
-            maxDimensionPixels: limits.maxImageDimensionPixels,
-            maxPixels: limits.maxImagePixels,
-            maxDecodedBytes: limits.maxDecodedImageBytes,
-          },
-          signal: compileOptions.signal,
-        })
+        images = await prepareImageAssetsAsync(
+          normalised.value.document.assets,
+          {
+            limits: {
+              maxBytes: limits.maxImageBytes,
+              maxDimensionPixels: limits.maxImageDimensionPixels,
+              maxPixels: limits.maxImagePixels,
+              maxDecodedBytes: limits.maxDecodedImageBytes,
+            },
+            signal: compileOptions.signal,
+          }
+        )
       } catch (error) {
         if (!(error instanceof ImagePreparationError)) throw error
         const diagnostic: Diagnostic = Object.freeze({
@@ -143,6 +147,19 @@ export async function createDocxPdfEngine(
         diagnostics,
       })
       compiledTemplates.add(result)
+      const embeddedFontConfiguration = fontConfigurationForDocument(
+        normalised.value.document,
+        options.fonts
+      )
+      const compiledFontRegistry =
+        embeddedFontConfiguration === options.fonts
+          ? fontRegistry
+          : embeddedFontConfiguration
+            ? await createFontRegistry(embeddedFontConfiguration)
+            : undefined
+      if (compiledFontRegistry) {
+        compiledFontRegistries.set(result, compiledFontRegistry)
+      }
       staticImages.set(result, images)
       packageUsage.set(
         result,
@@ -170,12 +187,14 @@ export async function createDocxPdfEngine(
         signal: previewOptions.signal,
         includeTrace: true,
       }
+      const compiledFontRegistry = compiledFontRegistries.get(compiled)
+      const compiledTextShaper = options.textShaper ?? compiledFontRegistry
       const layout =
-        fontRegistry && textShaper
+        compiledFontRegistry && compiledTextShaper
           ? layoutDocument(compiled.source, {
               ...commonLayoutOptions,
-              fonts: fontRegistry,
-              shaper: textShaper,
+              fonts: compiledFontRegistry,
+              shaper: compiledTextShaper,
             })
           : layoutDocument(compiled.source, commonLayoutOptions)
       if (hasErrors(layout.diagnostics)) {
@@ -235,7 +254,7 @@ export async function createDocxPdfEngine(
           compiled.source.assets.length
         )
         if (dynamicAssets.length > 0) {
-          const dynamicImages = prepareImageAssets(dynamicAssets, {
+          const dynamicImages = await prepareImageAssetsAsync(dynamicAssets, {
             limits: {
               maxBytes: limits.maxImageBytes,
               maxDimensionPixels: limits.maxImageDimensionPixels,
@@ -276,12 +295,14 @@ export async function createDocxPdfEngine(
         signal: renderOptions.signal,
         includeTrace: renderOptions.includeLayoutTrace,
       }
+      const compiledFontRegistry = compiledFontRegistries.get(compiled)
+      const compiledTextShaper = options.textShaper ?? compiledFontRegistry
       const layout =
-        fontRegistry && textShaper
+        compiledFontRegistry && compiledTextShaper
           ? layoutDocument(resolved.value.document, {
               ...commonLayoutOptions,
-              fonts: fontRegistry,
-              shaper: textShaper,
+              fonts: compiledFontRegistry,
+              shaper: compiledTextShaper,
             })
           : layoutDocument(resolved.value.document, commonLayoutOptions)
       const layoutAt = now()
@@ -301,7 +322,7 @@ export async function createDocxPdfEngine(
         metadata: renderOptions.metadata,
         signal: renderOptions.signal,
         images: renderImages,
-        ...(fontRegistry ? { fonts: fontRegistry } : {}),
+        ...(compiledFontRegistry ? { fonts: compiledFontRegistry } : {}),
       })
       const completedAt = now()
       const diagnostics = Object.freeze([
@@ -800,6 +821,50 @@ function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
 
 function now(): number {
   return globalThis.performance?.now() ?? Date.now()
+}
+
+function fontConfigurationForDocument(
+  document: SemanticDocument,
+  base: FontConfiguration | undefined
+): FontConfiguration | undefined {
+  const embedded = document.fontAssets ?? []
+  if (embedded.length === 0) return base
+  const key = (family: string, weight: number, style: string) =>
+    `${family.trim().toLowerCase()}\u0000${weight}\u0000${style}`
+  const embeddedKeys = new Set(
+    embedded.map((asset) => key(asset.family, asset.weight, asset.style))
+  )
+  const faces = [
+    ...embedded.map((asset) => ({
+      family: asset.family,
+      weight: asset.weight,
+      style: asset.style,
+      bytes: Uint8Array.from(asset.bytes),
+    })),
+    ...(base?.faces ?? []).filter(
+      (face) => !embeddedKeys.has(key(face.family, face.weight, face.style))
+    ),
+  ]
+  const requestedFallback = base?.fallbackFamily
+  const fallbackFamily =
+    (requestedFallback &&
+    faces.some(
+      (face) =>
+        face.family.trim().toLowerCase() ===
+          requestedFallback.trim().toLowerCase() &&
+        face.weight === 400 &&
+        face.style === "normal"
+    )
+      ? requestedFallback
+      : embedded.find(
+          (asset) => asset.weight === 400 && asset.style === "normal"
+        )?.family) ?? embedded[0]?.family
+  if (!fallbackFamily) return base
+  return Object.freeze({
+    faces: Object.freeze(faces),
+    fallbackFamily,
+    ...(base?.aliases ? { aliases: base.aliases } : {}),
+  })
 }
 
 export type {

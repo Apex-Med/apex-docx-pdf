@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-10T16:20:39.257Z",
+  "families": [
+    {
+      "family": "Inter",
+      "category": "sans-serif",
+      "faces": [
+        {
+          "family": "Inter",
+          "weight": 400,
+          "style": "normal",
+          "woff2": "/fonts/inter-400.woff2",
+          "ttf": "/fonts/inter-400.ttf",
+          "woff2Sha256": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc",
+          "ttfSha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82"
+        },
+        {
+          "family": "Inter",
+          "weight": 700,
+          "style": "normal",
+          "woff2": "/fonts/inter-700.woff2",
+          "ttf": "/fonts/inter-700.ttf",
+          "woff2Sha256": "6f56409fd3d64bb85f7d070bce20749db2d66b6d63cec586cc22d1c761be2491",
+          "ttfSha256": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f"
+        }
+      ]
+    },
+    {
+      "family": "Calibri",
+      "category": "sans-serif",
+      "faces": [
+        {
+          "family": "Calibri",
+          "weight": 400,
+          "style": "normal",
+          "woff2": "/fonts/calibri-400.woff2",
+          "ttf": "/fonts/calibri-400.ttf",
+          "woff2Sha256": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc",
+          "ttfSha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82"
+        }
+      ]
+    }
+  ]
+}

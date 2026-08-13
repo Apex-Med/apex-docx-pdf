@@ -28,6 +28,17 @@ declare module "fontkit" {
     encode(): Uint8Array
   }
 
+  export type FontkitVariationAxis = Readonly<{
+    name: string
+    min: number
+    default: number
+    max: number
+  }>
+
+  export type FontkitVariationSettings = Readonly<
+    Record<string, number>
+  >
+
   export type FontkitFont = Readonly<{
     postscriptName: string | null
     unitsPerEm: number
@@ -37,8 +48,10 @@ declare module "fontkit" {
     underlinePosition: number
     underlineThickness: number
     bbox: FontkitBox
+    variationAxes?: Readonly<Record<string, FontkitVariationAxis>>
     hasGlyphForCodePoint(codePoint: number): boolean
     createSubset(): FontkitSubset
+    getVariation?(settings: FontkitVariationSettings | string): FontkitFont
     layout(
       text: string,
       features?: readonly string[] | Readonly<Record<string, boolean>>

@@ -1,6 +1,7 @@
 import type * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
+import { usePortalContainer } from "@workspace/ui/lib/portal-container"
 import { cn } from "@workspace/ui/lib/utils"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -78,8 +79,9 @@ function SelectContent({
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
+  const container = usePortalContainer()
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={container}>
       <SelectPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}

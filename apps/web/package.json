@@ -15,6 +15,7 @@
     "@apexmed/browser": "workspace:*",
     "@apexmed/core": "workspace:*",
     "@apexmed/devtools": "workspace:*",
+    "@apexmed/editor": "workspace:*",
     "@apexmed/engine": "workspace:*",
     "@apexmed/fonts": "workspace:*",
     "@codemirror/lang-json": "^6.0.2",

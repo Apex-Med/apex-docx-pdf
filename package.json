@@ -18,6 +18,7 @@
     "format:check": "prettier --check .",
     "fixtures:check": "bun scripts/check-fixture-corpus.ts",
     "fixtures:release": "bun scripts/check-fixture-corpus.ts --release",
+    "fidelity": "bun scripts/document-fidelity.ts",
     "packages:check": "bun run build && bun run packages:validate",
     "packages:consumer-smoke": "bun scripts/check-packed-consumer.ts",
     "packages:size:review": "bun scripts/review-package-size.ts",

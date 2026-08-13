@@ -1,5 +1,8 @@
-import type { SemanticImageAsset } from "@apexmed/core"
+import type { SemanticImageAsset, SemanticImageMimeType } from "@apexmed/core"
 import { unzlibSync, zlibSync } from "fflate"
+
+import { isAvif, isGif, isWebp } from "./decode"
+import { minimalPng, rasterizeSvg, sanitizeSvg, svgIntrinsicSize } from "./svg"
 
 export type PreparedImage = Readonly<{
   hash: string
@@ -10,7 +13,41 @@ export type PreparedImage = Readonly<{
   filter: "FlateDecode" | "DCTDecode"
   bytes: readonly number[]
   alphaBytes?: readonly number[]
+  /** Set when preparation used a minimal/placeholder raster (e.g. SVG without canvas). */
+  diagnostic?: string
 }>
+
+export {
+  sanitizeSvg,
+  rasterizeSvg,
+  svgIntrinsicSize,
+  minimalPng,
+  encodeRgbaPng,
+} from "./svg"
+export type {
+  RasterizeSvgOptions,
+  RasterizeSvgResult,
+  SvgSanitizeResult,
+} from "./svg"
+export {
+  sniffImageDimensions,
+  sniffMimeType,
+  isPng,
+  isJpeg,
+  isGif,
+  isWebp,
+  isAvif,
+} from "./decode"
+export type { ImageDimensions } from "./decode"
+
+export const SUPPORTED_IMAGE_MIME_TYPES = Object.freeze([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/svg+xml",
+] as const satisfies readonly SemanticImageMimeType[])
 
 export type ImagePreparationProvider = Readonly<{
   get(assetId: string): PreparedImage | undefined
@@ -69,31 +106,9 @@ export function prepareImageAssets(
     if (byAsset.has(asset.id))
       fail("images/duplicate-id", asset.id, "duplicate asset ID")
     validateAssetEnvelope(asset, limits)
-    const source = Uint8Array.from(asset.bytes)
-    const hash = sha256(source, options.signal)
-    let image = byHash
-      .get(hash)
-      ?.find((candidate) => equalBytes(candidateSourceBytes(candidate), source))
-    if (image) {
-      validateDeduplicatedAsset(
-        asset,
-        source,
-        hash,
-        image,
-        limits,
-        options.signal
-      )
-    } else {
-      image =
-        asset.mimeType === "image/png"
-          ? preparePng(asset, source, hash, limits, options.signal)
-          : prepareJpeg(asset, source, hash, limits, options.signal)
-      const bucket = byHash.get(hash) ?? []
-      bucket.push(image)
-      byHash.set(hash, bucket)
-    }
-    byAsset.set(asset.id, image)
-    entries.push(Object.freeze({ assetId: asset.id, image }))
+    const prepared = prepareOneAsset(asset, limits, options.signal, byHash)
+    byAsset.set(asset.id, prepared.image)
+    entries.push(Object.freeze({ assetId: asset.id, image: prepared.image }))
   }
   const frozenEntries = Object.freeze(entries)
   return Object.freeze({
@@ -102,6 +117,283 @@ export function prepareImageAssets(
       return byAsset.get(assetId)
     },
   })
+}
+
+/**
+ * Async preparation that rasterizes SVG / GIF / WebP / AVIF when a canvas or
+ * ImageBitmap decoder is available, then runs the sync PNG/JPEG pipeline.
+ */
+export async function prepareImageAssetsAsync(
+  assets: readonly SemanticImageAsset[],
+  options: Readonly<{
+    limits?: Partial<ImagePreparationLimits>
+    signal?: AbortSignal
+  }> = {}
+): Promise<ImagePreparationRegistry> {
+  const normalized: SemanticImageAsset[] = []
+  for (const asset of assets) {
+    options.signal?.throwIfAborted()
+    normalized.push(await ensureRasterCompanion(asset, options.signal))
+  }
+  return prepareImageAssets(normalized, options)
+}
+
+/**
+ * Ensure SVG/GIF/WebP/AVIF assets carry a PNG `rasterFallback` for PDF/DOCX.
+ * No-ops for PNG/JPEG. Uses ImageBitmap/canvas when available.
+ */
+export async function ensureRasterCompanion(
+  asset: SemanticImageAsset,
+  signal?: AbortSignal
+): Promise<SemanticImageAsset> {
+  signal?.throwIfAborted()
+  if (asset.mimeType === "image/png" || asset.mimeType === "image/jpeg")
+    return asset
+  if (asset.rasterFallback && asset.rasterFallback.bytes.length > 0)
+    return asset
+
+  if (asset.mimeType === "image/svg+xml") {
+    const result = await rasterizeSvg(Uint8Array.from(asset.bytes), {
+      widthPx: asset.pixelWidth,
+      heightPx: asset.pixelHeight,
+    })
+    signal?.throwIfAborted()
+    return Object.freeze({
+      ...asset,
+      pixelWidth: result.rasterized ? result.width : asset.pixelWidth,
+      pixelHeight: result.rasterized ? result.height : asset.pixelHeight,
+      rasterFallback: Object.freeze({
+        bytes: Object.freeze(Array.from(result.pngBytes)),
+        pixelWidth: result.width,
+        pixelHeight: result.height,
+      }),
+    })
+  }
+
+  const png = await transcodeRasterToPng(
+    Uint8Array.from(asset.bytes),
+    asset.mimeType,
+    signal
+  )
+  return Object.freeze({
+    ...asset,
+    pixelWidth: png.width,
+    pixelHeight: png.height,
+    rasterFallback: Object.freeze({
+      bytes: Object.freeze(Array.from(png.bytes)),
+      pixelWidth: png.width,
+      pixelHeight: png.height,
+    }),
+  })
+}
+
+export async function transcodeRasterToPng(
+  bytes: Uint8Array,
+  mimeType:
+    | Exclude<
+        SemanticImageMimeType,
+        "image/png" | "image/jpeg" | "image/svg+xml"
+      >
+    | string,
+  signal?: AbortSignal
+): Promise<Readonly<{ bytes: Uint8Array; width: number; height: number }>> {
+  signal?.throwIfAborted()
+  if (typeof createImageBitmap !== "function") {
+    throw new ImagePreparationError(
+      "images/transcode-unavailable",
+      "asset",
+      `Cannot transcode ${mimeType} to PNG: createImageBitmap is unavailable`
+    )
+  }
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(
+      new Blob([bytes as BlobPart], { type: mimeType })
+    )
+  } catch (error) {
+    throw new ImagePreparationError(
+      "images/transcode-failed",
+      "asset",
+      `Failed to decode ${mimeType}: ${message(error)}`
+    )
+  }
+  signal?.throwIfAborted()
+  try {
+    if (typeof OffscreenCanvas === "function") {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const ctx = canvas.getContext("2d")
+      if (!ctx)
+        throw new ImagePreparationError(
+          "images/transcode-unavailable",
+          "asset",
+          "OffscreenCanvas 2d context unavailable"
+        )
+      ctx.drawImage(bitmap, 0, 0)
+      const blob = await canvas.convertToBlob({ type: "image/png" })
+      return {
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        width: bitmap.width,
+        height: bitmap.height,
+      }
+    }
+    if (typeof document !== "undefined" && document.createElement) {
+      const canvas = document.createElement("canvas")
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+      const ctx = canvas.getContext("2d")
+      if (!ctx)
+        throw new ImagePreparationError(
+          "images/transcode-unavailable",
+          "asset",
+          "canvas 2d context unavailable"
+        )
+      ctx.drawImage(bitmap, 0, 0)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (value) =>
+            value ? resolve(value) : reject(new Error("toBlob failed")),
+          "image/png"
+        )
+      })
+      return {
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        width: bitmap.width,
+        height: bitmap.height,
+      }
+    }
+    throw new ImagePreparationError(
+      "images/transcode-unavailable",
+      "asset",
+      "No canvas API available to transcode raster images"
+    )
+  } finally {
+    bitmap.close()
+  }
+}
+
+function prepareOneAsset(
+  asset: SemanticImageAsset,
+  limits: ImagePreparationLimits,
+  signal: AbortSignal | undefined,
+  byHash: Map<string, PreparedImage[]>
+): Readonly<{ image: PreparedImage; source: Uint8Array }> {
+  if (asset.mimeType === "image/png") {
+    const source = Uint8Array.from(asset.bytes)
+    return {
+      image: prepareCached(
+        asset,
+        source,
+        () => preparePng(asset, source, sha256(source, signal), limits, signal),
+        byHash,
+        limits,
+        signal
+      ),
+      source,
+    }
+  }
+  if (asset.mimeType === "image/jpeg") {
+    const source = Uint8Array.from(asset.bytes)
+    return {
+      image: prepareCached(
+        asset,
+        source,
+        () =>
+          prepareJpeg(asset, source, sha256(source, signal), limits, signal),
+        byHash,
+        limits,
+        signal
+      ),
+      source,
+    }
+  }
+
+  // SVG / GIF / WebP / AVIF → prepare via PNG companion (or minimal SVG fallback).
+  const fallback = rasterSourceForAsset(asset)
+  const pngAsset: SemanticImageAsset = Object.freeze({
+    type: "imageAsset",
+    id: asset.id,
+    source: asset.source,
+    packagePath: asset.rasterFallback?.packagePath ?? asset.packagePath,
+    mimeType: "image/png",
+    bytes: Object.freeze(Array.from(fallback.bytes)),
+    pixelWidth: fallback.width,
+    pixelHeight: fallback.height,
+  })
+  const source = Uint8Array.from(pngAsset.bytes)
+  let image = prepareCached(
+    pngAsset,
+    source,
+    () => preparePng(pngAsset, source, sha256(source, signal), limits, signal),
+    byHash,
+    limits,
+    signal
+  )
+  if (fallback.diagnostic) {
+    image = Object.freeze({ ...image, diagnostic: fallback.diagnostic })
+    sourceByPrepared.set(image, source.slice())
+  }
+  return { image, source }
+}
+
+function rasterSourceForAsset(asset: SemanticImageAsset): Readonly<{
+  bytes: Uint8Array
+  width: number
+  height: number
+  diagnostic?: string
+}> {
+  if (asset.rasterFallback && asset.rasterFallback.bytes.length > 0) {
+    return {
+      bytes: Uint8Array.from(asset.rasterFallback.bytes),
+      width: asset.rasterFallback.pixelWidth,
+      height: asset.rasterFallback.pixelHeight,
+    }
+  }
+  if (asset.mimeType === "image/svg+xml") {
+    const sanitized = sanitizeSvg(
+      new TextDecoder().decode(Uint8Array.from(asset.bytes))
+    )
+    const size = svgIntrinsicSize(sanitized.svgText, {
+      width: Math.max(1, asset.pixelWidth),
+      height: Math.max(1, asset.pixelHeight),
+    })
+    const width = Math.min(8, Math.max(1, size.width))
+    const height = Math.min(8, Math.max(1, size.height))
+    return {
+      bytes: minimalPng(width, height),
+      width,
+      height,
+      diagnostic:
+        "SVG prepared with minimal PNG fallback (no raster companion / canvas)",
+    }
+  }
+  fail(
+    "images/rasterize-required",
+    asset.id,
+    `${asset.mimeType} requires a PNG rasterFallback or prepareImageAssetsAsync()`
+  )
+}
+
+function prepareCached(
+  asset: SemanticImageAsset,
+  source: Uint8Array,
+  prepare: () => PreparedImage,
+  byHash: Map<string, PreparedImage[]>,
+  limits: ImagePreparationLimits,
+  signal?: AbortSignal
+): PreparedImage {
+  const hash = sha256(source, signal)
+  let image = byHash
+    .get(hash)
+    ?.find((candidate) => equalBytes(candidateSourceBytes(candidate), source))
+  if (image) {
+    validateDeduplicatedAsset(asset, source, hash, image, limits, signal)
+    return image
+  }
+  image = prepare()
+  const bucket = byHash.get(hash) ?? []
+  bucket.push(image)
+  byHash.set(hash, bucket)
+  return image
 }
 
 // DCT bytes are source bytes. PNG planes carry a hidden immutable source copy
@@ -120,7 +412,9 @@ function validateAssetEnvelope(
   limits: ImagePreparationLimits
 ): void {
   if (!asset.id) fail("images/id", asset.id, "asset ID must not be empty")
-  if (asset.mimeType !== "image/png" && asset.mimeType !== "image/jpeg")
+  if (
+    !(SUPPORTED_IMAGE_MIME_TYPES as readonly string[]).includes(asset.mimeType)
+  )
     fail("images/mime", asset.id, "image MIME type is unsupported")
   if (!Array.isArray(asset.bytes) || asset.bytes.length === 0)
     fail("images/bytes", asset.id, "image bytes must be a non-empty array")
@@ -132,7 +426,52 @@ function validateAssetEnvelope(
     )
   )
     fail("images/bytes", asset.id, "image bytes must contain octets")
+  if (asset.rasterFallback) {
+    if (
+      !Array.isArray(asset.rasterFallback.bytes) ||
+      asset.rasterFallback.bytes.length === 0
+    )
+      fail("images/bytes", asset.id, "raster fallback bytes must be non-empty")
+    if (asset.rasterFallback.bytes.length > limits.maxBytes)
+      fail("images/limit", asset.id, "raster fallback byte limit exceeded")
+    validateDimensions(
+      asset.id,
+      asset.rasterFallback.pixelWidth,
+      asset.rasterFallback.pixelHeight,
+      limits
+    )
+  }
   validateDimensions(asset.id, asset.pixelWidth, asset.pixelHeight, limits)
+  // Lightweight signature checks for newly supported formats. PNG/JPEG keep
+  // their detailed prepare-path errors for backward-compatible diagnostics.
+  const source = Uint8Array.from(asset.bytes)
+  if (asset.mimeType === "image/gif" && !isGif(source))
+    fail(
+      "images/gif-signature",
+      asset.id,
+      "declared GIF MIME does not match bytes"
+    )
+  if (asset.mimeType === "image/webp" && !isWebp(source))
+    fail(
+      "images/webp-signature",
+      asset.id,
+      "declared WebP MIME does not match bytes"
+    )
+  if (asset.mimeType === "image/avif" && !isAvif(source))
+    fail(
+      "images/avif-signature",
+      asset.id,
+      "declared AVIF MIME does not match bytes"
+    )
+  if (asset.mimeType === "image/svg+xml") {
+    const text = new TextDecoder().decode(source)
+    if (!/<svg[\s>]/iu.test(text))
+      fail(
+        "images/svg-signature",
+        asset.id,
+        "declared SVG MIME does not contain <svg>"
+      )
+  }
 }
 
 function validateDeduplicatedAsset(
@@ -153,7 +492,7 @@ function validateDeduplicatedAsset(
         asset.id,
         "declared PNG MIME type conflicts with exact image bytes"
       )
-  } else {
+  } else if (asset.mimeType === "image/jpeg") {
     prepareJpeg(asset, source, hash, limits, signal)
     if (prepared.filter !== "DCTDecode")
       fail(
@@ -161,16 +500,26 @@ function validateDeduplicatedAsset(
         asset.id,
         "declared JPEG MIME type conflicts with exact image bytes"
       )
+  } else {
+    // Companion PNG path — dimensions must agree with the prepared raster.
+    if (prepared.filter !== "FlateDecode")
+      fail(
+        "images/mime",
+        asset.id,
+        "raster companion must prepare as PNG FlateDecode"
+      )
   }
-  if (
-    asset.pixelWidth !== prepared.width ||
-    asset.pixelHeight !== prepared.height
-  )
-    fail(
-      "images/dimensions",
-      asset.id,
-      "declared dimensions conflict with exact image bytes"
+  if (asset.mimeType === "image/png" || asset.mimeType === "image/jpeg") {
+    if (
+      asset.pixelWidth !== prepared.width ||
+      asset.pixelHeight !== prepared.height
     )
+      fail(
+        "images/dimensions",
+        asset.id,
+        "declared dimensions conflict with exact image bytes"
+      )
+  }
 }
 
 function validateDimensions(

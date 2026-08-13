@@ -1,0 +1,729 @@
+/* Apex editor — Google Docs-like page desk + tables + images
+ * Theme: chrome/desk follow host `.dark`; page paper stays print-white. */
+
+/* ── Design tokens (light defaults; overridden under .dark) ── */
+:root,
+.apex-editor-root {
+  --apex-page-bg: #ffffff;
+  --apex-page-fg: #202124;
+  --apex-desk: #f8f9fa;
+  --apex-page-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.15), 0 2px 6px rgba(60, 64, 67, 0.1);
+  --apex-page-gap: 32px;
+  --apex-accent: #1a73e8;
+  --apex-chrome-bg: var(--background, #ffffff);
+  --apex-chrome-fg: var(--foreground, #0f172a);
+  --apex-chrome-muted: var(--muted-foreground, #5f6368);
+  --apex-chrome-border: var(--border, #dadce0);
+  --apex-chrome-hover: var(--muted, #f1f3f4);
+  --apex-chrome-danger: var(--destructive, #c5221f);
+  --apex-chrome-danger-bg: color-mix(
+    in oklab,
+    var(--apex-chrome-danger) 12%,
+    transparent
+  );
+  --apex-label-bg: #f1f3f4;
+  --apex-label-fg: #5f6368;
+  --apex-label-border: #dadce0;
+  --apex-table-border: #dadce0;
+  --apex-table-header-bg: #f8f9fa;
+  --apex-selection-fill: rgba(26, 115, 232, 0.12);
+  color-scheme: light;
+}
+
+/* Host theme class (ThemeProvider on <html>) */
+.dark,
+.dark .apex-editor-root {
+  /* Paper stays white for WYSIWYG / print fidelity */
+  --apex-page-bg: #ffffff;
+  --apex-page-fg: #202124;
+  /* Desk + chrome track dark UI */
+  --apex-desk: #1c1c1e;
+  --apex-page-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --apex-accent: #8ab4f8;
+  --apex-chrome-bg: var(--background, #212121);
+  --apex-chrome-fg: var(--foreground, #e8eaed);
+  --apex-chrome-muted: var(--muted-foreground, #9aa0a6);
+  --apex-chrome-border: var(--border, rgba(255, 255, 255, 0.12));
+  --apex-chrome-hover: var(--muted, #2d2e30);
+  --apex-chrome-danger: var(--destructive, #f28b82);
+  --apex-chrome-danger-bg: color-mix(
+    in oklab,
+    var(--apex-chrome-danger) 16%,
+    transparent
+  );
+  --apex-label-bg: #2d2e30;
+  --apex-label-fg: #e8eaed;
+  --apex-label-border: #5f6368;
+  --apex-table-border: #dadce0; /* on white paper */
+  --apex-table-header-bg: #f8f9fa;
+  --apex-selection-fill: rgba(138, 180, 248, 0.2);
+  color-scheme: dark;
+}
+
+/* Prefer system preference when host has not set .dark / .light yet */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.dark) {
+    --apex-desk: #1c1c1e;
+    --apex-page-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --apex-accent: #8ab4f8;
+    --apex-chrome-bg: #212121;
+    --apex-chrome-fg: #e8eaed;
+    --apex-chrome-muted: #9aa0a6;
+    --apex-chrome-border: rgba(255, 255, 255, 0.12);
+    --apex-chrome-hover: #2d2e30;
+    --apex-chrome-danger: #f28b82;
+    --apex-chrome-danger-bg: rgba(242, 139, 130, 0.16);
+    --apex-label-bg: #2d2e30;
+    --apex-label-fg: #e8eaed;
+    --apex-label-border: #5f6368;
+    --apex-selection-fill: rgba(138, 180, 248, 0.2);
+    color-scheme: dark;
+  }
+}
+
+.apex-editor-root {
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.apex-editor-surface {
+  min-width: 0;
+  min-height: 0;
+  background: var(--apex-desk);
+  padding: 24px 16px 64px;
+  color-scheme: light; /* document canvas stays light paper */
+  transform: scale(var(--apex-zoom, 1));
+  transform-origin: top center;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apex-chrome-muted) transparent;
+}
+
+/* ── Google Docs-style chrome ── */
+.apex-editor-chrome {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+  border-bottom: 1px solid var(--apex-chrome-border);
+}
+
+.apex-editor-menubar {
+  border-radius: 0;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+}
+
+.apex-editor-menubar__trigger {
+  color: inherit;
+}
+
+.apex-editor-toolbar {
+  position: relative;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+}
+
+.apex-editor-toolbar__item {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.apex-editor-toolbar__more {
+  flex-shrink: 0;
+  width: 28px;
+  min-width: 28px;
+}
+
+.apex-editor-toolbar__color-btn {
+  position: relative;
+}
+
+.apex-editor-toolbar__color-swatch {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  width: 12px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+}
+
+.apex-editor-pages {
+  --apex-zoom: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background: var(--apex-desk);
+}
+
+.apex-editor-ruler-wrap {
+  background: var(--apex-chrome-bg);
+}
+
+.apex-editor-ruler {
+  position: relative;
+  overflow: hidden;
+}
+
+.apex-editor-ruler__track {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--apex-chrome-border);
+  box-sizing: border-box;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.apex-editor-ruler__margin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #e8eaed;
+  pointer-events: none;
+}
+
+.apex-editor-ruler__margin--left {
+  left: 0;
+}
+
+.apex-editor-ruler__margin--right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.apex-editor-ruler__ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.apex-editor-ruler__tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  line-height: 1;
+  color: var(--apex-chrome-muted);
+}
+
+.apex-editor-ruler__tick::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  width: 1px;
+  height: 6px;
+  background: var(--apex-chrome-border);
+  transform: translateX(-50%);
+}
+
+.apex-editor-ruler__handle,
+.apex-editor-ruler__marker,
+.apex-editor-ruler__tab-stop {
+  position: absolute;
+  top: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: ew-resize;
+  z-index: 3;
+}
+
+.apex-editor-ruler__handle {
+  width: 8px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.apex-editor-ruler__handle--margin-left,
+.apex-editor-ruler__handle--margin-right {
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    var(--apex-accent) 40%,
+    var(--apex-accent) 60%,
+    transparent 60%
+  );
+}
+
+.apex-editor-ruler__marker {
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, 12px);
+}
+
+.apex-editor-ruler__marker--indent {
+  background: var(--apex-accent);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.apex-editor-ruler__marker--first-line {
+  background: #5f6368;
+  clip-path: polygon(50% 0%, 0 100%, 100% 100%);
+}
+
+.apex-editor-ruler__tab-stop {
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, 14px);
+  background: #5f6368;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.apex-editor-surface .ProseMirror {
+  outline: none;
+  min-height: 100%;
+  caret-color: var(--apex-page-fg);
+  color: var(--apex-page-fg);
+  font-family: Calibri, Inter, Arial, system-ui, sans-serif;
+  font-size: 11pt;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.apex-editor-surface .ProseMirror:focus {
+  outline: none;
+}
+
+/*
+ * Section = page stack. Paper is intentionally light in both themes.
+ * content-visibility skips offscreen page paint; contain-intrinsic-size
+ * reserves approximate Letter height so scrollbars stay stable.
+ */
+.apex-editor-surface .ProseMirror > section[data-section],
+.apex-engine-page-sheet {
+  background: var(--apex-page-bg);
+  color: var(--apex-page-fg);
+  box-shadow: var(--apex-page-shadow);
+  margin: 0 auto var(--apex-page-gap);
+  position: relative;
+  box-sizing: border-box;
+  overflow: visible;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1056px;
+}
+
+.apex-editor-surface .ProseMirror > section[data-section] > * {
+  break-inside: auto;
+}
+
+.apex-editor-surface .ProseMirror p {
+  min-height: 1.35em;
+  margin: 0;
+  position: relative;
+}
+
+.apex-editor-surface .ProseMirror p:empty::before,
+.apex-editor-surface .ProseMirror p > br.ProseMirror-trailingBreak:only-child {
+  content: "";
+  display: inline-block;
+  min-width: 1px;
+  min-height: 1em;
+}
+
+.apex-editor-surface .ProseMirror .ProseMirror-trailingBreak {
+  pointer-events: none;
+}
+
+/* ── Tables (on paper) ── */
+.apex-editor-surface .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 8px 0;
+  overflow: visible;
+}
+
+.apex-editor-surface .ProseMirror td,
+.apex-editor-surface .ProseMirror th {
+  min-width: 0;
+  padding: var(--apex-cell-pad-top, 4px) var(--apex-cell-pad-right, 8px)
+    var(--apex-cell-pad-bottom, 4px) var(--apex-cell-pad-left, 8px);
+  vertical-align: top;
+  position: relative;
+  box-sizing: border-box;
+  background: var(--apex-page-bg);
+  border: 1px solid var(--apex-table-border);
+  color: var(--apex-page-fg);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.apex-editor-surface .ProseMirror td p,
+.apex-editor-surface .ProseMirror th p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.apex-editor-surface .ProseMirror th {
+  font-weight: 600;
+  background: var(--apex-table-header-bg);
+}
+
+.apex-editor-surface .ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--apex-selection-fill);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.apex-editor-surface .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--apex-accent);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.apex-editor-surface .ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+.apex-editor-root :focus-visible {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Manual page-break atom — zero-size marker. Visual page stack (rest of sheet +
+ * margins + desk gap + next top margin) comes from engine float spacers.
+ */
+.apex-editor-surface .ProseMirror [data-page-break="true"],
+.apex-editor-surface .ProseMirror .apex-manual-page-break {
+  display: inline-block !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden;
+  position: relative;
+  pointer-events: none;
+  user-select: none;
+  box-sizing: border-box;
+  background: transparent !important;
+  box-shadow: none !important;
+  vertical-align: top;
+}
+
+.apex-editor-surface .ProseMirror [data-page-break="true"]::before,
+.apex-editor-surface .ProseMirror .apex-manual-page-break::before {
+  content: none;
+}
+
+/* ── Engine page-break spacers ── */
+.apex-page-break-spacer {
+  display: block;
+  float: left;
+  clear: both;
+  width: 100%;
+  pointer-events: none;
+  user-select: none;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+.apex-page-break-spacer__rest {
+  width: 100%;
+  background: var(--apex-page-bg);
+}
+
+.apex-page-break-spacer__page-margin-bottom,
+.apex-page-break-spacer__page-margin-top {
+  background: var(--apex-page-bg);
+  box-shadow: var(--apex-page-shadow);
+  box-sizing: border-box;
+}
+
+.apex-page-break-spacer__gap {
+  background: var(--apex-desk);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.apex-page-break-spacer__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--apex-label-fg);
+  background: var(--apex-label-bg);
+  border: 1px solid var(--apex-label-border);
+  border-radius: 12px;
+  padding: 2px 12px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Images ── */
+.apex-image-node {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
+.apex-image-node img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.apex-image-node.is-selected {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: 2px;
+}
+
+.apex-image-node__handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--apex-accent);
+  border: 1px solid var(--apex-page-bg);
+  border-radius: 1px;
+  box-sizing: border-box;
+  z-index: 5;
+}
+
+.apex-image-node__handle--se {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
+}
+
+.apex-image-node__handle--e {
+  right: -5px;
+  top: 50%;
+  margin-top: -5px;
+  cursor: ew-resize;
+}
+
+/* Gapcursor */
+.apex-editor-surface .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+
+.apex-editor-surface .ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--apex-page-fg);
+  animation: apex-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes apex-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ── Ribbon (chrome — theme adaptive) ── */
+.apex-editor-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--apex-chrome-border);
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.apex-editor-ribbon__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+
+.apex-editor-ribbon__select {
+  min-width: 120px;
+  width: 140px;
+}
+
+.apex-editor-ribbon__select--size {
+  min-width: 72px;
+  width: 88px;
+}
+
+.apex-editor-ribbon__select--style {
+  min-width: 120px;
+  width: 130px;
+}
+
+/* ── Table context menu (chrome) ── */
+.apex-table-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 220px;
+  padding: 4px;
+  margin: 0;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+  border: 1px solid var(--apex-chrome-border);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.18);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  user-select: none;
+  color-scheme: inherit;
+}
+
+.dark .apex-table-context-menu {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.apex-table-context-menu__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.apex-table-context-menu__item:hover:not(:disabled),
+.apex-table-context-menu__item:focus-visible:not(:disabled) {
+  background: var(--apex-chrome-hover);
+  outline: none;
+}
+
+.apex-table-context-menu__item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.apex-table-context-menu__item--danger {
+  color: var(--apex-chrome-danger);
+}
+
+.apex-table-context-menu__item--danger:hover:not(:disabled),
+.apex-table-context-menu__item--danger:focus-visible:not(:disabled) {
+  background: var(--apex-chrome-danger-bg);
+}
+
+.apex-table-context-menu__separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--apex-chrome-border);
+}
+
+.apex-table-context-menu__submenu-label {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--apex-chrome-muted);
+}
+
+/* ── Side panels / overlays (chrome) ── */
+.apex-print-preview {
+  width: min(360px, 38vw);
+  min-width: 260px;
+  overflow: auto;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+  border-radius: 8px;
+  border: 1px solid var(--apex-chrome-border);
+  padding: 8px;
+}
+
+@media (max-width: 760px) {
+  .apex-editor-menubar {
+    overflow-x: auto;
+    overscroll-behavior-x: none;
+    scrollbar-width: thin;
+  }
+
+  .apex-editor-toolbar {
+    min-height: 48px;
+  }
+
+  .apex-editor-toolbar__icon-btn,
+  .apex-editor-toolbar__more {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .apex-editor-surface {
+    padding-inline: 8px;
+  }
+
+  .apex-print-preview {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apex-editor-root *,
+  .apex-editor-root *::before,
+  .apex-editor-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.apex-print-preview__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--apex-chrome-muted);
+  margin-bottom: 8px;
+}
+
+.apex-divergence-overlay {
+  padding: 8px 12px;
+  background: color-mix(in oklab, #f59e0b 14%, var(--apex-chrome-bg));
+  border-top: 1px solid
+    color-mix(in oklab, #f59e0b 45%, var(--apex-chrome-border));
+  font-size: 12px;
+  color: color-mix(in oklab, #9a3412 70%, var(--apex-chrome-fg));
+  max-height: 120px;
+  overflow: auto;
+}
+
+.dark .apex-divergence-overlay {
+  background: color-mix(in oklab, #f59e0b 12%, var(--apex-chrome-bg));
+  border-top-color: color-mix(in oklab, #fbbf24 35%, var(--apex-chrome-border));
+  color: color-mix(in oklab, #fde68a 80%, var(--apex-chrome-fg));
+}

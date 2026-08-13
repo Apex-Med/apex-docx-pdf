@@ -6,6 +6,7 @@ import {
   type FontEmbeddingProvider,
   type FontFaceId,
   type GlyphId,
+  type LinkBox,
   type NodeId,
   type PageDisplayList,
   type PositionedGlyph,
@@ -65,6 +66,10 @@ export function serializePdf(
       (count, image) => count + (image.image.alphaBytes ? 2 : 1),
       0
     )
+  const linksByPage = serializableDisplayList.pages.map((page, pageIndex) =>
+    linkBoxesFromPage(page, pageIndex)
+  )
+  const annotationObjectStart = pageObjectStart + pageCount * 2
   const objects: Uint8Array[] = []
   const pageReferences = serializableDisplayList.pages
     .map((_, index) => `${pageObjectStart + index * 2} 0 R`)
@@ -92,6 +97,7 @@ export function serializePdf(
     objects.push(...imageObjects(image))
   }
 
+  let annotationCursor = annotationObjectStart
   for (const [index, page] of serializableDisplayList.pages.entries()) {
     throwIfAborted(options.signal)
     const content = pageContent(
@@ -103,10 +109,17 @@ export function serializePdf(
     )
     const pageObjectNumber = pageObjectStart + index * 2
     const contentObjectNumber = pageObjectNumber + 1
+    const pageLinks = linksByPage[index] ?? []
+    const annots =
+      pageLinks.length === 0
+        ? ""
+        : ` /Annots [${pageLinks
+            .map((_, linkIndex) => `${annotationCursor + linkIndex} 0 R`)
+            .join(" ")}]`
     objects.push(
       ascii(
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${point(page.width)} ${point(page.height)}] ` +
-          `/Resources << /Font << ${fontResources(embeddedFonts, embeddedObjectStart)} >>${pageImageResources(page, preparedImages.byAsset)} >> /Contents ${contentObjectNumber} 0 R >>`
+          `/Resources << /Font << ${fontResources(embeddedFonts, embeddedObjectStart)} >>${pageImageResources(page, preparedImages.byAsset)} >> /Contents ${contentObjectNumber} 0 R${annots} >>`
       )
     )
     objects.push(
@@ -116,6 +129,14 @@ export function serializePdf(
         ascii("\nendstream"),
       ])
     )
+    annotationCursor += pageLinks.length
+  }
+
+  for (const [pageIndex, page] of serializableDisplayList.pages.entries()) {
+    throwIfAborted(options.signal)
+    for (const link of linksByPage[pageIndex] ?? []) {
+      objects.push(linkAnnotationObject(link, page.height))
+    }
   }
 
   const header = ascii("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n")
@@ -172,6 +193,55 @@ function validPageDisplayList(
     pages.push(page)
   }
   return Object.freeze({ pages: Object.freeze(pages) })
+}
+
+/** Collects link hit-boxes from glyph runs that carry an href. */
+function linkBoxesFromPage(
+  page: PageDisplayList["pages"][number],
+  pageIndex: number
+): readonly LinkBox[] {
+  const links: LinkBox[] = []
+  for (const item of page.items) {
+    if (item.type !== "glyph-run") continue
+    const href = item.href
+    if (typeof href !== "string" || href.length === 0) continue
+    const ascent = twips(Math.round((item.fontSize * 4) / 5))
+    const height = twips(Math.max(1, item.fontSize))
+    links.push(
+      Object.freeze({
+        href,
+        x: item.x,
+        y: twips(item.baselineY - ascent),
+        width: item.width,
+        height,
+        pageIndex,
+      })
+    )
+  }
+  return Object.freeze(links)
+}
+
+function linkAnnotationObject(link: LinkBox, pageHeight: Twip): Uint8Array {
+  const llx = point(link.x)
+  const lly = point(twips(pageHeight - link.y - link.height))
+  const urx = point(twips(link.x + link.width))
+  const ury = point(twips(pageHeight - link.y))
+  return concat([
+    ascii(
+      `<< /Type /Annot /Subtype /Link /Rect [${llx} ${lly} ${urx} ${ury}] /Border [0 0 0] /A << /S /URI /URI `
+    ),
+    pdfLiteralString(link.href),
+    ascii(" >> >>"),
+  ])
+}
+
+/** PDF literal string with `(`, `)`, and `\` escaped; bytes are UTF-8. */
+function pdfLiteralString(value: string): Uint8Array {
+  return concat([
+    ascii("("),
+    escapePdfLiteral(new TextEncoder().encode(value)),
+    ascii(")"),
+  ])
 }
 
 function pageContent(
@@ -441,6 +511,19 @@ function preparePdfImages(
           )
         )
       continue
+    }
+    if (image?.diagnostic) {
+      for (const placement of placements.filter(
+        (item) => item.assetId === assetId
+      ))
+        diagnostics.push(
+          diagnostic(
+            "pdf/image-raster-fallback",
+            "warning",
+            `${image.diagnostic}; asset '${assetId}'`,
+            placement.sourceNodeId
+          )
+        )
     }
     const valid = image as PreparedImage
     let prepared = (buckets.get(valid.hash) ?? []).find((candidate) =>

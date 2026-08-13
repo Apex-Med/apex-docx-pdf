@@ -48,7 +48,7 @@ export type BrowserTemplatePreview = Readonly<{
 
 export type BrowserPreviewAsset = Readonly<{
   assetId: string
-  mimeType: "image/png" | "image/jpeg"
+  mimeType: import("@apexmed/core").SemanticImageMimeType
   bytes: Uint8Array<ArrayBuffer>
 }>
 

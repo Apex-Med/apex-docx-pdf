@@ -9,6 +9,7 @@ import {
   type LayoutDocument,
   type LayoutTrace,
   type LayoutTraceEvent,
+  type LinkBox,
   type NodeId,
   type NumberingDefinition,
   type NumberingFormat,
@@ -25,6 +26,7 @@ import {
   type ResolvedTable,
   type ResolvedTableCell,
   type ResolvedTableRow,
+  type ShapeTextInput,
   type ShapedGlyph,
   type TableBorder,
   type TextShaper,
@@ -42,10 +44,60 @@ export type Phase1FontMetrics = Readonly<{
   lineHeight: (style: TextStyle) => Twip
 }>
 
+/**
+ * Optional prepared-block memoization keyed by frozen node identity and width.
+ * Semantic nodes are frozen, so `node === cached` is a valid identity check.
+ * Re-layout after an identity-preserving edit becomes re-pagination only.
+ */
+export type PreparedBlockCache = {
+  get(
+    node: object,
+    width: Twip
+  ):
+    | Readonly<{ kind: "paragraph"; value: unknown }>
+    | Readonly<{ kind: "table"; value: unknown }>
+    | undefined
+  set(
+    node: object,
+    width: Twip,
+    value:
+      | Readonly<{ kind: "paragraph"; value: unknown }>
+      | Readonly<{ kind: "table"; value: unknown }>
+  ): void
+}
+
+/** In-memory prepared-block cache using WeakMap identity + width. */
+export function createPreparedBlockCache(): PreparedBlockCache {
+  const store = new WeakMap<
+    object,
+    Map<number, { kind: string; value: unknown }>
+  >()
+  return {
+    get(node, width) {
+      const byWidth = store.get(node)
+      const entry = byWidth?.get(width)
+      if (!entry) return undefined
+      return entry as
+        | Readonly<{ kind: "paragraph"; value: unknown }>
+        | Readonly<{ kind: "table"; value: unknown }>
+    },
+    set(node, width, value) {
+      let byWidth = store.get(node)
+      if (!byWidth) {
+        byWidth = new Map()
+        store.set(node, byWidth)
+      }
+      byWidth.set(width, value)
+    },
+  }
+}
+
 type CommonLayoutOptions = Readonly<{
   maxPages?: number
   signal?: AbortSignal
   includeTrace?: boolean
+  /** Optional prepared-block cache for identity-preserving re-layouts. */
+  cache?: PreparedBlockCache
 }>
 
 const FONT_FALLBACK_TRACE_CODES = new Set([
@@ -104,12 +156,22 @@ type Cluster = Readonly<{
   baselineShift: Twip
   whitespace: boolean
   preserveSpace: boolean
+  /** Character offset within the paragraph at which this cluster begins. */
+  charOffset?: number
   faceId?: FontFaceId
   glyphs?: readonly PreparedGlyph[]
   underlineOffset: Twip
   underlineThickness: Twip
+  /** External URL when this cluster comes from a hyperlink run. */
+  href?: string | null
   atom?:
-    | Readonly<{ type: "image"; assetId: string; height: Twip }>
+    | Readonly<{
+        type: "image"
+        assetId: string
+        height: Twip
+        offsetX: Twip
+        offsetY: Twip
+      }>
     | Readonly<{ type: "tab" }>
     | Readonly<{
         type: "pageField"
@@ -129,6 +191,7 @@ type Token = Readonly<{
   hardBreak: boolean
   preserveSpace: boolean
   pageBreak?: boolean
+  columnBreak?: boolean
   tabSourceNodeId?: NodeId
 }>
 
@@ -139,7 +202,17 @@ type MeasuredLine = Readonly<{
   descent: Twip
   lineGap: Twip
   wrapped: boolean
+  /** Character offset within the paragraph text at which this line begins. */
+  charOffset: number
   pageBreakAfter?: boolean
+  columnBreakAfter?: boolean
+}>
+
+type SectionColumnGeometry = Readonly<{
+  count: number
+  space: Twip
+  separator: boolean
+  columns: readonly Rect[]
 }>
 
 type LineBox = Readonly<{ x: Twip; width: Twip }>
@@ -204,6 +277,7 @@ type PreparedMergeChain = Readonly<{
 
 type PreparedTable = Readonly<{
   table: ResolvedTable
+  indentStart: Twip
   rows: readonly PreparedTableRow[]
   mergeChains: readonly PreparedMergeChain[]
   headerHeight: Twip
@@ -309,6 +383,116 @@ export function createPhase1StandardFontMetrics(): Phase1FontMetrics {
 }
 
 const DEFAULT_METRICS = createPhase1StandardFontMetrics()
+const DEFAULT_COLUMN_SPACE = twips(720)
+const COLUMN_SEPARATOR_WIDTH = twips(15)
+
+function resolveSectionColumnGeometry(
+  section: ResolvedDocument["sections"][number],
+  contentBounds: Rect
+): SectionColumnGeometry {
+  const columns = section.properties.columns
+  const count =
+    columns !== null &&
+    columns !== undefined &&
+    Number.isSafeInteger(columns.count) &&
+    columns.count > 1
+      ? Math.min(columns.count, 12)
+      : 1
+  if (count <= 1) {
+    return {
+      count: 1,
+      space: twips(0),
+      separator: false,
+      columns: Object.freeze([contentBounds]),
+    }
+  }
+  if (columns === null || columns === undefined)
+    throw new RangeError("Multi-column geometry requires section columns")
+  const space =
+    columns.space !== undefined && Number.isSafeInteger(columns.space)
+      ? twips(Math.max(0, columns.space))
+      : DEFAULT_COLUMN_SPACE
+  const separator = columns.separator === true
+  const totalSpace = space * (count - 1)
+  const available = contentBounds.width - totalSpace
+  if (available <= 0)
+    throw new RangeError(
+      "Section column spacing leaves no writable column width"
+    )
+
+  const equalWidth = columns.equalWidth !== false
+  const explicit =
+    !equalWidth &&
+    columns.widths !== null &&
+    columns.widths !== undefined &&
+    columns.widths.length === count
+      ? columns.widths.map((width) => twips(Math.max(1, width)))
+      : null
+
+  let widths: Twip[]
+  if (explicit) {
+    const sum = explicit.reduce((total, width) => total + width, 0)
+    if (sum <= 0) throw new RangeError("Section column widths must be positive")
+    // Scale explicit widths into the writable area so nested geometry stays valid.
+    widths = explicit.map((width) =>
+      twips(Math.max(1, Math.floor((width * available) / sum)))
+    )
+    let allocated = widths.reduce((total, width) => total + width, 0)
+    let index = 0
+    while (allocated < available && index < widths.length) {
+      widths[index] = twips((widths[index] as number) + 1)
+      allocated += 1
+      index += 1
+    }
+  } else {
+    const base = Math.floor(available / count)
+    const remainder = available - base * count
+    widths = Array.from({ length: count }, (_, index) =>
+      twips(base + (index < remainder ? 1 : 0))
+    )
+  }
+
+  const rects: Rect[] = []
+  let x = contentBounds.x
+  for (let index = 0; index < count; index += 1) {
+    const width = widths[index] as Twip
+    rects.push({
+      x: twips(x),
+      y: contentBounds.y,
+      width,
+      height: contentBounds.height,
+    })
+    x = twips(x + width + (index < count - 1 ? space : 0))
+  }
+  return {
+    count,
+    space,
+    separator,
+    columns: Object.freeze(rects),
+  }
+}
+
+function emitColumnSeparators(
+  page: InternalPage,
+  geometry: SectionColumnGeometry,
+  sourceNodeId: NodeId
+): void {
+  if (!geometry.separator || geometry.count <= 1) return
+  for (let index = 0; index < geometry.count - 1; index += 1) {
+    const left = geometry.columns[index] as Rect
+    const x = twips(left.x + left.width + Math.floor(geometry.space / 2))
+    page.items.push({
+      type: "line",
+      sourceNodeId,
+      x1: x,
+      y1: page.contentBounds.y,
+      x2: x,
+      y2: twips(page.contentBounds.y + page.contentBounds.height),
+      width: COLUMN_SEPARATOR_WIDTH,
+      color: "#000000",
+    })
+  }
+}
 
 /**
  * Lays out resolved paragraphs. With an injected registry and shaper it emits
@@ -421,6 +605,8 @@ export function layoutDocument(
       width: twips(contentWidth),
       height: twips(contentHeight),
     }
+    const columnGeometry = resolveSectionColumnGeometry(section, contentBounds)
+    const flowBounds = columnGeometry.columns[0] as Rect
     const header = prepareHeaderFooter(
       section.defaultHeaderId,
       "header",
@@ -465,6 +651,7 @@ export function layoutDocument(
       footerY: twips(pageHeight - footerExtent),
     }
     pages.push(page)
+    emitColumnSeparators(page, columnGeometry, section.id)
     tracePages.push({
       pageNumber: page.pageNumber,
       pageBounds: {
@@ -482,7 +669,49 @@ export function layoutDocument(
         kind: "page-break",
         reason,
       })
-    return { page, y: contentBounds.y, items: page.items }
+    return {
+      page,
+      y: flowBounds.y,
+      items: page.items,
+      flowBounds,
+      columnIndex: 0,
+      columnGeometry,
+    }
+  }
+
+  const advanceFlow = (
+    section: ResolvedDocument["sections"][number],
+    state: PageState,
+    mode: "column" | "page" | "overflow",
+    reason: string,
+    sourceNodeId: NodeId
+  ): PageState => {
+    if (mode === "page" || state.columnGeometry.count <= 1) {
+      return createPage(section, reason, sourceNodeId)
+    }
+    if (
+      mode === "column" ||
+      state.columnIndex < state.columnGeometry.count - 1
+    ) {
+      if (state.columnIndex >= state.columnGeometry.count - 1) {
+        return createPage(section, reason, sourceNodeId)
+      }
+      const nextIndex = state.columnIndex + 1
+      const flowBounds = state.columnGeometry.columns[nextIndex] as Rect
+      events.push({
+        pageNumber: state.page.pageNumber,
+        sourceNodeId,
+        kind: "page-break",
+        reason: mode === "column" ? "manual-column-break" : reason,
+      })
+      return {
+        ...state,
+        y: flowBounds.y,
+        flowBounds,
+        columnIndex: nextIndex,
+      }
+    }
+    return createPage(section, reason, sourceNodeId)
   }
 
   for (const [sectionIndex, section] of document.sections.entries()) {
@@ -495,24 +724,35 @@ export function layoutDocument(
       )
     }
 
-    const sectionPage = current.page
-    const sectionContentWidth = sectionPage.contentBounds.width
+    const sectionContentWidth = current.flowBounds.width
+    const sectionContentHeight = current.flowBounds.height
     const prepared: readonly PreparedBlock[] = section.blocks.map((block) => {
       throwIfAborted(options.signal)
       if (block.type === "table") {
+        const cachedTable = options.cache?.get(block, sectionContentWidth)
+        const tableValue =
+          cachedTable?.kind === "table"
+            ? (cachedTable.value as ReturnType<typeof prepareTable>)
+            : prepareTable(
+                block,
+                sectionContentWidth,
+                typography,
+                diagnostics,
+                numbering,
+                pageFieldDigits,
+                assets,
+                sectionContentHeight,
+                options.signal
+              )
+        if (cachedTable?.kind !== "table") {
+          options.cache?.set(block, sectionContentWidth, {
+            kind: "table",
+            value: tableValue,
+          })
+        }
         return {
           type: "table",
-          value: prepareTable(
-            block,
-            sectionContentWidth,
-            typography,
-            diagnostics,
-            numbering,
-            pageFieldDigits,
-            assets,
-            sectionPage.contentBounds.height,
-            options.signal
-          ),
+          value: tableValue,
         }
       }
       if (block.type === "horizontalRule") {
@@ -535,19 +775,29 @@ export function layoutDocument(
           },
         }
       }
-      const paragraph = prepareParagraph(
-        block,
-        sectionContentWidth,
-        typography,
-        diagnostics,
-        numbering,
-        pageFieldDigits,
-        assets,
-        options.signal
-      )
+      const cachedParagraph = options.cache?.get(block, sectionContentWidth)
+      const paragraph =
+        cachedParagraph?.kind === "paragraph"
+          ? (cachedParagraph.value as PreparedParagraph)
+          : prepareParagraph(
+              block,
+              sectionContentWidth,
+              typography,
+              diagnostics,
+              numbering,
+              pageFieldDigits,
+              assets,
+              options.signal
+            )
+      if (cachedParagraph?.kind !== "paragraph") {
+        options.cache?.set(block, sectionContentWidth, {
+          kind: "paragraph",
+          value: paragraph,
+        })
+      }
       if (
         paragraph.lineHeights.some(
-          (lineHeight) => lineHeight > sectionPage.contentBounds.height
+          (lineHeight) => lineHeight > sectionContentHeight
         )
       )
         throw new RangeError(
@@ -581,19 +831,25 @@ export function layoutDocument(
       if (block.type === "horizontalRule") {
         const { rule, height } = block.value
         let contentBottom = twips(
-          current.page.contentBounds.y + current.page.contentBounds.height
+          current.flowBounds.y + current.flowBounds.height
         )
-        if (height > current.page.contentBounds.height)
+        if (height > current.flowBounds.height)
           throw new RangeError(
             "Horizontal-rule block is taller than a writable fresh page"
           )
         if (
           rule.properties.pageBreakBefore &&
-          current.y !== current.page.contentBounds.y
+          current.y !== current.flowBounds.y
         ) {
-          current = createPage(section, "page-break-before", rule.id)
+          current = advanceFlow(
+            section,
+            current,
+            "page",
+            "page-break-before",
+            rule.id
+          )
           contentBottom = twips(
-            current.page.contentBounds.y + current.page.contentBounds.height
+            current.flowBounds.y + current.flowBounds.height
           )
         }
         const next = prepared[paragraphIndex + 1]
@@ -605,12 +861,14 @@ export function layoutDocument(
               )
             : height
         if (
-          current.y !== current.page.contentBounds.y &&
+          current.y !== current.flowBounds.y &&
           current.y + keepHeight > contentBottom &&
-          keepHeight <= current.page.contentBounds.height
+          keepHeight <= current.flowBounds.height
         ) {
-          current = createPage(
+          current = advanceFlow(
             section,
+            current,
+            "overflow",
             rule.properties.keepWithNext
               ? "keep-with-next"
               : "horizontal-rule-overflow",
@@ -630,11 +888,9 @@ export function layoutDocument(
         current.items.push({
           type: "line",
           sourceNodeId: rule.id,
-          x1: current.page.contentBounds.x,
+          x1: current.flowBounds.x,
           y1: centerY,
-          x2: twips(
-            current.page.contentBounds.x + current.page.contentBounds.width
-          ),
+          x2: twips(current.flowBounds.x + current.flowBounds.width),
           y2: centerY,
           width: rule.height,
           color: rule.color,
@@ -644,9 +900,9 @@ export function layoutDocument(
           sourceNodeId: rule.id,
           kind: "block",
           bounds: {
-            x: current.page.contentBounds.x,
+            x: current.flowBounds.x,
             y: current.y,
-            width: current.page.contentBounds.width,
+            width: current.flowBounds.width,
             height: rule.height,
           },
           reason: "word-vml-horizontal-rule",
@@ -659,17 +915,21 @@ export function layoutDocument(
       const item = block.value
       const { paragraph, lines, lineHeights, label, properties } = item
       let contentBottom = twips(
-        current.page.contentBounds.y + current.page.contentBounds.height
+        current.flowBounds.y + current.flowBounds.height
       )
 
       if (
         paragraph.properties.pageBreakBefore &&
-        current.y !== current.page.contentBounds.y
+        current.y !== current.flowBounds.y
       ) {
-        current = createPage(section, "page-break-before", paragraph.id)
-        contentBottom = twips(
-          current.page.contentBounds.y + current.page.contentBounds.height
+        current = advanceFlow(
+          section,
+          current,
+          "page",
+          "page-break-before",
+          paragraph.id
         )
+        contentBottom = twips(current.flowBounds.y + current.flowBounds.height)
       }
 
       const previous = prepared[paragraphIndex - 1]
@@ -701,12 +961,18 @@ export function layoutDocument(
           )
       )
       if (chainEnd > paragraphIndex) {
-        if (chainHeight <= current.page.contentBounds.height) {
+        if (chainHeight <= current.flowBounds.height) {
           if (
-            current.y !== current.page.contentBounds.y &&
+            current.y !== current.flowBounds.y &&
             current.y + chainHeight > contentBottom
           ) {
-            current = createPage(section, "keep-with-next", paragraph.id)
+            current = advanceFlow(
+              section,
+              current,
+              "overflow",
+              "keep-with-next",
+              paragraph.id
+            )
             events.push({
               pageNumber: current.page.pageNumber,
               sourceNodeId: paragraph.id,
@@ -715,7 +981,7 @@ export function layoutDocument(
               reason: "keep-with-next",
             })
             contentBottom = twips(
-              current.page.contentBounds.y + current.page.contentBounds.height
+              current.flowBounds.y + current.flowBounds.height
             )
           }
         } else {
@@ -749,10 +1015,16 @@ export function layoutDocument(
 
       if (
         paragraph.properties.keepLinesTogether &&
-        item.height <= current.page.contentBounds.height &&
+        item.height <= current.flowBounds.height &&
         current.y + item.height > contentBottom
       ) {
-        current = createPage(section, "keep-lines-together", paragraph.id)
+        current = advanceFlow(
+          section,
+          current,
+          "overflow",
+          "keep-lines-together",
+          paragraph.id
+        )
         events.push({
           pageNumber: current.page.pageNumber,
           sourceNodeId: paragraph.id,
@@ -760,12 +1032,10 @@ export function layoutDocument(
           decision: "moved",
           reason: "keep-lines-together",
         })
-        contentBottom = twips(
-          current.page.contentBounds.y + current.page.contentBounds.height
-        )
+        contentBottom = twips(current.flowBounds.y + current.flowBounds.height)
       } else if (
         paragraph.properties.keepLinesTogether &&
-        item.height > current.page.contentBounds.height
+        item.height > current.flowBounds.height
       ) {
         diagnostics.push({
           code: "layout/keep-lines-together-too-tall",
@@ -788,6 +1058,14 @@ export function layoutDocument(
       current.y = twips(current.y + paragraph.properties.spacingBefore)
       let lineIndex = 0
       let diagnosedWidowImpossible = false
+      const isTerminalImplicitEmptyParagraph =
+        sectionIndex === document.sections.length - 1 &&
+        paragraphIndex === prepared.length - 1 &&
+        paragraph.properties.pageBreakBefore === false &&
+        paragraph.properties.numbering === null &&
+        paragraph.children.every(
+          (child) => child.type === "text" && child.text.length === 0
+        )
       while (lineIndex < lines.length) {
         throwIfAborted(options.signal)
         let capacity = fittingLineCount(
@@ -796,10 +1074,24 @@ export function layoutDocument(
           current.y,
           contentBottom
         )
-        if (capacity === 0 && current.y !== current.page.contentBounds.y) {
-          current = createPage(section, "line-overflow", paragraph.id)
+        if (capacity === 0 && current.y !== current.flowBounds.y) {
+          // Word requires a paragraph after a terminal table. Google Docs does
+          // not materialize a new blank page when that structural paragraph is
+          // the only thing that would overflow; explicit page/section breaks
+          // remain represented by their own semantic controls above.
+          if (isTerminalImplicitEmptyParagraph) {
+            lineIndex = lines.length
+            break
+          }
+          current = advanceFlow(
+            section,
+            current,
+            "overflow",
+            "line-overflow",
+            paragraph.id
+          )
           contentBottom = twips(
-            current.page.contentBounds.y + current.page.contentBounds.height
+            current.flowBounds.y + current.flowBounds.height
           )
           continue
         }
@@ -807,7 +1099,10 @@ export function layoutDocument(
 
         const manualBreakOffset = lines
           .slice(lineIndex)
-          .findIndex((line) => line.pageBreakAfter === true)
+          .findIndex(
+            (line) =>
+              line.pageBreakAfter === true || line.columnBreakAfter === true
+          )
         if (manualBreakOffset >= 0)
           capacity = Math.min(capacity, manualBreakOffset + 1)
 
@@ -822,9 +1117,15 @@ export function layoutDocument(
             lineIndex === 0 &&
             capacity === 1 &&
             capacity < remaining &&
-            current.y !== current.page.contentBounds.y
+            current.y !== current.flowBounds.y
           ) {
-            current = createPage(section, "widow-orphan", paragraph.id)
+            current = advanceFlow(
+              section,
+              current,
+              "overflow",
+              "widow-orphan",
+              paragraph.id
+            )
             events.push({
               pageNumber: current.page.pageNumber,
               sourceNodeId: paragraph.id,
@@ -833,7 +1134,7 @@ export function layoutDocument(
               reason: "widow-orphan",
             })
             contentBottom = twips(
-              current.page.contentBounds.y + current.page.contentBounds.height
+              current.flowBounds.y + current.flowBounds.height
             )
             continue
           }
@@ -855,7 +1156,7 @@ export function layoutDocument(
           if (
             capacity === 1 &&
             capacity < remaining &&
-            current.y === current.page.contentBounds.y &&
+            current.y === current.flowBounds.y &&
             !diagnosedWidowImpossible
           ) {
             diagnosedWidowImpossible = true
@@ -890,9 +1191,9 @@ export function layoutDocument(
               sourceNodeId: paragraph.id,
               kind: "overflow",
               bounds: {
-                x: current.page.contentBounds.x,
+                x: current.flowBounds.x,
                 y: current.y,
-                width: current.page.contentBounds.width,
+                width: current.flowBounds.width,
                 height: lineHeight,
               },
               reason: "line-taller-than-content-area",
@@ -901,7 +1202,7 @@ export function layoutDocument(
 
           const box = paragraphLineBox(
             properties,
-            current.page.contentBounds,
+            current.flowBounds,
             lineIndex === 0
           )
           const justify =
@@ -921,12 +1222,7 @@ export function layoutDocument(
             current.y + line.ascent + Math.floor(leading / 2)
           )
           if (label && lineIndex === 0)
-            emitListLabel(
-              current.items,
-              label,
-              current.page.contentBounds,
-              baselineY
-            )
+            emitListLabel(current.items, label, current.flowBounds, baselineY)
           emitLine(current.items, line, additions, startX, baselineY)
 
           events.push({
@@ -939,13 +1235,15 @@ export function layoutDocument(
               width: renderedWidth,
               height: lineHeight,
             },
+            charOffset: line.charOffset,
+            lineIndex,
           })
           current.y = twips(current.y + lineHeight)
           lineIndex += 1
         }
         const blockBox = paragraphLineBox(
           properties,
-          current.page.contentBounds,
+          current.flowBounds,
           firstRenderedLine === 0
         )
         events.push({
@@ -960,14 +1258,26 @@ export function layoutDocument(
           },
         })
         const manualPageBreak = lines[lineIndex - 1]?.pageBreakAfter === true
-        if (lineIndex < lines.length || manualPageBreak) {
-          current = createPage(
+        const manualColumnBreak =
+          lines[lineIndex - 1]?.columnBreakAfter === true
+        if (lineIndex < lines.length || manualPageBreak || manualColumnBreak) {
+          current = advanceFlow(
             section,
-            manualPageBreak ? "manual-page-break" : breakReason,
+            current,
+            manualPageBreak
+              ? "page"
+              : manualColumnBreak
+                ? "column"
+                : "overflow",
+            manualPageBreak
+              ? "manual-page-break"
+              : manualColumnBreak
+                ? "manual-column-break"
+                : breakReason,
             paragraph.id
           )
           contentBottom = twips(
-            current.page.contentBounds.y + current.page.contentBounds.height
+            current.flowBounds.y + current.flowBounds.height
           )
         }
       }
@@ -1077,11 +1387,38 @@ export function layoutDocument(
         events: Object.freeze(events),
       })
     : undefined
+  const links = collectLinkBoxes(displayList)
   return Object.freeze({
     displayList,
     diagnostics: Object.freeze(diagnostics),
+    ...(links.length > 0 ? { links } : {}),
     ...(trace ? { trace } : {}),
   })
+}
+
+/** Builds clickable link boxes from glyph runs that carry an href. */
+function collectLinkBoxes(displayList: PageDisplayList): readonly LinkBox[] {
+  const links: LinkBox[] = []
+  for (const [pageIndex, page] of displayList.pages.entries()) {
+    for (const item of page.items) {
+      if (item.type !== "glyph-run") continue
+      const href = item.href
+      if (typeof href !== "string" || href.length === 0) continue
+      const ascent = twips(Math.round((item.fontSize * 4) / 5))
+      const height = twips(Math.max(1, item.fontSize))
+      links.push(
+        Object.freeze({
+          href,
+          x: item.x,
+          y: twips(item.baselineY - ascent),
+          width: item.width,
+          height,
+          pageIndex,
+        })
+      )
+    }
+  }
+  return Object.freeze(links)
 }
 
 function prepareParagraph(
@@ -1160,7 +1497,29 @@ function prepareTable(
     throw new RangeError(
       "Invalid table grid: resolved table width does not equal the grid width"
     )
-  if (gridWidth > availableWidth)
+  const authoredIndent = table.indentStart ?? twips(0)
+  if (!Number.isSafeInteger(authoredIndent) || authoredIndent < 0)
+    throw new RangeError("Invalid table indentation")
+  const alignment = table.alignment ?? "left"
+  if (alignment !== "left" && alignment !== "center" && alignment !== "right")
+    throw new RangeError("Invalid table alignment")
+  const remaining = availableWidth - gridWidth
+  const indentStart =
+    alignment === "center"
+      ? twips(Math.max(0, Math.floor(remaining / 2)))
+      : alignment === "right"
+        ? twips(Math.max(0, remaining))
+        : authoredIndent
+  // Word and Google Docs tolerate sub-point grid rounding where fractional
+  // dxa values round the declared columns a few twips wider than the writable
+  // box. Preserve that authored geometry; reject only a material overflow.
+  // Center and right justification consume leftover writable width, so overflow
+  // is measured against the grid itself rather than authored left indent.
+  if (
+    gridWidth + (alignment === "left" ? authoredIndent : 0) > availableWidth &&
+    gridWidth + (alignment === "left" ? authoredIndent : 0) - availableWidth >
+      20
+  )
     throw new RangeError("Invalid table grid: table exceeds the writable width")
   if (table.rows.length === 0)
     throw new RangeError("Invalid table: at least one row is required")
@@ -1240,6 +1599,12 @@ function prepareTable(
         throw new RangeError(
           "Invalid table grid: resolved cell width does not equal its spanned columns"
         )
+      if (cell.cellPadding !== null && cell.cellPadding !== undefined) {
+        for (const side of Object.values(cell.cellPadding)) {
+          if (!Number.isSafeInteger(side) || side < 0)
+            throw new RangeError("Invalid direct table cell padding")
+        }
+      }
 
       const active = mergeOwners.get(cell.columnIndex)
       let mergeOwnerRow: number | null = null
@@ -1269,22 +1634,23 @@ function prepareTable(
       }
 
       const cellBorders = resolveCellBorders(table, rowIndex, cell)
+      const cellPadding = cell.cellPadding ?? table.cellPadding
       const { left: leftBorder, right: rightBorder } = cellBorders
       const { top: topBorder, bottom: bottomBorder } = cellBorders
       const leftInset = safeTwipSum(
-        [table.cellPadding.left, borderSpace(leftBorder)],
+        [cellPadding.left, borderSpace(leftBorder)],
         "Invalid table cell inset"
       )
       const rightInset = safeTwipSum(
-        [table.cellPadding.right, borderSpace(rightBorder)],
+        [cellPadding.right, borderSpace(rightBorder)],
         "Invalid table cell inset"
       )
       const topInset = safeTwipSum(
-        [table.cellPadding.top, borderSpace(topBorder)],
+        [cellPadding.top, borderSpace(topBorder)],
         "Invalid table cell inset"
       )
       const bottomInset = safeTwipSum(
-        [table.cellPadding.bottom, borderSpace(bottomBorder)],
+        [cellPadding.bottom, borderSpace(bottomBorder)],
         "Invalid table cell inset"
       )
       const contentWidth = width - leftInset - rightInset
@@ -1496,6 +1862,7 @@ function prepareTable(
   )
   return {
     table,
+    indentStart,
     rows: Object.freeze(sizedRows),
     mergeChains: Object.freeze(mergeChains),
     headerHeight,
@@ -1526,14 +1893,14 @@ function paginateTable(
 
   const bottom = (): Twip =>
     safeTwipSum(
-      [current.page.contentBounds.y, current.page.contentBounds.height],
+      [current.flowBounds.y, current.flowBounds.height],
       "Page content bounds exceed the safe integer range"
     )
   const freshPage = (sourceNodeId: NodeId, repeatHeaders = true): void => {
     current = createPage(section, "table-continuation", sourceNodeId)
     currentHasRepeatedHeaders = false
     if (repeatHeaders && originalHeadersComplete && prepared.headerHeight > 0) {
-      if (prepared.headerHeight >= current.page.contentBounds.height) {
+      if (prepared.headerHeight >= current.flowBounds.height) {
         if (!diagnosedHeaderTooTall) {
           diagnosedHeaderTooTall = true
           diagnostics.push({
@@ -1575,9 +1942,9 @@ function paginateTable(
 
   if (
     bodyStart > 0 &&
-    prepared.headerHeight <= current.page.contentBounds.height &&
+    prepared.headerHeight <= current.flowBounds.height &&
     prepared.headerHeight > bottom() - current.y &&
-    current.y !== current.page.contentBounds.y
+    current.y !== current.flowBounds.y
   ) {
     current = createPage(section, "table-header-group", table.id)
   }
@@ -1594,10 +1961,10 @@ function paginateTable(
         offset === 0 &&
         !row.row.allowBreakAcrossPages &&
         remaining <=
-          current.page.contentBounds.height -
+          current.flowBounds.height -
             (row.index >= bodyStart ? prepared.headerHeight : 0) &&
         remaining > capacity &&
-        current.y !== current.page.contentBounds.y
+        current.y !== current.flowBounds.y
       ) {
         freshPage(row.row.id)
         events.push({
@@ -1613,7 +1980,7 @@ function paginateTable(
         offset === 0 &&
         !row.row.allowBreakAcrossPages &&
         remaining >
-          current.page.contentBounds.height -
+          current.flowBounds.height -
             (row.index >= bodyStart ? prepared.headerHeight : 0) &&
         !diagnosedCantSplit
       ) {
@@ -1653,28 +2020,41 @@ function paginateTable(
         twips(capacity)
       )
       if (fragmentHeight <= 0) {
-        if (currentHasRepeatedHeaders) {
-          if (!diagnosedHeaderDegradation) {
-            diagnosedHeaderDegradation = true
-            diagnostics.push({
-              code: "layout/table-header-repeat-degraded-for-atomic-line",
-              severity: "warning",
-              message:
-                "Repeating headers were omitted from one or more continuation pages so an atomic table line could fit",
-              source: row.row.source,
-              nodeId: row.row.id,
-            })
-            events.push({
-              pageNumber: current.page.pageNumber,
-              sourceNodeId: row.row.id,
-              kind: "unsupported-approximation",
-              reason: "table-header-repeat-degraded-for-atomic-line",
-            })
+        if (current.y !== current.flowBounds.y) {
+          if (currentHasRepeatedHeaders) {
+            const headerCapacity = twips(
+              current.flowBounds.height - prepared.headerHeight
+            )
+            const fitsWithHeaders =
+              headerCapacity > 0 &&
+              safeTableFragmentHeight(
+                prepared,
+                row,
+                offset,
+                headerCapacity
+              ) > 0
+            if (!fitsWithHeaders) {
+              if (!diagnosedHeaderDegradation) {
+                diagnosedHeaderDegradation = true
+                diagnostics.push({
+                  code: "layout/table-header-repeat-degraded-for-atomic-line",
+                  severity: "warning",
+                  message:
+                    "Repeating headers were omitted from one or more continuation pages so an atomic table line could fit",
+                  source: row.row.source,
+                  nodeId: row.row.id,
+                })
+                events.push({
+                  pageNumber: current.page.pageNumber,
+                  sourceNodeId: row.row.id,
+                  kind: "unsupported-approximation",
+                  reason: "table-header-repeat-degraded-for-atomic-line",
+                })
+              }
+              freshPage(row.row.id, false)
+              continue
+            }
           }
-          freshPage(row.row.id, false)
-          continue
-        }
-        if (current.y !== current.page.contentBounds.y) {
           freshPage(row.row.id)
           continue
         }
@@ -1758,7 +2138,7 @@ function emitTableRowFragment(
   const shadings: DisplayListItem[] = []
   for (const cell of row.cells) {
     const x = safeTwipSum(
-      [current.page.contentBounds.x, cell.x],
+      [current.flowBounds.x, prepared.indentStart, cell.x],
       "Table cell position exceeds the safe integer range"
     )
     const paintOwner = mergeOwnerCell(prepared, cell)
@@ -1784,7 +2164,7 @@ function emitTableRowFragment(
     "Table fragment position exceeds the safe integer range"
   )
   const pageBottom = safeTwipSum(
-    [current.page.contentBounds.y, current.page.contentBounds.height],
+    [current.flowBounds.y, current.flowBounds.height],
     "Page content bounds exceed the safe integer range"
   )
   const textItems: InternalDisplayItem[] = []
@@ -1801,6 +2181,7 @@ function emitTableRowFragment(
       textItems,
       rowY,
       logicalStart,
+      prepared.indentStart,
       events
     )
   }
@@ -1809,7 +2190,7 @@ function emitTableRowFragment(
   // Borders are last so they remain crisp above shading and text.
   for (const cell of row.cells) {
     const x = safeTwipSum(
-      [current.page.contentBounds.x, cell.x],
+      [current.flowBounds.x, prepared.indentStart, cell.x],
       "Table cell position exceeds the safe integer range"
     )
     const isMergeContinuation = cell.cell.verticalMerge === "continue"
@@ -1867,7 +2248,10 @@ function emitTableRowFragment(
     sourceNodeId: row.row.id,
     kind: "table-row-fragment",
     bounds: {
-      x: current.page.contentBounds.x,
+      x: safeTwipSum(
+        [current.flowBounds.x, prepared.indentStart],
+        "Table position exceeds the safe integer range"
+      ),
       y: rowY,
       width: table.width,
       height,
@@ -1955,7 +2339,21 @@ function safeTableFragmentHeight(
       }
     }
   }
-  return twips(end - start)
+  const height = twips(end - start)
+  if (height <= 0 || end === rowEnd) return height
+  const containsCompleteLine = placements.some(
+    (placement) =>
+      placement.top >= start &&
+      placement.bottom <= end &&
+      placement.bottom > start
+  )
+  if (containsCompleteLine) return height
+  // A leftover that cannot hold the next atomic line is not a valid page
+  // fragment. Move the remaining row instead of painting padding-only slivers.
+  const remainingLineStartsInRow = placements.some(
+    (placement) => placement.top >= start && placement.top < rowEnd
+  )
+  return remainingLineStartsInRow ? twips(0) : height
 }
 
 function tableCellContentTop(
@@ -2007,6 +2405,7 @@ function emitTableLinePlacement(
   items: InternalDisplayItem[],
   rowY: Twip,
   logicalStart: Twip,
+  tableIndentStart: Twip,
   events: LayoutTraceEvent[]
 ): void {
   const { cell, paragraph, lineIndex, line } = placement
@@ -2017,7 +2416,7 @@ function emitTableLinePlacement(
   )
   const bounds: Rect = {
     x: safeTwipSum(
-      [current.page.contentBounds.x, cell.contentX],
+      [current.flowBounds.x, tableIndentStart, cell.contentX],
       "Table cell line position exceeds the safe integer range"
     ),
     y: localY,
@@ -2052,6 +2451,8 @@ function emitTableLinePlacement(
       width: renderedWidth,
       height: lineHeight,
     },
+    charOffset: line.charOffset,
+    lineIndex,
   })
 }
 
@@ -2121,9 +2522,13 @@ function emitBorder(
 ): void {
   if (!border || border.style === "none" || border.width <= 0) return
   const push = (offset: Twip): void => {
+    const strokeWidth =
+      border.style === "dotted"
+        ? twips(Math.ceil(border.width / 20) * 20)
+        : border.width
     const dashArray =
       border.style === "dotted"
-        ? ([border.width, twips(Math.max(1, border.width * 2))] as const)
+        ? ([twips(1), twips(Math.max(20, border.width * 2 - 1))] as const)
         : border.style === "dashed"
           ? ([
               twips(Math.max(1, border.width * 4)),
@@ -2137,7 +2542,7 @@ function emitBorder(
       y1: horizontal ? twips(y + offset) : y,
       x2: horizontal ? twips(x + length) : twips(x + offset),
       y2: horizontal ? twips(y + offset) : twips(y + length),
-      width: border.width,
+      width: strokeWidth,
       color: border.color,
       ...(dashArray ? { dashArray } : {}),
       ...(border.style === "dotted" ? { lineCap: "round" as const } : {}),
@@ -2175,21 +2580,6 @@ function validateBorder(border: TableBorder | null): void {
     throw new RangeError("Invalid table border")
 }
 
-function bordersEqual(
-  left: TableBorder | null,
-  right: TableBorder | null
-): boolean {
-  return (
-    left === right ||
-    (left !== null &&
-      right !== null &&
-      left.style === right.style &&
-      left.color === right.color &&
-      left.width === right.width &&
-      left.space === right.space)
-  )
-}
-
 function verticalMergeOwnerCell(
   table: ResolvedTable,
   rowIndex: number,
@@ -2214,11 +2604,34 @@ function sharedDirectBorder(
   const direct = candidates.filter(
     (border): border is TableBorder => border !== null
   )
-  const first = direct[0]
-  if (first === undefined) return undefined
-  if (direct.some((border) => !bordersEqual(first, border)))
-    throw new RangeError("Conflicting direct borders on a shared table edge")
-  return first
+  if (direct.length === 0) return undefined
+
+  // Word permits the two cells on a shared edge to carry different direct
+  // border declarations. Resolve both cells to the same visible winner so the
+  // edge is painted once consistently. A visible border always defeats an
+  // explicit `nil`/`none`; width and then style break remaining ties.
+  const stylePriority: Readonly<Record<TableBorder["style"], number>> = {
+    none: 0,
+    dotted: 1,
+    dashed: 2,
+    single: 3,
+    double: 4,
+  }
+  return direct.reduce((winner, candidate) => {
+    const winnerVisible = winner.style === "none" ? 0 : 1
+    const candidateVisible = candidate.style === "none" ? 0 : 1
+    if (candidateVisible !== winnerVisible)
+      return candidateVisible > winnerVisible ? candidate : winner
+    if (candidate.width !== winner.width)
+      return candidate.width > winner.width ? candidate : winner
+    if (stylePriority[candidate.style] !== stylePriority[winner.style])
+      return stylePriority[candidate.style] > stylePriority[winner.style]
+        ? candidate
+        : winner
+    if (candidate.space !== winner.space)
+      return candidate.space > winner.space ? candidate : winner
+    return winner
+  })
 }
 
 function resolveCellBorders(
@@ -2280,14 +2693,52 @@ function resolveCellBorders(
         owner.borders.bottom,
         ...below.map((candidate) => directFrom(candidate, rowIndex + 1, "top")),
       ])
-  const directLeft = sharedDirectBorder([
+  const directLeftCandidates = [
     owner.borders.left,
     directFrom(previous, rowIndex, "right"),
-  ])
-  const directRight = sharedDirectBorder([
+  ] as const
+  const directRightCandidates = [
     owner.borders.right,
     directFrom(next, rowIndex, "left"),
-  ])
+  ] as const
+  const directLeft = sharedDirectBorder(directLeftCandidates)
+  const directRight = sharedDirectBorder(directRightCandidates)
+  const hasBorderOverrides = (candidate: ResolvedTableCell): boolean =>
+    Object.values(
+      verticalMergeOwnerCell(table, rowIndex, candidate).borders
+    ).some((border) => border !== null)
+  const ownerHasBorderOverrides = hasBorderOverrides(cell)
+  const internalVertical = (
+    direct: TableBorder | null | undefined,
+    adjacent: ResolvedTableCell | undefined
+  ): TableBorder | null => {
+    const fallback = table.borders.insideVertical
+    const ownerCell = verticalMergeOwnerCell(table, rowIndex, cell)
+    const adjacentOwner =
+      adjacent === undefined
+        ? undefined
+        : verticalMergeOwnerCell(table, rowIndex, adjacent)
+    const visibleMergedBoundary =
+      cell.verticalMerge !== "none" &&
+      adjacent?.verticalMerge !== "none" &&
+      (ownerCell.columnSpan >= 3 || (adjacentOwner?.columnSpan ?? 0) >= 3) &&
+      ownerCell.blocks.some(paragraphHasVisibleContent) &&
+      adjacentOwner?.blocks.some(paragraphHasVisibleContent) === true
+    // Google Docs retains the inherited inside border between two independent,
+    // content-bearing vertical merge regions (for example a prescription body
+    // and its side note), even when their owner cells carry nil sides.
+    if (
+      direct?.style === "none" &&
+      visibleMergedBoundary &&
+      fallback?.style !== "none"
+    )
+      return fallback
+    if (direct !== undefined) return direct
+    return ownerHasBorderOverrides ||
+      (adjacent !== undefined && hasBorderOverrides(adjacent))
+      ? null
+      : fallback
+  }
   return {
     top: sameMergeAbove
       ? null
@@ -2300,15 +2751,13 @@ function resolveCellBorders(
           ? table.borders.bottom
           : table.borders.insideHorizontal)),
     left:
-      directLeft ??
-      (cell.columnIndex === 0
-        ? table.borders.left
-        : table.borders.insideVertical),
+      cell.columnIndex === 0
+        ? (directLeft ?? table.borders.left)
+        : internalVertical(directLeft, previous),
     right:
-      directRight ??
-      (cell.columnIndex + cell.columnSpan === table.columnWidths.length
-        ? table.borders.right
-        : table.borders.insideVertical),
+      cell.columnIndex + cell.columnSpan === table.columnWidths.length
+        ? (directRight ?? table.borders.right)
+        : internalVertical(directRight, next),
   }
 }
 
@@ -2399,6 +2848,10 @@ function prepareImageCluster(
       type: "image",
       assetId: image.assetId,
       height: image.height,
+      offsetX:
+        image.placement?.type === "anchor" ? image.placement.offsetX : twips(0),
+      offsetY:
+        image.placement?.type === "anchor" ? image.placement.offsetY : twips(0),
     }),
   })
 }
@@ -2437,17 +2890,36 @@ function preparePageFieldCluster(
       style: field.style.fontStyle,
     })
     const face = typography.fonts.face(match.faceId)
+    const resolvedWeight =
+      match.kind === "alias" ? face.weight : field.style.fontWeight
     resolvedStyle = {
       ...presentation.style,
       fontFamily: face.family,
-      fontWeight: face.weight,
+      fontWeight: resolvedWeight,
       fontStyle: face.style,
+    }
+    const variation = shapeVariationForRun(
+      { weight: field.style.fontWeight, style: field.style.fontStyle },
+      face.weight
+    )
+    const fontsWithVariation = typography.fonts as FontRegistry & {
+      getFontVariation?: (
+        family: string,
+        options?: Readonly<{ wght?: number; ital?: number }>
+      ) => unknown
+    }
+    if (
+      variation &&
+      typeof fontsWithVariation.getFontVariation === "function"
+    ) {
+      fontsWithVariation.getFontVariation(field.style.fontFamily, variation)
     }
     const shaped = typography.shaper.shape({
       face,
       text: "0123456789",
       fontSize: presentation.style.fontSize,
       direction: "ltr",
+      ...(variation ? { variation } : {}),
     })
     const digits = new Map<string, readonly ShapedGlyph[]>()
     for (let index = 0; index < 10; index += 1) {
@@ -2529,6 +3001,10 @@ type PageState = {
   page: InternalPage
   y: Twip
   items: InternalDisplayItem[]
+  /** Writable area for the current column (full content area when count === 1). */
+  flowBounds: Rect
+  columnIndex: number
+  columnGeometry: SectionColumnGeometry
 }
 
 type NumberingResolver = Readonly<{
@@ -3020,19 +3496,30 @@ function measureParagraph(
   const finish = (
     wrapped: boolean,
     force = false,
-    pageBreakAfter = false
+    pageBreakAfter = false,
+    columnBreakAfter = false
   ): void => {
     trimTrailingWhitespace()
     if (clusters.length > 0 || force) {
-      const emptyMetrics = emptyLineMetrics(paragraph, typography)
+      const emptyMetrics =
+        clusters.length === 0
+          ? emptyLineMetrics(paragraph, typography)
+          : undefined
+      const lineCharOffset =
+        clusters.find((cluster) => cluster.charOffset !== undefined)
+          ?.charOffset ??
+        clusters[0]?.charOffset ??
+        0
       lines.push({
         clusters: Object.freeze(clusters),
         width,
-        ascent: ascent || emptyMetrics.ascent,
-        descent: descent || emptyMetrics.descent,
-        lineGap: lineGap || emptyMetrics.lineGap,
+        ascent: emptyMetrics?.ascent ?? ascent,
+        descent: emptyMetrics?.descent ?? descent,
+        lineGap: emptyMetrics?.lineGap ?? lineGap,
         wrapped,
+        charOffset: lineCharOffset,
         ...(pageBreakAfter ? { pageBreakAfter: true } : {}),
+        ...(columnBreakAfter ? { columnBreakAfter: true } : {}),
       })
     }
     clusters = []
@@ -3045,7 +3532,11 @@ function measureParagraph(
   for (const token of tokens) {
     throwIfAborted(signal)
     if (token.pageBreak) {
-      finish(false, true, true)
+      finish(false, true, true, false)
+      continue
+    }
+    if (token.columnBreak) {
+      finish(false, true, false, true)
       continue
     }
     if (token.hardBreak) {
@@ -3122,6 +3613,7 @@ function prepareTokens(
   signal?: AbortSignal
 ): readonly Token[] {
   const result: Token[] = []
+  let paragraphCharOffset = 0
   for (const child of paragraph.children) {
     throwIfAborted(signal)
     if (child.type === "break") {
@@ -3131,7 +3623,9 @@ function prepareTokens(
         hardBreak: child.kind === "line",
         preserveSpace: true,
         ...(child.kind === "page" ? { pageBreak: true } : {}),
+        ...(child.kind === "column" ? { columnBreak: true } : {}),
       })
+      // Manual breaks occupy no character width in the editor char-offset map.
       continue
     }
     if (child.type === "tab") {
@@ -3142,27 +3636,35 @@ function prepareTokens(
         preserveSpace: true,
         tabSourceNodeId: child.id,
       })
+      paragraphCharOffset += 1
       continue
     }
     if (child.type === "image") {
       validateImage(child, assets)
       result.push({
-        clusters: Object.freeze([prepareImageCluster(child)]),
-        whitespace: false,
-        hardBreak: false,
-        preserveSpace: true,
-      })
-      continue
-    }
-    if (child.type === "pageField") {
-      result.push({
         clusters: Object.freeze([
-          preparePageFieldCluster(child, typography, pageFieldDigits),
+          { ...prepareImageCluster(child), charOffset: paragraphCharOffset },
         ]),
         whitespace: false,
         hardBreak: false,
         preserveSpace: true,
       })
+      paragraphCharOffset += 1
+      continue
+    }
+    if (child.type === "pageField") {
+      result.push({
+        clusters: Object.freeze([
+          {
+            ...preparePageFieldCluster(child, typography, pageFieldDigits),
+            charOffset: paragraphCharOffset,
+          },
+        ]),
+        whitespace: false,
+        hardBreak: false,
+        preserveSpace: true,
+      })
+      paragraphCharOffset += child.displayText.length
       continue
     }
     if (child.text.includes("\t")) {
@@ -3180,6 +3682,7 @@ function prepareTokens(
         ? prepareEmbeddedRun(child, typography, diagnostics)
         : prepareStandardRun(child, typography.metrics)
     const ranges = textRanges(child.text)
+    const runBase = paragraphCharOffset
     for (const range of ranges) {
       result.push({
         clusters: Object.freeze(
@@ -3188,13 +3691,17 @@ function prepareTokens(
               (cluster) =>
                 range.start <= cluster.start && cluster.start < range.end
             )
-            .map(({ start: _start, ...cluster }) => cluster)
+            .map(({ start, ...cluster }) => ({
+              ...cluster,
+              charOffset: runBase + start,
+            }))
         ),
         whitespace: range.whitespace,
         hardBreak: range.hardBreak,
         preserveSpace: child.preserveSpace === true,
       })
     }
+    paragraphCharOffset += child.text.length
   }
   return Object.freeze(result)
 }
@@ -3216,6 +3723,10 @@ function prepareStandardRun(
   )
   const result: IndexedCluster[] = []
   let start = 0
+  const href =
+    typeof child.href === "string" && child.href.length > 0
+      ? child.href
+      : undefined
   for (const character of child.text) {
     result.push({
       start,
@@ -3235,10 +3746,30 @@ function prepareStandardRun(
       underlineThickness: twips(
         Math.max(1, Math.round(presentation.style.fontSize / 20))
       ),
+      ...(href ? { href } : {}),
     })
     start += character.length
   }
   return result
+}
+
+function shapeVariationForRun(
+  requested: Readonly<{
+    weight: TextStyle["fontWeight"]
+    style: TextStyle["fontStyle"]
+  }>,
+  faceWeight: TextStyle["fontWeight"]
+): ShapeTextInput["variation"] | undefined {
+  if (
+    requested.weight === faceWeight &&
+    (requested.weight === 400 || requested.weight === 700)
+  ) {
+    return undefined
+  }
+  return {
+    wght: requested.weight,
+    ...(requested.style === "italic" ? { ital: 1 } : {}),
+  }
 }
 
 function prepareEmbeddedRun(
@@ -3253,11 +3784,31 @@ function prepareEmbeddedRun(
     style: child.style.fontStyle,
   })
   const face = typography.fonts.face(match.faceId)
+  // OOXML family aliases such as "Inter Medium" encode their static face in
+  // the family name while the run itself remains regular (400). Surface the
+  // selected face's weight for aliases. For ordinary face fallbacks, retain
+  // the semantic request so a variable Regular face can receive wght.
+  const resolvedWeight =
+    match.kind === "alias" ? face.weight : child.style.fontWeight
   const resolvedStyle = {
     ...presentation.style,
     fontFamily: face.family,
-    fontWeight: face.weight,
+    fontWeight: resolvedWeight,
     fontStyle: face.style,
+  }
+  const variation = shapeVariationForRun(
+    { weight: child.style.fontWeight, style: child.style.fontStyle },
+    face.weight
+  )
+  // Optional ManagedFontRegistry hook: warm variation instance / metrics.
+  const fontsWithVariation = typography.fonts as FontRegistry & {
+    getFontVariation?: (
+      family: string,
+      options?: Readonly<{ wght?: number; ital?: number }>
+    ) => Readonly<{ metrics: typeof face.metrics }>
+  }
+  if (variation && typeof fontsWithVariation.getFontVariation === "function") {
+    fontsWithVariation.getFontVariation(child.style.fontFamily, variation)
   }
   // Paragraph controls are layout boundaries, not font glyphs. Replacing each
   // UTF-16 code unit with a space preserves cluster offsets while still making
@@ -3268,6 +3819,7 @@ function prepareEmbeddedRun(
     text: shapingText,
     fontSize: presentation.style.fontSize,
     direction: "ltr",
+    ...(variation ? { variation } : {}),
   })
   if (match.kind === "face-fallback" || match.kind === "family-fallback") {
     diagnostics.push({
@@ -3305,6 +3857,10 @@ function prepareEmbeddedRun(
         twips(Math.abs(shaped.descent)),
         presentation.baselineShift
       )
+      const href =
+        typeof child.href === "string" && child.href.length > 0
+          ? child.href
+          : undefined
       return {
         start: first.clusterStart,
         text,
@@ -3329,6 +3885,7 @@ function prepareEmbeddedRun(
         underlineThickness: twips(
           Math.max(1, scale(face.metrics.underlineThickness))
         ),
+        ...(href ? { href } : {}),
       }
     })
 }
@@ -3366,10 +3923,41 @@ function emptyLineMetrics(
   const child = paragraph.children.find(
     (candidate) => candidate.type === "text" || candidate.type === "pageField"
   )
-  if (child && typography.kind === "standard") {
-    const height = typography.metrics.lineHeight(child.style)
+  const style = child?.style ?? paragraph.paragraphMarkStyle ?? undefined
+  if (style && typography.kind === "standard") {
+    const height = typography.metrics.lineHeight(style)
     const ascent = twips(Math.round((height * 4) / 5))
     return { ascent, descent: twips(height - ascent), lineGap: twips(0) }
+  }
+  if (style && typography.kind === "embedded") {
+    const presentation = scriptPresentation(style)
+    const match = typography.fonts.matchFace({
+      family: style.fontFamily,
+      weight: style.fontWeight,
+      style: style.fontStyle,
+    })
+    const face = typography.fonts.face(match.faceId)
+    const variation = shapeVariationForRun(
+      { weight: style.fontWeight, style: style.fontStyle },
+      face.weight
+    )
+    const shaped = typography.shaper.shape({
+      face,
+      text: "M",
+      fontSize: presentation.style.fontSize,
+      direction: "ltr",
+      ...(variation ? { variation } : {}),
+    })
+    const shifted = shiftedVerticalMetrics(
+      twips(Math.max(0, shaped.ascent)),
+      twips(Math.abs(shaped.descent)),
+      presentation.baselineShift
+    )
+    return {
+      ascent: shifted.ascent,
+      descent: shifted.descent,
+      lineGap: twips(Math.max(0, shaped.lineGap)),
+    }
   }
   return { ascent: twips(192), descent: twips(48), lineGap: twips(0) }
 }
@@ -3489,6 +4077,7 @@ function emitListLabel(
       descent: label.descent,
       lineGap: label.lineGap,
       wrapped: false,
+      charOffset: 0,
     },
     new Map(),
     x,
@@ -3678,6 +4267,10 @@ function emitLine(
       )
     )
     const shiftedBaselineY = twips(baselineY + first.baselineShift)
+    const href =
+      typeof first.href === "string" && first.href.length > 0
+        ? first.href
+        : undefined
     const run: GlyphRun = first.faceId
       ? {
           type: "glyph-run",
@@ -3696,6 +4289,7 @@ function emitLine(
           x,
           baselineY: shiftedBaselineY,
           width,
+          ...(href ? { href } : {}),
         }
       : {
           type: "glyph-run",
@@ -3712,6 +4306,7 @@ function emitLine(
           x,
           baselineY: shiftedBaselineY,
           width,
+          ...(href ? { href } : {}),
         }
     if (first.style.highlightColor) {
       items.push({
@@ -3756,8 +4351,8 @@ function emitLine(
           sourceNodeId: cluster.sourceNodeId,
           assetId: cluster.atom.assetId,
           bounds: {
-            x,
-            y: twips(baselineY - cluster.atom.height),
+            x: twips(x + cluster.atom.offsetX),
+            y: twips(baselineY - cluster.atom.height + cluster.atom.offsetY),
             width: cluster.width,
             height: cluster.atom.height,
           },
@@ -3785,7 +4380,8 @@ function emitLine(
       !first ||
       (first.sourceNodeId === cluster.sourceNodeId &&
         first.style === cluster.style &&
-        first.faceId === cluster.faceId)
+        first.faceId === cluster.faceId &&
+        first.href === cluster.href)
     if (!compatible) flush()
     segment.push({ cluster, addition })
     // Split after expanded spaces so the next standard run receives the offset.

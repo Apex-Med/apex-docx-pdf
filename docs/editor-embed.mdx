@@ -1,0 +1,159 @@
+---
+title: "Editor embed"
+description: "Embed the Apex DOCX editor with the apex-docx-editor custom element."
+---
+
+`@apexmed/editor/embed` registers an `<apex-docx-editor>` custom element that hosts a shadow-DOM editor surface. Overlays (menus, dialogs, tooltips) portal into the shadow root via `PortalContainerProvider`.
+
+## Install and define
+
+```html
+<script type="module">
+  import { loadEmbed } from "@apexmed/editor/embed"
+  loadEmbed()
+</script>
+
+<apex-docx-editor css-url="/editor.css" style="display:block;height:80vh"></apex-docx-editor>
+```
+
+Or from application code:
+
+```ts
+import { defineApexDocxEditorElement } from "@apexmed/editor/embed"
+
+defineApexDocxEditorElement()
+```
+
+## Attributes
+
+| Attribute | Type | Description |
+| --- | --- | --- |
+| `readonly` | boolean (presence) | When present, the ProseMirror surface is not editable (`editable: false`). |
+| `css-url` | string URL | Optional stylesheet fetched and transformed for shadow DOM (`:root` → `:host`, `@property` hoisted). Built-in editor CSS is always injected; `css-url` appends host/app styles. |
+
+```html
+<apex-docx-editor readonly css-url="/assets/editor-theme.css"></apex-docx-editor>
+```
+
+## Events
+
+Events bubble and are `composed` so listeners on light-DOM ancestors receive them.
+
+| Event | `detail` | When |
+| --- | --- | --- |
+| `ready` | none | Editor finished mounting inside the shadow root. |
+| `change` | `{ revision: number }` | Document content changed (monotonic `revision` for this mount). |
+| `error` | `{ message: string }` | Mount, `css-url` fetch, `loadDocx`, or `getPdf` failed. |
+
+```ts
+const el = document.querySelector("apex-docx-editor")!
+
+el.addEventListener("ready", () => {
+  console.log("editor ready")
+})
+
+el.addEventListener("change", (event) => {
+  const detail = (event as CustomEvent<{ revision: number }>).detail
+  console.log("revision", detail.revision)
+})
+
+el.addEventListener("error", (event) => {
+  const detail = (event as CustomEvent<{ message: string }>).detail
+  console.error(detail.message)
+})
+```
+
+## Imperative methods
+
+Call these on the element instance (after `ready`, or await the methods — they wait for mount).
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `loadDocx(bytes)` | `Promise<void>` | Parse DOCX (`normaliseDocxBytes`) and replace the open document. |
+| `getDocx()` | `Promise<Uint8Array>` | Serialize the current document to DOCX (`serializeDocx`). |
+| `getPdf()` | `Promise<Uint8Array>` | Layout (`layoutDocument`) then serialize PDF (`serializePdf`). |
+| `setReadOnly(value)` | `void` | Toggle editability and sync the `readonly` attribute. |
+| `getDocument()` | `SemanticDocument \| null` | Current in-memory semantic document, or `null` before mount / after destroy. |
+| `getSelectionRoot()` | `Document \| ShadowRoot` | Shadow root for selection APIs (do not use `document.getSelection()` alone). |
+
+```ts
+const el = document.querySelector("apex-docx-editor")! as ApexDocxEditorElement
+
+const response = await fetch("/sample.docx")
+await el.loadDocx(await response.arrayBuffer())
+
+const docx = await el.getDocx()
+const pdf = await el.getPdf()
+el.setReadOnly(true)
+const semantic = el.getDocument()
+```
+
+## Example page
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Apex editor embed</title>
+    <style>
+      apex-docx-editor {
+        display: block;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <apex-docx-editor id="editor"></apex-docx-editor>
+    <script type="module">
+      import { loadEmbed } from "@apexmed/editor/embed"
+
+      loadEmbed()
+
+      const editor = document.getElementById("editor")
+
+      editor.addEventListener("ready", async () => {
+        const bytes = await fetch("/fixtures/hello.docx").then((r) =>
+          r.arrayBuffer()
+        )
+        await editor.loadDocx(bytes)
+      })
+
+      editor.addEventListener("change", () => {
+        console.log("document changed")
+      })
+    </script>
+  </body>
+</html>
+```
+
+## Programmatic mount (without the custom element)
+
+`mountEditor` returns an `EditorController` with the same imperative surface. Prefer the custom element for third-party embeds; use `mountEditor` when you already own the host node.
+
+```ts
+import { mountEditor } from "@apexmed/editor"
+
+const host = document.getElementById("host")!
+const shadow = host.attachShadow({ mode: "open" })
+const mountPoint = document.createElement("div")
+shadow.append(mountPoint)
+
+const controller = mountEditor(mountPoint, {
+  shadowRoot: shadow,
+  readOnly: false,
+  onChange: (document) => {
+    console.log("sections", document.sections.length)
+  },
+})
+
+await controller.loadDocx(docxBytes)
+const pdf = await controller.getPdf()
+controller.destroy()
+```
+
+## Shadow DOM notes
+
+- Selection and focus must use the editor view / `getSelectionRoot()`, not light-DOM `document.getSelection()` alone.
+- UI portals target the shadow root so popovers stay inside the embed boundary.
+- `@property` rules from Tailwind-style sheets are hoisted to `document` because they do not apply inside shadow roots.

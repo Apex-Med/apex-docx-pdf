@@ -406,7 +406,7 @@ describe("DOCX Phase 3 style resolution", () => {
   test("fails rather than dropping meaningful unsupported style properties", () => {
     const result = parseDocx(
       buildOneParagraphDocx({
-        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>x</w:t></w:r></w:p></w:body></w:document>`,
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:p><w:r><w:rPr><w:smallCaps/></w:rPr><w:t>x</w:t></w:r></w:p></w:body></w:document>`,
       })
     )
     expect(errorCodes(result)).toContain("DOCX_UNSUPPORTED_STYLE_PROPERTY")
@@ -834,6 +834,74 @@ const PHASE6_CONTENT_TYPES = `<Types xmlns="http://schemas.openxmlformats.org/pa
 </Types>`
 
 describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () => {
+  test("selects a supported AlternateContent fallback instead of rejecting an unsupported choice", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic" xmlns:mc="urn:mc" xmlns:wpg="urn:wpg" xmlns:wps="urn:wps"><w:body><w:p><w:r>
+        <mc:AlternateContent>
+          <mc:Choice Requires="wpg"><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><a:graphic><a:graphicData><wpg:wgp><wps:wsp><wps:txbx><w:txbxContent><w:p/></w:txbxContent></wps:txbx></wps:wsp></wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>
+          <mc:Fallback><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="imgPng"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Fallback>
+        </mc:AlternateContent>
+      </w:r></w:p><w:sectPr/></w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="imgPng" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`,
+        "word/media/picture.png": PNG_3X2,
+      },
+    })
+
+    const result = normaliseDocxBytes(bytes)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
+    const images =
+      paragraph?.children.filter((inline) => inline.type === "image") ?? []
+    expect(images).toHaveLength(1)
+    expect(result.value.assets[0]?.packagePath).toBe("word/media/picture.png")
+    expect(images[0]?.source.xmlPath).toContain(
+      "mc:AlternateContent[1]/mc:Fallback[1]/w:drawing[1]"
+    )
+  })
+
+  test("materializes a bounded empty rectangle Choice as an SVG image", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic" xmlns:mc="urn:mc" xmlns:wpg="urn:wpg" xmlns:wps="urn:wps"><w:body><w:p><w:r>
+        <mc:AlternateContent>
+          <mc:Choice Requires="wpg"><w:drawing><wp:inline><wp:extent cx="127000" cy="63500"/><a:graphic><a:graphicData><wps:wsp><wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="6350"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/></a:ln></wps:spPr><wps:txbx><w:txbxContent><w:p/></w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>
+          <mc:Fallback><w:drawing><wp:inline><wp:extent cx="127000" cy="63500"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="imgPng"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Fallback>
+        </mc:AlternateContent>
+      </w:r></w:p><w:sectPr/></w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="imgPng" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`,
+        "word/media/picture.png": PNG_3X2,
+      },
+    })
+
+    const result = normaliseDocxBytes(bytes)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.assets).toHaveLength(1)
+    expect(result.value.assets[0]).toMatchObject({
+      mimeType: "image/svg+xml",
+      pixelWidth: 200,
+      pixelHeight: 100,
+      rasterFallback: {
+        pixelWidth: 27,
+        pixelHeight: 13,
+      },
+    })
+    const svg = new TextDecoder().decode(
+      Uint8Array.from(result.value.assets[0]?.bytes ?? [])
+    )
+    expect(svg).toContain('<rect fill="#FFFFFF" stroke="#000000"')
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
+    const image = paragraph?.children.find((inline) => inline.type === "image")
+    expect(image).toMatchObject({ width: 200, height: 100 })
+    expect(image?.source.xmlPath).toContain(
+      "mc:AlternateContent[1]/mc:Choice[1]/w:drawing[1]"
+    )
+  })
+
   test("normalises relationship-owned PNG and JPEG inline images with stable assets, dimensions, and aspect metadata", () => {
     const bytes = buildOneParagraphDocx({
       documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p>
@@ -904,8 +972,8 @@ describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () 
         section.blocks.length,
       ])
     ).toEqual([
-      ["portrait", 11907, 1],
-      ["landscape", 16839, 1],
+      ["portrait", 11920, 1],
+      ["landscape", 16840, 1],
     ])
     expect([
       Number(result.value.sections[0]?.properties.headerDistance),
@@ -950,7 +1018,7 @@ describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () 
               ? inline.text
               : "image"
         )
-      ).toEqual(["PAGE:", " / ", "NUMPAGES:"])
+      ).toEqual(["PAGE:7", " / ", "NUMPAGES:9"])
     }
 
     const anchored = inspectDocx(

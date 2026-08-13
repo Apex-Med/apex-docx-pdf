@@ -1,0 +1,77 @@
+{
+  "name": "@apexmed/editor",
+  "version": "0.1.0-next.1",
+  "description": "Engine-authoritative paginated DOCX editor for Apex DOCX PDF.",
+  "type": "module",
+  "sideEffects": false,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/craig-bredenkamp/apex-docx-pdf.git",
+    "directory": "packages/editor"
+  },
+  "homepage": "https://github.com/craig-bredenkamp/apex-docx-pdf#readme",
+  "bugs": {
+    "url": "https://github.com/craig-bredenkamp/apex-docx-pdf/issues"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "prosemirror",
+    "pagination"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./embed": "./src/embed/index.ts"
+  },
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts && bun ../../scripts/prepare-package.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "fonts:index": "bun scripts/build-fonts-index.ts"
+  },
+  "peerDependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "dependencies": {
+    "@apexmed/core": "workspace:*",
+    "@apexmed/devtools": "workspace:*",
+    "@apexmed/docx": "workspace:*",
+    "@apexmed/fonts": "workspace:*",
+    "@apexmed/images": "workspace:*",
+    "@apexmed/layout": "workspace:*",
+    "@apexmed/pdf": "workspace:*",
+    "@fontsource/inter": "^5.3.0",
+    "@workspace/ui": "workspace:*",
+    "@hugeicons/core-free-icons": "^4.2.3",
+    "@hugeicons/react": "^1.1.9",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-gapcursor": "^1.4.1",
+    "prosemirror-history": "^1.5.0",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.11",
+    "prosemirror-schema-list": "^1.5.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-transform": "^1.12.0",
+    "prosemirror-view": "^1.42.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsup": "8.5.1",
+    "typescript": "^6"
+  }
+}

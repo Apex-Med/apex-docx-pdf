@@ -47,6 +47,8 @@
         "icon": "settings-2",
         "pages": [
           "browser",
+          "editor-embed",
+          "document-fidelity",
           "determinism",
           "security",
           "bun-vercel",

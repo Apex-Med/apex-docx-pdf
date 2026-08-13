@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { twips } from "@apexmed/core"
 
 import { normaliseDocxBytes, parseDocx } from "../src"
 import { buildOneParagraphDocx } from "./helpers/docx-fixture"
@@ -204,32 +205,22 @@ describe("unsupported-feature modes", () => {
     }
   })
 
-  test("rejects true multi-column sections without rejecting the explicit one-column form", () => {
-    const multiColumn = parseDocx(
+  test("parses multi-column sections and keeps the explicit one-column form", () => {
+    const multiColumn = normaliseDocxBytes(
       documentBodyWith(
         "<w:p><w:r><w:t>Columns</w:t></w:r></w:p>",
-        '<w:cols w:num="2"/>'
-      ),
-      { unsupportedFeatures: "lenient" }
+        '<w:cols w:num="2" w:space="720" w:equalWidth="1" w:sep="1"/>'
+      )
     )
-    expect(multiColumn.ok).toBe(false)
-    expect(multiColumn.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "DOCX_UNSUPPORTED_STYLE_PROPERTY",
-          severity: "error",
-          source: {
-            part: "word/document.xml",
-            xmlPath: "/w:document[1]/w:body[1]/w:sectPr[1]/w:cols[1]",
-          },
-          details: {
-            mode: "lenient",
-            fallback: "none",
-            feature: "multiColumnSections",
-          },
-        }),
-      ])
-    )
+    expect(multiColumn.ok).toBe(true)
+    if (!multiColumn.ok) return
+    expect(multiColumn.value.sections[0]?.properties.columns).toEqual({
+      count: 2,
+      equalWidth: true,
+      space: twips(720),
+      separator: true,
+      widths: null,
+    })
 
     const oneColumn = normaliseDocxBytes(
       documentBodyWith(
@@ -239,5 +230,13 @@ describe("unsupported-feature modes", () => {
     )
     expect(oneColumn.ok).toBe(true)
     expect(oneColumn.diagnostics).toEqual([])
+    if (!oneColumn.ok) return
+    expect(oneColumn.value.sections[0]?.properties.columns).toEqual({
+      count: 1,
+      equalWidth: true,
+      space: twips(720),
+      separator: false,
+      widths: null,
+    })
   })
 })

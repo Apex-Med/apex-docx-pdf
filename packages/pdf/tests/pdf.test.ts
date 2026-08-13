@@ -284,6 +284,43 @@ describe("Phase 1 PDF serializer", () => {
     expect(text.match(/\/Type \/Page /gu) ?? []).toHaveLength(2)
   })
 
+  test("emits URI link annotations for glyph runs with href", () => {
+    const page = displayList.pages[0]
+    if (page === undefined) throw new Error("fixture must contain a page")
+    const glyph = page.items[0]
+    if (glyph?.type !== "glyph-run")
+      throw new Error("fixture must begin with a glyph run")
+    const linked: PageDisplayList = {
+      pages: [
+        {
+          ...page,
+          items: [
+            {
+              ...glyph,
+              text: "docs",
+              href: "https://example.com/a(b)",
+              x: twips(1_440),
+              baselineY: twips(1_680),
+              width: twips(800),
+              fontSize: twips(240),
+            },
+          ],
+        },
+      ],
+    }
+    const result = serializePdf(linked)
+    const text = new TextDecoder("latin1").decode(result.bytes)
+    expect(text).toContain("/Subtype /Link")
+    expect(text).toContain("/Border [0 0 0]")
+    expect(text).toContain("/S /URI")
+    expect(text).toContain("/URI (https://example.com/a\\(b\\))")
+    expect(text).toMatch(/\/Annots \[\d+ 0 R\]/u)
+    expect(validatePdfStructure(result.bytes).valid).toBe(true)
+    // Rect uses PDF bottom-left coords: ascent = 192, height = 240
+    // y = 1680 - 192 = 1488; lly = 16838 - 1488 - 240 = 15110; ury = 16838 - 1488 = 15350
+    expect(text).toContain("/Rect [72 755.5 112 767.5]")
+  })
+
   test("diagnoses text outside WinAnsi rather than encoding it incorrectly", () => {
     const page = displayList.pages[0]
     if (page === undefined) throw new Error("fixture must contain a page")

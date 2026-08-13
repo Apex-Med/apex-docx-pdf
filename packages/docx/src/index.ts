@@ -26,6 +26,7 @@ export type {
   ParsedDocxHeaderFooter,
   ParsedDocxImage,
   ParsedDocxImageAsset,
+  ParsedDocxFontAsset,
   ParsedDocxInline,
   ParsedDocxPageField,
   ParsedDocxSection,
@@ -42,6 +43,7 @@ export type {
   ParsedDocxText,
 } from "./types"
 export { normaliseDocx } from "./normalise"
+export { serializeDocx } from "./write/serialize"
 
 /** Validates the hostile-input boundary without interpreting WordprocessingML. */
 export function inspectDocx(

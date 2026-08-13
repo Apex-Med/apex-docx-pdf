@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlaygroundRoute = PlaygroundRouteImport.update({
@@ -56,6 +62,7 @@ const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteWithChildren
+  '/editor': typeof EditorRoute
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/editor': typeof EditorRoute
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteWithChildren
+  '/editor': typeof EditorRoute
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/docs'
+    | '/editor'
     | '/playground'
     | '/support'
     | '/docs/$'
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/editor'
     | '/playground'
     | '/support'
     | '/docs/$'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/docs'
+    | '/editor'
     | '/playground'
     | '/support'
     | '/docs/$'
@@ -112,6 +124,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocsRoute: typeof DocsRouteWithChildren
+  EditorRoute: typeof EditorRoute
   PlaygroundRoute: typeof PlaygroundRoute
   SupportRoute: typeof SupportRoute
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
@@ -131,6 +144,13 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/playground': {
@@ -186,6 +206,7 @@ const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRouteWithChildren,
+  EditorRoute: EditorRoute,
   PlaygroundRoute: PlaygroundRoute,
   SupportRoute: SupportRoute,
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
