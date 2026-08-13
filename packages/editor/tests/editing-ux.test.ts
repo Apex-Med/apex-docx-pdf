@@ -170,6 +170,18 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
     // Full stack: rest(160px) + bottom margin(96) + gap(32) + top margin(96) >> dashed line
     const height = Number.parseFloat(el.style.height || "0")
     expect(height).toBeGreaterThan(200)
+    const bottom = el.querySelector(
+      ".apex-page-break-spacer__page-margin-bottom"
+    ) as HTMLElement | null
+    const top = el.querySelector(
+      ".apex-page-break-spacer__page-margin-top"
+    ) as HTMLElement | null
+    const gap = el.querySelector(
+      ".apex-page-break-spacer__gap"
+    ) as HTMLElement | null
+    expect(bottom?.style.boxShadow).toBe("none")
+    expect(top?.style.boxShadow).toBe("none")
+    expect(gap?.style.overflow).toBe("hidden")
   })
 
   test("insertPageBreak inserts a page_break node with apex-manual-page-break class in schema", () => {

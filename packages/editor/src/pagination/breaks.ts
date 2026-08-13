@@ -454,7 +454,8 @@ export function createBreakSpacerElement(
     `margin-right:-${marginRightPx}px`,
     `width:calc(100% + ${marginLeftPx + marginRightPx}px)`,
     "background:var(--apex-page-bg,#fff)",
-    "box-shadow:var(--apex-page-shadow)",
+    /* Shadows are painted in the desk gutter, not on the margin strip. */
+    "box-shadow:none",
     "box-sizing:border-box",
   ].join(";")
 
@@ -471,6 +472,8 @@ export function createBreakSpacerElement(
     "align-items:center",
     "justify-content:center",
     "box-sizing:border-box",
+    "position:relative",
+    "overflow:hidden",
   ].join(";")
   const label = document.createElement("span")
   label.className = "apex-page-break-spacer__label"
@@ -486,7 +489,7 @@ export function createBreakSpacerElement(
     `margin-right:-${marginRightPx}px`,
     `width:calc(100% + ${marginLeftPx + marginRightPx}px)`,
     "background:var(--apex-page-bg,#fff)",
-    "box-shadow:var(--apex-page-shadow)",
+    "box-shadow:none",
     "box-sizing:border-box",
     "border-radius:1px 1px 0 0",
   ].join(";")
@@ -507,7 +510,6 @@ export function createTableBreakRowElement(
   const cell = document.createElement("td")
   cell.colSpan = Math.max(1, columnCount)
   cell.style.cssText = [
-    "height:0",
     "padding:0",
     "border:none",
     "background:transparent",

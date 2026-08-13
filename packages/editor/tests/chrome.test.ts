@@ -187,12 +187,19 @@ describe("editor chrome components", () => {
     expect(EDITOR_CSS).toContain("ProseMirror-trailingBreak:not(:only-child)")
   })
 
-  test("page sheets use content-visibility for offscreen paint skipping", () => {
-    expect(EDITOR_CSS).toContain("content-visibility: auto")
-    expect(EDITOR_CSS).toContain("contain-intrinsic-size")
+  test("page sheets do not size a multi-page section as one Letter box", () => {
+    expect(EDITOR_CSS).not.toContain("content-visibility: auto")
+    expect(EDITOR_CSS).not.toContain("contain-intrinsic-size")
     expect(EDITOR_CSS).toContain("apex-engine-page-sheet")
     expect(EDITOR_CSS).toContain("overscroll-behavior: contain")
     expect(EDITOR_CSS).toContain("prefers-reduced-motion: reduce")
+    expect(EDITOR_CSS).toContain("display: flow-root")
+    expect(EDITOR_CSS).toContain("zoom: var(--apex-zoom, 1)")
+    expect(EDITOR_CSS).not.toMatch(
+      /\.apex-editor-surface\s*\{[^}]*transform:\s*scale/s
+    )
+    expect(EDITOR_CSS).toContain(".apex-page-break-spacer__gap::before")
+    expect(EDITOR_CSS).toContain(".apex-page-break-spacer__gap::after")
   })
 
   test("editor exposes application shortcuts, full font catalog, and style creation", () => {

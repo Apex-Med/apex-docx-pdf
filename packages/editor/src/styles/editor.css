@@ -97,8 +97,6 @@
   background: var(--apex-desk);
   padding: 24px 16px 64px;
   color-scheme: light; /* document canvas stays light paper */
-  transform: scale(var(--apex-zoom, 1));
-  transform-origin: top center;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--apex-chrome-muted) transparent;
@@ -294,6 +292,10 @@
   line-height: 1.35;
   white-space: pre-wrap;
   word-wrap: break-word;
+  /* `zoom` scales layout size so the scrollport matches visual page height.
+   * `transform: scale` on the overflow scroller left a stale layout box and
+   * clipped descendant page shadows into dark bands at sheet edges. */
+  zoom: var(--apex-zoom, 1);
 }
 
 .apex-editor-surface .ProseMirror:focus {
@@ -301,9 +303,9 @@
 }
 
 /*
- * Section = page stack. Paper is intentionally light in both themes.
- * content-visibility skips offscreen page paint; contain-intrinsic-size
- * reserves approximate Letter height so scrollbars stay stable.
+ * Section = the full page stack (spacers punch desk gaps between sheets).
+ * Skip offscreen-paint containment on the section itself: a single-sheet
+ * placeholder height clips the multi-page stack and its gutter shadows.
  */
 .apex-editor-surface .ProseMirror > section[data-section],
 .apex-engine-page-sheet {
@@ -314,8 +316,6 @@
   position: relative;
   box-sizing: border-box;
   overflow: visible;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 1056px;
 }
 
 .apex-editor-surface .ProseMirror > section[data-section] > * {
@@ -326,6 +326,9 @@
   min-height: 1.35em;
   margin: 0;
   position: relative;
+  /* Contain mid-paragraph page-break floats so the paragraph grows to the
+   * full sheet stack instead of letting following blocks overlap it. */
+  display: flow-root;
 }
 
 .apex-editor-surface .ProseMirror p:empty::before,
@@ -499,7 +502,7 @@
 .apex-page-break-spacer__page-margin-bottom,
 .apex-page-break-spacer__page-margin-top {
   background: var(--apex-page-bg);
-  box-shadow: var(--apex-page-shadow);
+  box-shadow: none;
   box-sizing: border-box;
 }
 
@@ -509,6 +512,32 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+/*
+ * Page drop-shadows live in the desk gutter only. Putting box-shadow on the
+ * margin strips painted the blur onto the paper (dark bands over headings).
+ */
+.apex-page-break-spacer__gap::before,
+.apex-page-break-spacer__gap::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+  box-shadow: var(--apex-page-shadow);
+}
+
+.apex-page-break-spacer__gap::before {
+  top: 0;
+}
+
+.apex-page-break-spacer__gap::after {
+  bottom: 0;
+  transform: scaleY(-1);
 }
 
 .apex-page-break-spacer__label {
@@ -520,6 +549,8 @@
   border-radius: 12px;
   padding: 2px 12px;
   letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Images ── */
