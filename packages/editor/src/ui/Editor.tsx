@@ -1120,17 +1120,68 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             },
           }}
         >
-          <div className="flex min-h-0 flex-1 gap-3 p-3">
-            <div
-              ref={hostRef}
-              className="apex-editor-surface flex-1 overflow-auto rounded-lg"
-            />
-            {previewOn && layoutResult ? (
-              <PrintPreview
-                displayList={layoutResult.displayList}
-                trace={layoutResult.trace}
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-h-0 min-w-0 flex-1 gap-3 p-3">
+              <div
+                ref={hostRef}
+                className="apex-editor-surface flex-1 overflow-auto rounded-lg"
               />
-            ) : null}
+              {previewOn && layoutResult ? (
+                <PrintPreview
+                  displayList={layoutResult.displayList}
+                  trace={layoutResult.trace}
+                />
+              ) : null}
+            </div>
+            <TablePropertiesDialog
+              open={tablePropsOpen}
+              onOpenChange={setTablePropsOpen}
+              onApply={(options) => {
+                const positions = tablePropsCellPositionsRef.current
+                const captured = positions.length > 1 ? positions : undefined
+                runAll([
+                  setTableBorderStyle(
+                    options.applyBordersTo,
+                    options.borderStyle,
+                    options.borderColor,
+                    options.borderWidth,
+                    captured
+                  ),
+                  setTableAttrs({
+                    alignment: options.alignment,
+                    columnWidths: options.columnWidths,
+                    ...(options.columnWidths.length > 0
+                      ? {
+                          width: options.columnWidths.reduce(
+                            (sum, value) => sum + value,
+                            0
+                          ),
+                          preferredWidth: options.columnWidths.reduce(
+                            (sum, value) => sum + value,
+                            0
+                          ),
+                        }
+                      : {}),
+                    cellPadding: options.cellPadding,
+                    repeatHeaderRowCount: options.headerRowRepeat ? 1 : 0,
+                  }),
+                  setRowAttrs({
+                    height:
+                      options.rowHeight === null
+                        ? null
+                        : { rule: "atLeast", value: options.rowHeight },
+                    allowBreakAcrossPages: options.allowBreakAcrossPages,
+                    repeatAsHeader: options.headerRowRepeat,
+                  }),
+                  setCellShading(options.cellShading, captured),
+                  setCellVerticalAlignment(
+                    options.cellVerticalAlignment,
+                    captured
+                  ),
+                ])
+                setStatus("Table options applied")
+              }}
+            />
           </div>
         </EditorChrome>
         <LinkDialog
@@ -1242,55 +1293,6 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
               })
             )
             setStatus(count === 1 ? "Single column" : `${count} columns`)
-          }}
-        />
-        <TablePropertiesDialog
-          open={tablePropsOpen}
-          onOpenChange={setTablePropsOpen}
-          onApply={(options) => {
-            const positions = tablePropsCellPositionsRef.current
-            const captured = positions.length > 1 ? positions : undefined
-            runAll([
-              setTableBorderStyle(
-                options.applyBordersTo,
-                options.borderStyle,
-                options.borderColor,
-                options.borderWidth,
-                captured
-              ),
-              setTableAttrs({
-                alignment: options.alignment,
-                columnWidths: options.columnWidths,
-                ...(options.columnWidths.length > 0
-                  ? {
-                      width: options.columnWidths.reduce(
-                        (sum, value) => sum + value,
-                        0
-                      ),
-                      preferredWidth: options.columnWidths.reduce(
-                        (sum, value) => sum + value,
-                        0
-                      ),
-                    }
-                  : {}),
-                cellPadding: options.cellPadding,
-                repeatHeaderRowCount: options.headerRowRepeat ? 1 : 0,
-              }),
-              setRowAttrs({
-                height:
-                  options.rowHeight === null
-                    ? null
-                    : { rule: "atLeast", value: options.rowHeight },
-                allowBreakAcrossPages: options.allowBreakAcrossPages,
-                repeatAsHeader: options.headerRowRepeat,
-              }),
-              setCellShading(options.cellShading, captured),
-              setCellVerticalAlignment(
-                options.cellVerticalAlignment,
-                captured
-              ),
-            ])
-            setStatus("Table properties applied")
           }}
         />
         <StyleDialog

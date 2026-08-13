@@ -173,6 +173,24 @@ describe("editor chrome components", () => {
     expect(raw).toMatch(/\.apex-manual-page-break\s*\{[^}]*height:\s*0/s)
   })
 
+  test("table options is an in-layout collapsible sidebar", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "../src/ui/TablePropertiesDialog.tsx"),
+      "utf8"
+    )
+    expect(source).toContain("apex-table-options")
+    expect(source).toContain("Table options")
+    expect(source).toContain("aria-expanded")
+    expect(source).not.toContain("Sheet")
+    expect(source).not.toContain("SheetContent")
+    const css = readFileSync(
+      join(import.meta.dir, "../src/styles/editor.css"),
+      "utf8"
+    )
+    expect(css).toContain(".apex-table-options")
+    expect(css).toContain("flex: 0 0 300px")
+  })
+
   test("toolbar color palette uses vertical hue columns", () => {
     const toolbarPath = join(import.meta.dir, "../src/ui/Toolbar.tsx")
     const source = readFileSync(toolbarPath, "utf8")

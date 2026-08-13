@@ -368,7 +368,7 @@ export function MenuBar({
                   disabled={!inTable}
                   onClick={actions.onTableProperties}
                 >
-                  Table properties…
+                  Table options
                 </MenubarItem>
               </MenubarSubContent>
             </MenubarSub>
