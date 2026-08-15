@@ -39,7 +39,10 @@ export type PaperSizeId =
 
 /** Portrait width × height in twips. */
 export const PAPER_SIZES: Readonly<
-  Record<Exclude<PaperSizeId, "custom">, Readonly<{ width: number; height: number; label: string }>>
+  Record<
+    Exclude<PaperSizeId, "custom">,
+    Readonly<{ width: number; height: number; label: string }>
+  >
 > = {
   letter: { width: 12_240, height: 15_840, label: "Letter" },
   legal: { width: 12_240, height: 20_160, label: "Legal" },
@@ -94,7 +97,10 @@ function matchPaperSize(
   const portraitW = orientation === "landscape" ? height : width
   const portraitH = orientation === "landscape" ? width : height
   for (const [id, size] of Object.entries(PAPER_SIZES) as Array<
-    [Exclude<PaperSizeId, "custom">, (typeof PAPER_SIZES)[Exclude<PaperSizeId, "custom">]]
+    [
+      Exclude<PaperSizeId, "custom">,
+      (typeof PAPER_SIZES)[Exclude<PaperSizeId, "custom">],
+    ]
   >) {
     if (size.width === portraitW && size.height === portraitH) return id
   }
@@ -133,7 +139,11 @@ export function PageSetupDialog({
     defaults.orientation
   )
   const [paperSize, setPaperSize] = useState<PaperSizeId>(() =>
-    matchPaperSize(defaults.pageWidth, defaults.pageHeight, defaults.orientation)
+    matchPaperSize(
+      defaults.pageWidth,
+      defaults.pageHeight,
+      defaults.orientation
+    )
   )
   const [widthTwips, setWidthTwips] = useState(defaults.pageWidth)
   const [heightTwips, setHeightTwips] = useState(defaults.pageHeight)
@@ -252,6 +262,14 @@ export function PageSetupDialog({
           <div className="grid gap-2">
             <Label className="text-muted-foreground">Paper size</Label>
             <Select
+              items={[
+                ...(
+                  Object.keys(PAPER_SIZES) as Array<
+                    Exclude<PaperSizeId, "custom">
+                  >
+                ).map((id) => ({ value: id, label: PAPER_SIZES[id].label })),
+                { value: "custom", label: "Custom" },
+              ]}
               value={paperSize}
               onValueChange={(value) => {
                 if (value) applyPaperSize(value as PaperSizeId)
@@ -261,13 +279,15 @@ export function PageSetupDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(PAPER_SIZES) as Array<Exclude<PaperSizeId, "custom">>).map(
-                  (id) => (
-                    <SelectItem key={id} value={id}>
-                      {PAPER_SIZES[id].label}
-                    </SelectItem>
-                  )
-                )}
+                {(
+                  Object.keys(PAPER_SIZES) as Array<
+                    Exclude<PaperSizeId, "custom">
+                  >
+                ).map((id) => (
+                  <SelectItem key={id} value={id}>
+                    {PAPER_SIZES[id].label}
+                  </SelectItem>
+                ))}
                 <SelectItem value="custom">Custom</SelectItem>
               </SelectContent>
             </Select>
@@ -339,7 +359,11 @@ export function PageSetupDialog({
               Set as default
             </Button>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button

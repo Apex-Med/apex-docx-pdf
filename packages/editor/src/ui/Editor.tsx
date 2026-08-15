@@ -45,6 +45,7 @@ import {
   matchStyleToSelection,
   numberingDefinitionFromTransaction,
   removeLink,
+  setCellHorizontalAlignment,
   setCellShading,
   setCellVerticalAlignment,
   setFontFamily,
@@ -56,11 +57,13 @@ import {
   setParagraphSpacing,
   setParagraphAttrs,
   setRowAttrs,
+  setSelectedCellBorderStyle,
   setSectionColumns,
   setSectionPageSetup,
   selectedTableCellPositions,
+  selectedTableCellBorders,
+  selectedTableCellGrid,
   setTableAttrs,
-  setTableBorderStyle,
   setTextColor,
   tableCommands,
   toggleBold,
@@ -373,6 +376,20 @@ function editorNodeViews() {
   }
 }
 
+type TableOptionsSelection = Readonly<{
+  positions: readonly number[]
+  grid: ReturnType<typeof selectedTableCellGrid>
+  borders: ReturnType<typeof selectedTableCellBorders>
+}>
+
+function readTableOptionsSelection(state: EditorState): TableOptionsSelection {
+  return {
+    positions: selectedTableCellPositions(state),
+    grid: selectedTableCellGrid(state),
+    borders: selectedTableCellBorders(state),
+  }
+}
+
 export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
   function ApexEditor(
     {
@@ -413,8 +430,14 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const [findReplaceOpen, setFindReplaceOpen] = useState(false)
     const [lineSpacingOpen, setLineSpacingOpen] = useState(false)
     const [tablePropsOpen, setTablePropsOpen] = useState(false)
-    const lastTableCellPositionsRef = useRef<number[]>([])
-    const tablePropsCellPositionsRef = useRef<number[]>([])
+    const tablePropsOpenRef = useRef(tablePropsOpen)
+    tablePropsOpenRef.current = tablePropsOpen
+    const [tableOptionsSelection, setTableOptionsSelection] =
+      useState<TableOptionsSelection>({
+        positions: [],
+        grid: { rows: 1, columns: 1, cellCount: 0 },
+        borders: {},
+      })
     const [columnsOpen, setColumnsOpen] = useState(false)
     const [styleDialogOpen, setStyleDialogOpen] = useState(false)
     const [pageUnit, setPageUnit] = useState<PageSetupUnit>("in")
@@ -546,9 +569,13 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         dispatchTransaction(tr) {
           const next = view.state.apply(tr)
           view.updateState(next)
-          const tableCells = selectedTableCellPositions(next)
-          if (tableCells.length > 1) {
-            lastTableCellPositionsRef.current = tableCells
+          if (tablePropsOpenRef.current && tr.selectionSet) {
+            const nextTableSelection = readTableOptionsSelection(next)
+            if (nextTableSelection.grid.cellCount > 0) {
+              setTableOptionsSelection(nextTableSelection)
+            } else {
+              setTablePropsOpen(false)
+            }
           }
           const snap = getSelectionSnapshot(next)
           if (snap) setSelectionSnapshot(snap)
@@ -613,7 +640,15 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       view.focus()
     }, [])
 
-    const runAll = useCallback((commands: readonly Command[]) => {
+    const runLive = useCallback((command: Command) => {
+      const view = viewRef.current
+      if (!view || readOnlyRef.current) return
+      command(view.state, view.dispatch.bind(view))
+      const snap = getSelectionSnapshot(view.state)
+      if (snap) setSelectionSnapshot(snap)
+    }, [])
+
+    const runLiveAll = useCallback((commands: readonly Command[]) => {
       const view = viewRef.current
       if (!view || readOnlyRef.current) return
       for (const command of commands) {
@@ -621,7 +656,6 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       }
       const snap = getSelectionSnapshot(view.state)
       if (snap) setSelectionSnapshot(snap)
-      view.focus()
     }, [])
 
     const loadDocument = useCallback(
@@ -1006,14 +1040,10 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onTableSplitCell: () => run(tableCommands.splitCell),
         onTableProperties: () => {
           const view = viewRef.current
-          if (view) {
-            const current = selectedTableCellPositions(view.state)
-            tablePropsCellPositionsRef.current =
-              current.length > 1
-                ? current
-                : lastTableCellPositionsRef.current
+          if (view && !tablePropsOpenRef.current) {
+            setTableOptionsSelection(readTableOptionsSelection(view.state))
           }
-          setTablePropsOpen(true)
+          setTablePropsOpen((current) => !current)
         },
         onMarginsChange: (options) => run(setSectionPageSetup(options)),
         onIndentsChange: (options) => run(setParagraphAttrs(options)),
@@ -1100,6 +1130,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             previewOn,
             divergenceOn,
             printLayout: true,
+            tableOptionsOpen: tablePropsOpen,
           }}
           resources={{
             fonts: BUILTIN_FONT_INDEX,
@@ -1133,55 +1164,80 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                 />
               ) : null}
             </div>
-            <TablePropertiesDialog
-              open={tablePropsOpen}
-              onOpenChange={setTablePropsOpen}
-              onApply={(options) => {
-                const positions = tablePropsCellPositionsRef.current
-                const captured = positions.length > 1 ? positions : undefined
-                runAll([
-                  setTableBorderStyle(
-                    options.applyBordersTo,
-                    options.borderStyle,
-                    options.borderColor,
-                    options.borderWidth,
-                    captured
-                  ),
-                  setTableAttrs({
-                    alignment: options.alignment,
-                    columnWidths: options.columnWidths,
-                    ...(options.columnWidths.length > 0
-                      ? {
-                          width: options.columnWidths.reduce(
-                            (sum, value) => sum + value,
-                            0
-                          ),
-                          preferredWidth: options.columnWidths.reduce(
-                            (sum, value) => sum + value,
-                            0
-                          ),
-                        }
-                      : {}),
-                    cellPadding: options.cellPadding,
-                    repeatHeaderRowCount: options.headerRowRepeat ? 1 : 0,
-                  }),
-                  setRowAttrs({
-                    height:
-                      options.rowHeight === null
-                        ? null
-                        : { rule: "atLeast", value: options.rowHeight },
-                    allowBreakAcrossPages: options.allowBreakAcrossPages,
-                    repeatAsHeader: options.headerRowRepeat,
-                  }),
-                  setCellShading(options.cellShading, captured),
-                  setCellVerticalAlignment(
-                    options.cellVerticalAlignment,
-                    captured
-                  ),
-                ])
-                setStatus("Table options applied")
-              }}
-            />
+            {tablePropsOpen ? (
+              <TablePropertiesDialog
+                key={tableOptionsSelection.positions.join(":")}
+                open
+                onOpenChange={setTablePropsOpen}
+                selectionGrid={tableOptionsSelection.grid}
+                initialBorders={tableOptionsSelection.borders}
+                initial={{
+                  cellHorizontalAlignment:
+                    selectionSnapshot.paragraph?.alignment === "center" ||
+                    selectionSnapshot.paragraph?.alignment === "right"
+                      ? selectionSnapshot.paragraph.alignment
+                      : "left",
+                }}
+                onChange={(change) => {
+                  const positions = tableOptionsSelection.positions
+                  const captured = positions.length > 0 ? positions : undefined
+                  if (change.type === "tableAlignment") {
+                    runLive(setTableAttrs({ alignment: change.value }))
+                  } else if (change.type === "columnWidths") {
+                    const width = change.value.reduce(
+                      (sum, value) => sum + value,
+                      0
+                    )
+                    runLive(
+                      setTableAttrs({
+                        columnWidths: change.value,
+                        ...(width > 0 ? { width, preferredWidth: width } : {}),
+                      })
+                    )
+                  } else if (change.type === "rowHeight") {
+                    runLive(
+                      setRowAttrs({
+                        height:
+                          change.value === null
+                            ? null
+                            : { rule: "atLeast", value: change.value },
+                      })
+                    )
+                  } else if (change.type === "cellPadding") {
+                    runLive(setTableAttrs({ cellPadding: change.value }))
+                  } else if (change.type === "cellShading") {
+                    runLive(setCellShading(change.value, captured))
+                  } else if (change.type === "cellAlignment") {
+                    runLiveAll([
+                      setCellHorizontalAlignment(change.horizontal, captured),
+                      setCellVerticalAlignment(change.vertical, captured),
+                    ])
+                  } else if (change.type === "cellBorder") {
+                    runLive(
+                      setSelectedCellBorderStyle(
+                        change.target,
+                        change.value?.style ?? "none",
+                        change.value?.color ?? "#000000",
+                        change.value?.width ?? 15,
+                        captured
+                      )
+                    )
+                  } else if (change.type === "headerRowRepeat") {
+                    runLiveAll([
+                      setTableAttrs({
+                        repeatHeaderRowCount: change.value ? 1 : 0,
+                      }),
+                      setRowAttrs({ repeatAsHeader: change.value }),
+                    ])
+                  } else if (change.type === "allowBreakAcrossPages") {
+                    runLive(
+                      setRowAttrs({ allowBreakAcrossPages: change.value })
+                    )
+                  }
+                  setStatus("Table options updated")
+                }}
+              />
+            ) : null}
           </div>
         </EditorChrome>
         <LinkDialog

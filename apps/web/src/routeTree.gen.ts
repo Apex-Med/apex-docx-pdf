@@ -16,6 +16,8 @@ import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSplatRouteImport } from './routes/docs.$'
+import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates.$templateId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +55,16 @@ const DocsSplatRoute = DocsSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => DocsRoute,
 } as any)
+const SignInSplatRoute = SignInSplatRouteImport.update({
+  id: '/sign-in/$',
+  path: '/sign-in/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpSplatRoute = SignUpSplatRouteImport.update({
+  id: '/sign-up/$',
+  path: '/sign-up/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
   id: '/templates/$templateId',
   path: '/templates/$templateId',
@@ -66,6 +78,8 @@ export interface FileRoutesByFullPath {
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/docs/': typeof DocsIndexRoute
 }
@@ -75,6 +89,8 @@ export interface FileRoutesByTo {
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/docs': typeof DocsIndexRoute
 }
@@ -86,6 +102,8 @@ export interface FileRoutesById {
   '/playground': typeof PlaygroundRoute
   '/support': typeof SupportRoute
   '/docs/$': typeof DocsSplatRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/docs/': typeof DocsIndexRoute
 }
@@ -98,6 +116,8 @@ export interface FileRouteTypes {
     | '/playground'
     | '/support'
     | '/docs/$'
+    | '/sign-in/$'
+    | '/sign-up/$'
     | '/templates/$templateId'
     | '/docs/'
   fileRoutesByTo: FileRoutesByTo
@@ -107,6 +127,8 @@ export interface FileRouteTypes {
     | '/playground'
     | '/support'
     | '/docs/$'
+    | '/sign-in/$'
+    | '/sign-up/$'
     | '/templates/$templateId'
     | '/docs'
   id:
@@ -117,6 +139,8 @@ export interface FileRouteTypes {
     | '/playground'
     | '/support'
     | '/docs/$'
+    | '/sign-in/$'
+    | '/sign-up/$'
     | '/templates/$templateId'
     | '/docs/'
   fileRoutesById: FileRoutesById
@@ -127,6 +151,8 @@ export interface RootRouteChildren {
   EditorRoute: typeof EditorRoute
   PlaygroundRoute: typeof PlaygroundRoute
   SupportRoute: typeof SupportRoute
+  SignInSplatRoute: typeof SignInSplatRoute
+  SignUpSplatRoute: typeof SignUpSplatRoute
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
 }
 
@@ -181,6 +207,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSplatRouteImport
       parentRoute: typeof DocsRoute
     }
+    '/sign-in/$': {
+      id: '/sign-in/$'
+      path: '/sign-in/$'
+      fullPath: '/sign-in/$'
+      preLoaderRoute: typeof SignInSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up/$': {
+      id: '/sign-up/$'
+      path: '/sign-up/$'
+      fullPath: '/sign-up/$'
+      preLoaderRoute: typeof SignUpSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/templates/$templateId': {
       id: '/templates/$templateId'
       path: '/templates/$templateId'
@@ -209,6 +249,8 @@ const rootRouteChildren: RootRouteChildren = {
   EditorRoute: EditorRoute,
   PlaygroundRoute: PlaygroundRoute,
   SupportRoute: SupportRoute,
+  SignInSplatRoute: SignInSplatRoute,
+  SignUpSplatRoute: SignUpSplatRoute,
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
 }
 export const routeTree = rootRouteImport
@@ -216,10 +258,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

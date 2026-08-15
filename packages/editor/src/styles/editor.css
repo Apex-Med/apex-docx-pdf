@@ -200,7 +200,9 @@
   color-scheme: dark;
 }
 
-:host-context(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface,
+:host-context(.dark)
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface,
 :host(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface {
   color-scheme: dark;
 }
@@ -439,57 +441,81 @@
  * Keep :host rules in their own blocks so document stylesheets do not drop
  * the `.dark` selectors.
  */
-.dark .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
-  [data-color="#000000" i],
-  [data-color="#000" i],
-  [data-color="black" i],
-  [data-color="rgb(0, 0, 0)" i],
-  [data-color="rgb(0,0,0)" i]
-) {
+.dark
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
+  :is(
+    [data-color="#000000" i],
+    [data-color="#000" i],
+    [data-color="black" i],
+    [data-color="rgb(0, 0, 0)" i],
+    [data-color="rgb(0,0,0)" i]
+  ) {
   color: var(--apex-page-fg);
 }
 
-:host-context(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
-  [data-color="#000000" i],
-  [data-color="#000" i],
-  [data-color="black" i],
-  [data-color="rgb(0, 0, 0)" i],
-  [data-color="rgb(0,0,0)" i]
-),
-:host(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
-  [data-color="#000000" i],
-  [data-color="#000" i],
-  [data-color="black" i],
-  [data-color="rgb(0, 0, 0)" i],
-  [data-color="rgb(0,0,0)" i]
-) {
+:host-context(.dark)
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
+  :is(
+    [data-color="#000000" i],
+    [data-color="#000" i],
+    [data-color="black" i],
+    [data-color="rgb(0, 0, 0)" i],
+    [data-color="rgb(0,0,0)" i]
+  ),
+:host(.dark)
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
+  :is(
+    [data-color="#000000" i],
+    [data-color="#000" i],
+    [data-color="black" i],
+    [data-color="rgb(0, 0, 0)" i],
+    [data-color="rgb(0,0,0)" i]
+  ) {
   color: var(--apex-page-fg);
 }
 
-.dark .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
-  [data-fill-color="#ffffff" i],
-  [data-fill-color="#fff" i],
-  [data-fill-color="white" i],
-  [data-fill-color="rgb(255, 255, 255)" i],
-  [data-fill-color="rgb(255,255,255)" i]
-) {
+.dark
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
+  :is(
+    [data-fill-color="#ffffff" i],
+    [data-fill-color="#fff" i],
+    [data-fill-color="white" i],
+    [data-fill-color="rgb(255, 255, 255)" i],
+    [data-fill-color="rgb(255,255,255)" i]
+  ) {
   background-color: var(--apex-page-bg);
 }
 
-:host-context(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
-  [data-fill-color="#ffffff" i],
-  [data-fill-color="#fff" i],
-  [data-fill-color="white" i],
-  [data-fill-color="rgb(255, 255, 255)" i],
-  [data-fill-color="rgb(255,255,255)" i]
-),
-:host(.dark) .apex-editor-root[data-apex-dark-pages] .apex-editor-surface .ProseMirror :is(
-  [data-fill-color="#ffffff" i],
-  [data-fill-color="#fff" i],
-  [data-fill-color="white" i],
-  [data-fill-color="rgb(255, 255, 255)" i],
-  [data-fill-color="rgb(255,255,255)" i]
-) {
+:host-context(.dark)
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
+  :is(
+    [data-fill-color="#ffffff" i],
+    [data-fill-color="#fff" i],
+    [data-fill-color="white" i],
+    [data-fill-color="rgb(255, 255, 255)" i],
+    [data-fill-color="rgb(255,255,255)" i]
+  ),
+:host(.dark)
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
+  :is(
+    [data-fill-color="#ffffff" i],
+    [data-fill-color="#fff" i],
+    [data-fill-color="white" i],
+    [data-fill-color="rgb(255, 255, 255)" i],
+    [data-fill-color="rgb(255,255,255)" i]
+  ) {
   background-color: var(--apex-page-bg);
 }
 
@@ -587,8 +613,16 @@
 }
 
 /* Trailing caret br must not add a second line box inside a cell. */
-.apex-editor-surface .ProseMirror td p > br.ProseMirror-trailingBreak:not(:only-child),
-.apex-editor-surface .ProseMirror th p > br.ProseMirror-trailingBreak:not(:only-child) {
+.apex-editor-surface
+  .ProseMirror
+  td
+  p
+  > br.ProseMirror-trailingBreak:not(:only-child),
+.apex-editor-surface
+  .ProseMirror
+  th
+  p
+  > br.ProseMirror-trailingBreak:not(:only-child) {
   display: none;
 }
 
@@ -918,6 +952,13 @@
   text-transform: none;
 }
 
+.apex-table-options__subtitle {
+  margin: 2px 0 0;
+  color: var(--apex-chrome-muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
 .apex-table-options__body {
   flex: 1;
   min-height: 0;
@@ -925,15 +966,6 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--apex-chrome-muted) transparent;
-}
-
-.apex-table-options__footer {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--apex-chrome-border);
 }
 
 .apex-table-options__section-toggle {
@@ -956,7 +988,11 @@
 .apex-table-options__section-toggle:hover,
 .apex-table-options__section-toggle:focus-visible {
   background: var(--apex-chrome-hover);
-  outline: none;
+}
+
+.apex-table-options__section-toggle:focus-visible {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: -2px;
 }
 
 .apex-table-options__chevron {
@@ -964,7 +1000,8 @@
   transition: transform 150ms ease;
 }
 
-.apex-table-options__section-toggle[aria-expanded="false"] .apex-table-options__chevron {
+.apex-table-options__section-toggle[aria-expanded="false"]
+  .apex-table-options__chevron {
   transform: rotate(-90deg);
 }
 
@@ -973,6 +1010,289 @@
   gap: 12px;
   padding: 12px 16px 16px;
   border-bottom: 1px solid var(--apex-chrome-border);
+}
+
+.apex-cell-alignment {
+  display: grid;
+  grid-template-columns: repeat(3, 42px);
+  width: fit-content;
+  overflow: hidden;
+  border: 1px solid var(--apex-chrome-border);
+  border-radius: 6px;
+  background: color-mix(
+    in oklab,
+    var(--apex-chrome-bg) 88%,
+    var(--apex-chrome-hover)
+  );
+  margin: 0;
+  padding: 0;
+}
+
+.apex-cell-alignment__button {
+  display: flex;
+  width: 42px;
+  height: 36px;
+  padding: 7px;
+  border: 0;
+  border-right: 1px solid var(--apex-chrome-border);
+  border-bottom: 1px solid var(--apex-chrome-border);
+  background: transparent;
+  color: var(--apex-chrome-muted);
+}
+
+.apex-cell-alignment__button:nth-child(3n) {
+  border-right: 0;
+}
+
+.apex-cell-alignment__button:nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+
+.apex-cell-alignment__button:hover {
+  background: var(--apex-chrome-hover);
+  color: var(--apex-chrome-fg);
+}
+
+.apex-cell-alignment__button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--apex-accent);
+  outline-offset: -2px;
+}
+
+.apex-cell-alignment__button[aria-pressed="true"] {
+  background: color-mix(
+    in oklab,
+    var(--apex-accent) 16%,
+    var(--apex-chrome-bg)
+  );
+  color: var(--apex-accent);
+}
+
+.apex-cell-alignment__glyph {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.apex-cell-alignment__button[data-vertical="top"] .apex-cell-alignment__glyph {
+  justify-content: flex-start;
+}
+
+.apex-cell-alignment__button[data-vertical="center"]
+  .apex-cell-alignment__glyph {
+  justify-content: center;
+}
+
+.apex-cell-alignment__button[data-vertical="bottom"]
+  .apex-cell-alignment__glyph {
+  justify-content: flex-end;
+}
+
+.apex-cell-alignment__glyph span {
+  width: 15px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.apex-cell-alignment__glyph span:nth-child(2) {
+  width: 11px;
+}
+
+.apex-cell-alignment__button[data-horizontal="left"]
+  .apex-cell-alignment__glyph {
+  align-items: flex-start;
+}
+
+.apex-cell-alignment__button[data-horizontal="center"]
+  .apex-cell-alignment__glyph {
+  align-items: center;
+}
+
+.apex-cell-alignment__button[data-horizontal="right"]
+  .apex-cell-alignment__glyph {
+  align-items: flex-end;
+}
+
+.apex-cell-border {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 164px;
+  height: 116px;
+  margin: 4px auto 8px;
+  padding: 0;
+  border: 0;
+}
+
+.apex-cell-border__cells {
+  position: absolute;
+  inset: 14px;
+  display: grid;
+  gap: 2px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--apex-chrome-border);
+}
+
+.apex-cell-border[data-rows="1"] .apex-cell-border__cells {
+  grid-template-rows: 1fr;
+}
+
+.apex-cell-border[data-rows="2"] .apex-cell-border__cells {
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.apex-cell-border[data-columns="1"] .apex-cell-border__cells {
+  grid-template-columns: 1fr;
+}
+
+.apex-cell-border[data-columns="2"] .apex-cell-border__cells {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.apex-cell-border__cells > span {
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--apex-chrome-hover) 45%, transparent);
+  color: var(--apex-chrome-muted);
+  font-size: 12px;
+}
+
+.apex-cell-border__edge {
+  position: absolute;
+  z-index: 1;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: context-menu;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.apex-cell-border__edge::after {
+  content: "";
+  position: absolute;
+  border-radius: 2px;
+  background: var(--apex-chrome-border);
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.apex-cell-border__edge[data-target="top"],
+.apex-cell-border__edge[data-target="bottom"] {
+  left: 10px;
+  width: calc(100% - 20px);
+  height: 28px;
+}
+
+.apex-cell-border__edge[data-target="top"] {
+  top: 0;
+}
+
+.apex-cell-border__edge[data-target="bottom"] {
+  bottom: 0;
+}
+
+.apex-cell-border__edge[data-target="top"]::after,
+.apex-cell-border__edge[data-target="bottom"]::after {
+  right: 4px;
+  left: 4px;
+  height: 2px;
+}
+
+.apex-cell-border__edge[data-target="top"]::after {
+  bottom: 0;
+}
+
+.apex-cell-border__edge[data-target="bottom"]::after {
+  top: 0;
+}
+
+.apex-cell-border__edge[data-target="left"],
+.apex-cell-border__edge[data-target="right"] {
+  top: 10px;
+  width: 28px;
+  height: calc(100% - 20px);
+}
+
+.apex-cell-border__edge[data-target="left"] {
+  left: 0;
+}
+
+.apex-cell-border__edge[data-target="right"] {
+  right: 0;
+}
+
+.apex-cell-border__edge[data-target="left"]::after,
+.apex-cell-border__edge[data-target="right"]::after {
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+}
+
+.apex-cell-border__edge[data-target="left"]::after {
+  right: 0;
+}
+
+.apex-cell-border__edge[data-target="right"]::after {
+  left: 0;
+}
+
+.apex-cell-border__edge[data-target="insideHorizontal"] {
+  top: calc(50% - 14px);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: 28px;
+}
+
+.apex-cell-border__edge[data-target="insideHorizontal"]::after {
+  top: 13px;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+}
+
+.apex-cell-border__edge[data-target="insideVertical"] {
+  top: 10px;
+  left: calc(50% - 14px);
+  width: 28px;
+  height: calc(100% - 20px);
+}
+
+.apex-cell-border__edge[data-target="insideVertical"]::after {
+  top: 4px;
+  bottom: 4px;
+  left: 13px;
+  width: 2px;
+}
+
+.apex-cell-border__edge:hover,
+.apex-cell-border__edge:focus-visible {
+  background: color-mix(in oklab, var(--apex-accent) 13%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--apex-accent) 38%, transparent);
+}
+
+.apex-cell-border__edge:hover::after,
+.apex-cell-border__edge:focus-visible::after {
+  background: var(--apex-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--apex-accent) 35%, transparent);
+}
+
+.apex-cell-border__edge[aria-pressed="true"]::after {
+  background: var(--apex-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--apex-accent) 30%, transparent);
+}
+
+.apex-cell-border__edge:focus-visible {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: -2px;
 }
 
 /* ── Side panels / overlays (chrome) ── */
@@ -1068,23 +1388,27 @@
     color-scheme: light;
   }
 
-  .apex-editor-surface .ProseMirror :is(
-    [data-color="#000000" i],
-    [data-color="#000" i],
-    [data-color="black" i],
-    [data-color="rgb(0, 0, 0)" i],
-    [data-color="rgb(0,0,0)" i]
-  ) {
+  .apex-editor-surface
+    .ProseMirror
+    :is(
+      [data-color="#000000" i],
+      [data-color="#000" i],
+      [data-color="black" i],
+      [data-color="rgb(0, 0, 0)" i],
+      [data-color="rgb(0,0,0)" i]
+    ) {
     color: #000000;
   }
 
-  .apex-editor-surface .ProseMirror :is(
-    [data-fill-color="#ffffff" i],
-    [data-fill-color="#fff" i],
-    [data-fill-color="white" i],
-    [data-fill-color="rgb(255, 255, 255)" i],
-    [data-fill-color="rgb(255,255,255)" i]
-  ) {
+  .apex-editor-surface
+    .ProseMirror
+    :is(
+      [data-fill-color="#ffffff" i],
+      [data-fill-color="#fff" i],
+      [data-fill-color="white" i],
+      [data-fill-color="rgb(255, 255, 255)" i],
+      [data-fill-color="rgb(255,255,255)" i]
+    ) {
     background-color: #ffffff;
   }
 }

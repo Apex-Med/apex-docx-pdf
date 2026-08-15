@@ -8,8 +8,11 @@ import {
   createEditorStateFromDocument,
   insertTable,
   selectedTableCellPositions,
+  selectedTableCellGrid,
+  setCellHorizontalAlignment,
   setCellBorderStyle,
   setCellShading,
+  setSelectedCellBorderStyle,
   setTableBorderStyle,
   toSemanticDocument,
 } from "../src/index"
@@ -61,6 +64,108 @@ function selectCellRange(
 }
 
 describe("individual cell borders", () => {
+  test("selected cell grid follows caret, row, column, and rectangle selections", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+
+    expect(selectedTableCellGrid(placeInFirstCell(state))).toEqual({
+      rows: 1,
+      columns: 1,
+      cellCount: 1,
+    })
+    expect(selectedTableCellGrid(selectCellRange(state, 0, 1))).toEqual({
+      rows: 1,
+      columns: 2,
+      cellCount: 2,
+    })
+    expect(selectedTableCellGrid(selectCellRange(state, 0, 2))).toEqual({
+      rows: 2,
+      columns: 1,
+      cellCount: 2,
+    })
+    expect(selectedTableCellGrid(selectCellRange(state, 0, 3))).toEqual({
+      rows: 2,
+      columns: 2,
+      cellCount: 4,
+    })
+  })
+
+  test("selected-cell border targets paint only selection boundaries and middles", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(2, 2)).state
+    state = selectCellRange(state, 0, 3)
+    const positions = selectedTableCellPositions(state)
+
+    state = applyCommandToSemantic(
+      state,
+      setSelectedCellBorderStyle("top", "double", "#aa0000", 20, positions)
+    ).state
+    state = applyCommandToSemantic(
+      state,
+      setSelectedCellBorderStyle(
+        "insideVertical",
+        "dashed",
+        "#0000aa",
+        18,
+        positions
+      )
+    ).state
+
+    const attrs: Array<Record<string, unknown>> = []
+    state.doc.descendants((node) => {
+      if (node.type.name === "table_cell") attrs.push({ ...node.attrs })
+    })
+    expect(attrs[0]?.borderTop).toMatchObject({ style: "double" })
+    expect(attrs[1]?.borderTop).toMatchObject({ style: "double" })
+    expect(attrs[2]?.borderTop).not.toMatchObject({ style: "double" })
+    expect(attrs[3]?.borderTop).not.toMatchObject({ style: "double" })
+    expect(attrs[0]?.borderRight).toMatchObject({ style: "dashed" })
+    expect(attrs[1]?.borderLeft).toMatchObject({ style: "dashed" })
+    expect(attrs[2]?.borderRight).toMatchObject({ style: "dashed" })
+    expect(attrs[3]?.borderLeft).toMatchObject({ style: "dashed" })
+    expect(attrs[0]?.borderLeft).not.toMatchObject({ style: "dashed" })
+    expect(attrs[1]?.borderRight).not.toMatchObject({ style: "dashed" })
+  })
+
+  test("a caret border edit changes only the current cell", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(1, 2)).state
+    state = placeInFirstCell(state)
+    const positions = selectedTableCellPositions(state)
+    state = applyCommandToSemantic(
+      state,
+      setSelectedCellBorderStyle("right", "single", "#123456", 16, positions)
+    ).state
+
+    const rightBorders: unknown[] = []
+    state.doc.descendants((node) => {
+      if (node.type.name === "table_cell") {
+        rightBorders.push(node.attrs.borderRight)
+      }
+    })
+    expect(rightBorders[0]).toMatchObject({ color: "#123456" })
+    expect(rightBorders[1]).not.toMatchObject({ color: "#123456" })
+  })
+
+  test("cell horizontal alignment updates every paragraph in captured cells", () => {
+    let state = createEditorStateFromDocument(createBlankDocument())
+    state = applyCommandToSemantic(state, insertTable(1, 2)).state
+    state = selectCellRange(state, 0, 1)
+    const positions = selectedTableCellPositions(state)
+
+    const result = applyCommandToSemantic(
+      state,
+      setCellHorizontalAlignment("right", positions)
+    )
+
+    expect(result.applied).toBe(true)
+    const alignments: unknown[] = []
+    result.state.doc.descendants((node) => {
+      if (node.type.name === "paragraph") alignments.push(node.attrs.alignment)
+    })
+    expect(alignments).toEqual(["right", "right"])
+  })
+
   test("setCellBorderStyle writes per-side border attrs on the cell", () => {
     let state = createEditorStateFromDocument(createBlankDocument())
     state = applyCommandToSemantic(state, insertTable(2, 2)).state

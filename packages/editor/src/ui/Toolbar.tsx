@@ -22,6 +22,7 @@ import {
   TextColorIcon,
   TextItalicIcon,
   TextUnderlineIcon,
+  ViewSidebarRightIcon,
   Undo02Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -87,6 +88,7 @@ export type ToolbarProps = Readonly<{
   styleNames: readonly { id: string; name: string }[]
   palettes: Readonly<Record<string, readonly string[]>>
   customPalettes: readonly CustomPalette[]
+  tableOptionsOpen: boolean
   onCustomPalettesChange: (palettes: CustomPalette[]) => void
 }>
 
@@ -368,6 +370,7 @@ export function Toolbar({
   styleNames,
   palettes,
   customPalettes,
+  tableOptionsOpen,
   onCustomPalettesChange,
 }: ToolbarProps): ReactNode {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -498,6 +501,10 @@ export function Toolbar({
               className="apex-editor-toolbar__item"
             >
               <Select
+                items={ZOOM_PRESETS.map((preset) => ({
+                  value: String(preset),
+                  label: `${preset}%`,
+                }))}
                 value={String(zoom)}
                 onValueChange={(value) => {
                   if (value) actions.onZoomChange(Number(value))
@@ -530,6 +537,13 @@ export function Toolbar({
               className="apex-editor-toolbar__item"
             >
               <Select
+                items={[
+                  ...styleNames.map((style) => ({
+                    value: style.id,
+                    label: styleDisplayName(style.name),
+                  })),
+                  { value: "__none__", label: "Clear style" },
+                ]}
                 value={styleId ?? "Normal"}
                 onValueChange={(value) => {
                   if (value === "__none__") actions.onApplyStyle(null)
@@ -819,7 +833,10 @@ export function Toolbar({
                       />
                     }
                   >
-                    <HugeiconsIcon icon={ParagraphSpacingIcon} strokeWidth={2} />
+                    <HugeiconsIcon
+                      icon={ParagraphSpacingIcon}
+                      strokeWidth={2}
+                    />
                   </TooltipTrigger>
                   <TooltipContent>Line & paragraph spacing</TooltipContent>
                 </Tooltip>
@@ -993,7 +1010,7 @@ export function Toolbar({
 
     const containerWidth = container.clientWidth
     // Reserve space for the overflow trigger so items don't thrash in/out.
-    const moreButtonWidth = 36
+    const moreButtonWidth = snapshot.table.inTable ? 72 : 36
     const gap = 4
     const children = Array.from(
       measure.querySelectorAll<HTMLElement>("[data-toolbar-id]")
@@ -1045,7 +1062,7 @@ export function Toolbar({
       }
       return nextOverflowList
     })
-  }, [])
+  }, [snapshot.table.inTable])
 
   // Overflow depends on container width / chrome size — not selection revision.
   // Re-measure when the item set or zoom chrome changes width, via ResizeObserver.
@@ -1093,7 +1110,15 @@ export function Toolbar({
 
       {shownItems.map((id) => renderItem(id))}
 
-      <div className="ml-auto flex h-9 w-10 shrink-0 items-center justify-end">
+      <div className="ml-auto flex h-9 shrink-0 items-center justify-end gap-1">
+        {snapshot.table.inTable ? (
+          <ToolbarIconButton
+            label="Open table options"
+            icon={ViewSidebarRightIcon}
+            pressed={tableOptionsOpen}
+            onClick={actions.onTableProperties}
+          />
+        ) : null}
         {overflowItems.length > 0 ? (
           <Popover>
             <PopoverTrigger
@@ -1126,10 +1151,7 @@ function ColorSwatchGrid({
   columns: ReadonlyArray<readonly [string, readonly string[]]>
   onPick: (color: string) => void
 }): ReactNode {
-  const shadeCount = Math.max(
-    1,
-    ...columns.map(([, colors]) => colors.length)
-  )
+  const shadeCount = Math.max(1, ...columns.map(([, colors]) => colors.length))
   return (
     <div
       className="grid w-fit gap-1"

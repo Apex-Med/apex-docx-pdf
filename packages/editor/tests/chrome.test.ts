@@ -144,7 +144,7 @@ describe("editor chrome components", () => {
     expect(source).toContain("clearFormatting")
     expect(source).toContain("onClearFormatting")
     expect(source).toContain("onParagraphSpacing")
-    expect(source).toContain("variant=\"ghost\"")
+    expect(source).toContain('variant="ghost"')
     expect(source).toContain("DropdownMenu")
     expect(source).toContain("ParagraphSpacingIcon")
     expect(source).toContain("apex-editor-toolbar__sep")
@@ -181,6 +181,25 @@ describe("editor chrome components", () => {
     expect(source).toContain("apex-table-options")
     expect(source).toContain("Table options")
     expect(source).toContain("aria-expanded")
+    expect(source).toContain("apex-cell-alignment")
+    expect(source).toContain("apex-cell-border")
+    expect(source).toContain("selectionGrid.rows")
+    expect(source).toContain("insideHorizontal")
+    expect(source).toContain("insideVertical")
+    expect(source).toContain("onContextMenu")
+    expect(source).toContain('type: "cellBorder"')
+    expect(source).toContain("ScrubbableNumberLabel")
+    expect(source).toContain("ScrubbableNumberButton")
+    expect(source).toContain("setPointerCapture")
+    expect(source).toContain("cursor-ew-resize")
+    expect(source).toContain("touch-none")
+    expect(source).toContain("paddingText")
+    expect(source).toContain("HorizontalResizeIcon")
+    expect(source).toContain("VerticalResizeIcon")
+    expect(source).toContain("paddingExpanded")
+    expect(source).toContain("individual cell padding controls")
+    expect(source).toContain('placeholder="Mixed"')
+    expect(source).not.toContain(">Apply<")
     expect(source).not.toContain("Sheet")
     expect(source).not.toContain("SheetContent")
     const css = readFileSync(
@@ -189,6 +208,23 @@ describe("editor chrome components", () => {
     )
     expect(css).toContain(".apex-table-options")
     expect(css).toContain("flex: 0 0 300px")
+    expect(css).toContain(".apex-cell-border__edge:hover")
+    expect(css).toContain("cursor: context-menu")
+    expect(css).toContain("var(--apex-accent) 13%")
+
+    const editorSource = readFileSync(
+      join(import.meta.dir, "../src/ui/Editor.tsx"),
+      "utf8"
+    )
+    expect(editorSource).toContain("tr.selectionSet")
+    expect(editorSource).toContain("readTableOptionsSelection(next)")
+    expect(editorSource).toContain("tableOptionsSelection.positions.join")
+    expect(editorSource).toContain("const runLive = useCallback")
+    const runLiveSource = editorSource.slice(
+      editorSource.indexOf("const runLive = useCallback"),
+      editorSource.indexOf("const runLiveAll = useCallback")
+    )
+    expect(runLiveSource).not.toContain("view.focus()")
   })
 
   test("toolbar color palette uses vertical hue columns", () => {
@@ -202,9 +238,11 @@ describe("editor chrome components", () => {
     // Overflow should not recompute on every selection revision (layout shift).
     expect(source).not.toContain("snapshot.revision, zoom")
     expect(source).toContain("h-12 min-h-12")
-    expect(source).toContain("variant=\"ghost\"")
+    expect(source).toContain('variant="ghost"')
     expect(source).toContain("FONT_SIZE_OPTIONS")
     expect(source).toContain("FontSizeControl")
+    expect(source).toContain('label="Open table options"')
+    expect(source).toContain("tableOptionsOpen")
     expect(source).toContain('event.key !== "Enter"')
     expect(source).toContain("apex-editor-toolbar__font-size-input")
   })
@@ -259,7 +297,9 @@ describe("editor chrome components", () => {
     expect(source).not.toContain("justify-center")
     expect(source).toContain("section[data-section]")
     expect(source).toContain("apex-editor-ruler__tab-add")
-    expect(alignmentFromRects({ left: 120, width: 408 }, { left: 40 }, 816)).toEqual({
+    expect(
+      alignmentFromRects({ left: 120, width: 408 }, { left: 40 }, 816)
+    ).toEqual({
       left: 80,
       width: 408,
       scale: 0.5,

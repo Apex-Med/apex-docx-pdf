@@ -27,7 +27,9 @@ export function EditorChrome({
   portalContainer,
   children,
 }: EditorChromeProps): ReactNode {
-  const portalRef = useRef<HTMLElement | ShadowRoot | null>(portalContainer ?? null)
+  const portalRef = useRef<HTMLElement | ShadowRoot | null>(
+    portalContainer ?? null
+  )
   portalRef.current = portalContainer ?? null
   const pagesRef = useRef<HTMLDivElement | null>(null)
 
@@ -57,6 +59,7 @@ export function EditorChrome({
             styleNames={resources.styleNames}
             palettes={resources.palettes}
             customPalettes={resources.customPalettes}
+            tableOptionsOpen={view.tableOptionsOpen}
             onCustomPalettesChange={resources.onCustomPalettesChange}
           />
           {view.rulerVisible && section ? (

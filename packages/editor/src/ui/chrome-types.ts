@@ -90,6 +90,7 @@ export type EditorChromeViewState = Readonly<{
   previewOn: boolean
   divergenceOn: boolean
   printLayout: boolean
+  tableOptionsOpen: boolean
 }>
 
 export const DARK_PAGES_STORAGE_KEY = "apex-editor-dark-pages"

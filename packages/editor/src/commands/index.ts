@@ -66,6 +66,17 @@ export type CellBorderSpec = Readonly<{
 }>
 
 export type CellBorderSide = "top" | "right" | "bottom" | "left" | "all"
+export type SelectedCellBorderTarget =
+  CellBorderSide | "insideHorizontal" | "insideVertical"
+
+export type SelectedTableCellGrid = Readonly<{
+  rows: 1 | 2
+  columns: 1 | 2
+  cellCount: number
+}>
+export type SelectedTableCellBorders = Partial<
+  Record<Exclude<SelectedCellBorderTarget, "all">, CellBorderSpec | null>
+>
 
 /** Word/Google-style grid used when the user inserts a table. */
 export const DEFAULT_INSERTED_TABLE_BORDER: CellBorderSpec = Object.freeze({
@@ -1036,6 +1047,40 @@ export function setCellVerticalAlignment(
   }
 }
 
+/** Align every paragraph contained by the selected table cells. */
+export function setCellHorizontalAlignment(
+  alignment: "left" | "center" | "right",
+  cellPositions?: readonly number[]
+): Command {
+  return (state, dispatch) => {
+    const cells = resolveTableCells(state, cellPositions)
+    if (cells.length === 0) return false
+    if (dispatch) {
+      let tr = state.tr
+      const paragraphs: number[] = []
+      for (const cell of cells) {
+        cell.node.descendants((node, relativePos) => {
+          if (node.type.name === "paragraph") {
+            paragraphs.push(cell.pos + 1 + relativePos)
+          }
+          return true
+        })
+      }
+      for (const pos of paragraphs.sort((a, b) => b - a)) {
+        const mapped = tr.mapping.map(pos)
+        const paragraph = tr.doc.nodeAt(mapped)
+        if (paragraph?.type.name !== "paragraph") continue
+        tr = tr.setNodeMarkup(mapped, undefined, {
+          ...paragraph.attrs,
+          alignment,
+        })
+      }
+      dispatch(tr)
+    }
+    return true
+  }
+}
+
 function findCellDepth($from: {
   depth: number
   node: (d: number) => PMNode
@@ -1148,7 +1193,11 @@ function cellsAtPositions(
 function addCellAtResolved(
   cells: { node: PMNode; pos: number }[],
   seen: Set<number>,
-  $pos: { depth: number; node: (d: number) => PMNode; before: (d: number) => number }
+  $pos: {
+    depth: number
+    node: (d: number) => PMNode
+    before: (d: number) => number
+  }
 ): void {
   const depth = findCellDepth($pos)
   const node = $pos.node(depth)
@@ -1199,6 +1248,130 @@ function selectedTableCells(
 
 export function selectedTableCellPositions(state: EditorState): number[] {
   return selectedTableCells(state).map((cell) => cell.pos)
+}
+
+function selectedCellGridInfo(state: EditorState) {
+  const tableInfo = enclosingTable(state)
+  if (!tableInfo) return null
+  const selected = resolveTableCells(state)
+  if (selected.length === 0) return null
+  const selectedPositions = new Set(selected.map((cell) => cell.pos))
+  const map = TableMap.get(tableInfo.node)
+  const coordinates = new Map<
+    number,
+    { top: number; right: number; bottom: number; left: number }
+  >()
+
+  for (let row = 0; row < map.height; row += 1) {
+    for (let column = 0; column < map.width; column += 1) {
+      const relativePos = map.map[row * map.width + column]
+      if (relativePos === undefined) continue
+      const pos = tableInfo.pos + 1 + relativePos
+      if (!selectedPositions.has(pos)) continue
+      const current = coordinates.get(pos)
+      coordinates.set(pos, {
+        top: Math.min(current?.top ?? row, row),
+        right: Math.max(current?.right ?? column + 1, column + 1),
+        bottom: Math.max(current?.bottom ?? row + 1, row + 1),
+        left: Math.min(current?.left ?? column, column),
+      })
+    }
+  }
+  if (coordinates.size === 0) return null
+  const rects = [...coordinates.entries()].map(([pos, rect]) => ({ pos, rect }))
+  return {
+    selected,
+    rects,
+    bounds: {
+      top: Math.min(...rects.map(({ rect }) => rect.top)),
+      right: Math.max(...rects.map(({ rect }) => rect.right)),
+      bottom: Math.max(...rects.map(({ rect }) => rect.bottom)),
+      left: Math.min(...rects.map(({ rect }) => rect.left)),
+    },
+  }
+}
+
+export function selectedTableCellGrid(
+  state: EditorState
+): SelectedTableCellGrid {
+  const info = selectedCellGridInfo(state)
+  if (!info) return { rows: 1, columns: 1, cellCount: 0 }
+  if (info.selected.length === 1) {
+    return { rows: 1, columns: 1, cellCount: 1 }
+  }
+  return {
+    rows: info.bounds.bottom - info.bounds.top > 1 ? 2 : 1,
+    columns: info.bounds.right - info.bounds.left > 1 ? 2 : 1,
+    cellCount: info.selected.length,
+  }
+}
+
+function borderSpecAttr(value: unknown): CellBorderSpec | null {
+  if (!value || typeof value !== "object") return null
+  const candidate = value as Partial<CellBorderSpec>
+  if (
+    candidate.style !== "none" &&
+    candidate.style !== "single" &&
+    candidate.style !== "double" &&
+    candidate.style !== "dotted" &&
+    candidate.style !== "dashed"
+  ) {
+    return null
+  }
+  return {
+    style: candidate.style,
+    color: String(candidate.color ?? "#000000"),
+    width: Number(candidate.width ?? 15),
+  }
+}
+
+export function selectedTableCellBorders(
+  state: EditorState
+): SelectedTableCellBorders {
+  const info = selectedCellGridInfo(state)
+  if (!info) return {}
+  const cells = new Map(
+    info.selected.map((cell) => [cell.pos, cell.node] as const)
+  )
+  const values: Record<
+    Exclude<SelectedCellBorderTarget, "all">,
+    CellBorderSpec[]
+  > = {
+    top: [],
+    right: [],
+    bottom: [],
+    left: [],
+    insideHorizontal: [],
+    insideVertical: [],
+  }
+  const add = (
+    target: keyof typeof values,
+    node: PMNode | undefined,
+    attr: "borderTop" | "borderRight" | "borderBottom" | "borderLeft"
+  ) => {
+    const spec = borderSpecAttr(node?.attrs[attr])
+    if (spec) values[target].push(spec)
+  }
+  for (const { pos, rect } of info.rects) {
+    const node = cells.get(pos)
+    if (rect.top === info.bounds.top) add("top", node, "borderTop")
+    if (rect.right === info.bounds.right) add("right", node, "borderRight")
+    if (rect.bottom === info.bounds.bottom) add("bottom", node, "borderBottom")
+    if (rect.left === info.bounds.left) add("left", node, "borderLeft")
+    if (rect.top > info.bounds.top) {
+      add("insideHorizontal", node, "borderTop")
+    }
+    if (rect.bottom < info.bounds.bottom) {
+      add("insideHorizontal", node, "borderBottom")
+    }
+    if (rect.left > info.bounds.left) add("insideVertical", node, "borderLeft")
+    if (rect.right < info.bounds.right) {
+      add("insideVertical", node, "borderRight")
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(values).map(([target, specs]) => [target, specs[0] ?? null])
+  ) as SelectedTableCellBorders
 }
 
 function resolveTableCells(
@@ -1257,11 +1430,97 @@ export function setCellBorderStyle(
   cellPositions?: readonly number[]
 ): Command {
   if (style === "none") return setCellBorder(side, null, cellPositions)
-  return setCellBorder(
-    side,
-    { style, color, width: widthTwips },
-    cellPositions
-  )
+  return setCellBorder(side, { style, color, width: widthTwips }, cellPositions)
+}
+
+/**
+ * Paint one outside or inside edge of the captured cell selection. Unlike
+ * table border commands, a caret selection always targets only its cell.
+ */
+export function setSelectedCellBorderStyle(
+  target: SelectedCellBorderTarget,
+  style: CellBorderSpec["style"] = "single",
+  color = "#000000",
+  widthTwips = 15,
+  cellPositions?: readonly number[]
+): Command {
+  const width = Number.isSafeInteger(widthTwips)
+    ? widthTwips
+    : Math.round(Number(widthTwips) || 15)
+  const spec: CellBorderSpec | null =
+    style === "none" ? null : { style, color, width: Math.max(0, width) }
+
+  return (state, dispatch) => {
+    const selection = cellPositions
+      ? cellsAtPositions(state.doc, cellPositions)
+      : selectedTableCells(state)
+    if (selection.length === 0) return false
+    const tableInfo = enclosingTable(state)
+    if (!tableInfo) return false
+
+    const selectedPositions = new Set(selection.map((cell) => cell.pos))
+    const map = TableMap.get(tableInfo.node)
+    const coordinates = new Map<
+      number,
+      { top: number; right: number; bottom: number; left: number }
+    >()
+    for (let row = 0; row < map.height; row += 1) {
+      for (let column = 0; column < map.width; column += 1) {
+        const relativePos = map.map[row * map.width + column]
+        if (relativePos === undefined) continue
+        const pos = tableInfo.pos + 1 + relativePos
+        if (!selectedPositions.has(pos)) continue
+        const current = coordinates.get(pos)
+        coordinates.set(pos, {
+          top: Math.min(current?.top ?? row, row),
+          right: Math.max(current?.right ?? column + 1, column + 1),
+          bottom: Math.max(current?.bottom ?? row + 1, row + 1),
+          left: Math.min(current?.left ?? column, column),
+        })
+      }
+    }
+    if (coordinates.size === 0) return false
+    if (!dispatch) return true
+
+    const rects = [...coordinates.entries()].map(([pos, rect]) => ({
+      pos,
+      rect,
+    }))
+    const bounds = {
+      top: Math.min(...rects.map(({ rect }) => rect.top)),
+      right: Math.max(...rects.map(({ rect }) => rect.right)),
+      bottom: Math.max(...rects.map(({ rect }) => rect.bottom)),
+      left: Math.min(...rects.map(({ rect }) => rect.left)),
+    }
+    let tr = state.tr
+    for (const { pos, rect } of rects.sort((a, b) => b.pos - a.pos)) {
+      const patch: Record<string, CellBorderSpec | null> = {}
+      if (target === "all") {
+        Object.assign(patch, cellBorderPatch("all", spec))
+      } else if (target === "top" && rect.top === bounds.top) {
+        patch.borderTop = spec
+      } else if (target === "right" && rect.right === bounds.right) {
+        patch.borderRight = spec
+      } else if (target === "bottom" && rect.bottom === bounds.bottom) {
+        patch.borderBottom = spec
+      } else if (target === "left" && rect.left === bounds.left) {
+        patch.borderLeft = spec
+      } else if (target === "insideHorizontal") {
+        if (rect.top > bounds.top) patch.borderTop = spec
+        if (rect.bottom < bounds.bottom) patch.borderBottom = spec
+      } else if (target === "insideVertical") {
+        if (rect.left > bounds.left) patch.borderLeft = spec
+        if (rect.right < bounds.right) patch.borderRight = spec
+      }
+      if (Object.keys(patch).length === 0) continue
+      const mapped = tr.mapping.map(pos)
+      const current = tr.doc.nodeAt(mapped)
+      if (!isTableCell(current)) continue
+      tr = tr.setNodeMarkup(mapped, undefined, { ...current.attrs, ...patch })
+    }
+    dispatch(tr)
+    return true
+  }
 }
 
 function cellBorderPatchForSide(
@@ -1314,7 +1573,8 @@ export function setTableBorderStyle(
 
     let tr = state.tr
     if (paintTableEdges) {
-      const current = (tableInfo.node.attrs.borders as TableBorderAttrs | null) ?? {
+      const current = (tableInfo.node.attrs
+        .borders as TableBorderAttrs | null) ?? {
         top: null,
         right: null,
         bottom: null,
@@ -1333,7 +1593,9 @@ export function setTableBorderStyle(
     }
 
     if (side === "all" || selected.length > 1) {
-      dispatch(applyBorderPatchToCells(tr, targets, cellBorderPatch(side, spec)))
+      dispatch(
+        applyBorderPatchToCells(tr, targets, cellBorderPatch(side, spec))
+      )
       return true
     }
 

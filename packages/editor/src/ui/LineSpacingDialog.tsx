@@ -8,12 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
   RadioGroup,
   RadioGroupItem,
 } from "@workspace/ui/components/radio-group"
+
+import { ScrubbableNumberInput } from "./ScrubbableNumberInput"
 
 export const LINE_SPACING_PRESETS = [
   { id: "single", label: "Single", value240ths: 240 },
@@ -129,10 +130,11 @@ export function LineSpacingDialog({
             {preset === "custom" ? (
               <label className="grid gap-1.5 text-sm">
                 <span className="text-muted-foreground">Custom (240ths)</span>
-                <Input
-                  type="number"
+                <ScrubbableNumberInput
                   value={custom240ths}
-                  onChange={(event) => setCustom240ths(event.target.value)}
+                  scrubMin={1}
+                  scrubStep={1}
+                  onValueChange={setCustom240ths}
                 />
               </label>
             ) : null}
@@ -141,20 +143,22 @@ export function LineSpacingDialog({
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1.5 text-sm">
               <span className="text-muted-foreground">Space before (pt)</span>
-              <Input
-                type="number"
+              <ScrubbableNumberInput
                 step="any"
                 value={spaceBeforePt}
-                onChange={(event) => setSpaceBeforePt(event.target.value)}
+                scrubMin={0}
+                scrubStep={0.5}
+                onValueChange={setSpaceBeforePt}
               />
             </label>
             <label className="grid gap-1.5 text-sm">
               <span className="text-muted-foreground">Space after (pt)</span>
-              <Input
-                type="number"
+              <ScrubbableNumberInput
                 step="any"
                 value={spaceAfterPt}
-                onChange={(event) => setSpaceAfterPt(event.target.value)}
+                scrubMin={0}
+                scrubStep={0.5}
+                onValueChange={setSpaceAfterPt}
               />
             </label>
           </div>

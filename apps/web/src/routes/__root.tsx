@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/tanstack-react-start";
 import {
   HeadContent,
   Scripts,
@@ -136,10 +137,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="overscroll-none">
-        <ThemeProvider defaultTheme="system" storageKey="apex-ui-theme">
+        <ClerkProvider>
+          <ThemeProvider defaultTheme="system" storageKey="apex-ui-theme">
           {children}
-        </ThemeProvider>
-        <Scripts />
+          </ThemeProvider>
+          <Scripts />
+        </ClerkProvider>
       </body>
     </html>
   )
