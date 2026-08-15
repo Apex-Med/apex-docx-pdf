@@ -16,6 +16,8 @@ import {
 } from "@workspace/ui/components/radio-group"
 import { Switch } from "@workspace/ui/components/switch"
 
+import { ScrubbableNumberInput } from "./ScrubbableNumberInput"
+
 export type ColumnsDialogProps = Readonly<{
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -104,17 +106,17 @@ export function ColumnsDialog({
               <Label htmlFor={countId} className="text-muted-foreground">
                 Custom count (1–12)
               </Label>
-              <Input
+              <ScrubbableNumberInput
                 id={countId}
-                type="number"
                 min={1}
                 max={12}
                 value={count}
-                onChange={(event) =>
+                scrubMin={1}
+                scrubMax={12}
+                scrubStep={1}
+                onValueChange={(value) =>
                   setCount(
-                    String(
-                      Math.min(12, Math.max(1, Number(event.target.value) || 1))
-                    )
+                    String(Math.min(12, Math.max(1, Number(value) || 1)))
                   )
                 }
               />
@@ -132,12 +134,13 @@ export function ColumnsDialog({
             <Label htmlFor={spaceId} className="text-muted-foreground">
               Column spacing (twips)
             </Label>
-            <Input
+            <ScrubbableNumberInput
               id={spaceId}
-              type="number"
               min={0}
               value={space}
-              onChange={(event) => setSpace(event.target.value)}
+              scrubMin={0}
+              scrubStep={10}
+              onValueChange={setSpace}
             />
           </div>
           {!equalWidth ? (

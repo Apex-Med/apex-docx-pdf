@@ -189,15 +189,12 @@ describe("editor chrome components", () => {
     expect(source).toContain("onContextMenu")
     expect(source).toContain('type: "cellBorder"')
     expect(source).toContain("ScrubbableNumberLabel")
-    expect(source).toContain("ScrubbableNumberButton")
-    expect(source).toContain("setPointerCapture")
-    expect(source).toContain("cursor-ew-resize")
-    expect(source).toContain("touch-none")
+    expect(source).toContain("ScrubbableNumberDisclosure")
+    expect(source).toContain("ScrubbableNumberInput")
     expect(source).toContain("paddingText")
     expect(source).toContain("HorizontalResizeIcon")
     expect(source).toContain("VerticalResizeIcon")
     expect(source).toContain("paddingExpanded")
-    expect(source).toContain("individual cell padding controls")
     expect(source).toContain('placeholder="Mixed"')
     expect(source).not.toContain(">Apply<")
     expect(source).not.toContain("Sheet")
@@ -225,6 +222,35 @@ describe("editor chrome components", () => {
       editorSource.indexOf("const runLiveAll = useCallback")
     )
     expect(runLiveSource).not.toContain("view.focus()")
+  })
+
+  test("editor numeric inputs share vertical scrubbing", () => {
+    const scrubSource = readFileSync(
+      join(import.meta.dir, "../src/ui/ScrubbableNumberInput.tsx"),
+      "utf8"
+    )
+    expect(scrubSource).toContain("startY")
+    expect(scrubSource).toContain("drag.startY - event.clientY")
+    expect(scrubSource).toContain("Math.abs(deltaX) > Math.abs(deltaY)")
+    expect(scrubSource).toContain("setPointerCapture")
+    expect(scrubSource).toContain("cursor-ns-resize")
+    expect(scrubSource).toContain("touch-pan-x")
+    expect(scrubSource).toContain("Click to type, or drag vertically")
+    expect(scrubSource).toContain("individual cell padding controls")
+
+    for (const file of [
+      "Toolbar.tsx",
+      "TablePropertiesDialog.tsx",
+      "LineSpacingDialog.tsx",
+      "PageSetupDialog.tsx",
+      "ColumnsDialog.tsx",
+    ]) {
+      const source = readFileSync(
+        join(import.meta.dir, `../src/ui/${file}`),
+        "utf8"
+      )
+      expect(source).toContain("ScrubbableNumberInput")
+    }
   })
 
   test("toolbar color palette uses vertical hue columns", () => {

@@ -8,6 +8,10 @@ import {
   readDarkPagesPreference,
   writeDarkPagesPreference,
 } from "../src/ui/chrome-types"
+import {
+  EDITOR_PREFERENCES_STORAGE_KEY,
+  normalizeEditorPreferences,
+} from "../src/ui/editor-preferences"
 
 describe("dark mode adaptivity", () => {
   test("editor CSS defines light tokens and .dark overrides for chrome/desk", () => {
@@ -102,9 +106,34 @@ describe("dark mode adaptivity", () => {
     expect(schema).not.toContain('"background:white"')
   })
 
-  test("dark pages preference defaults on when storage is unavailable", () => {
-    expect(readDarkPagesPreference()).toBe(true)
+  test("dark pages preference defaults off when storage is unavailable", () => {
+    expect(readDarkPagesPreference()).toBe(false)
     expect(() => writeDarkPagesPreference(false)).not.toThrow()
     expect(DARK_PAGES_STORAGE_KEY).toBe("apex-editor-dark-pages")
+  })
+
+  test("persisted editor preferences accept only bounded known values", () => {
+    expect(
+      normalizeEditorPreferences({
+        zoom: 125,
+        rulerVisible: false,
+        darkPages: false,
+        pageUnit: "cm",
+      })
+    ).toEqual({
+      zoom: 125,
+      rulerVisible: false,
+      darkPages: false,
+      pageUnit: "cm",
+    })
+    expect(
+      normalizeEditorPreferences({
+        zoom: 10_000,
+        rulerVisible: "yes",
+        darkPages: null,
+        pageUnit: "px",
+      })
+    ).toEqual({})
+    expect(EDITOR_PREFERENCES_STORAGE_KEY).toBe("apex-editor-preferences")
   })
 })

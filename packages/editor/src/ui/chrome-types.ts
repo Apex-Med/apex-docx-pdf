@@ -96,7 +96,7 @@ export type EditorChromeViewState = Readonly<{
 export const DARK_PAGES_STORAGE_KEY = "apex-editor-dark-pages"
 
 export function readDarkPagesPreference(): boolean {
-  if (typeof localStorage === "undefined") return true
+  if (typeof localStorage === "undefined") return false
   try {
     const stored = localStorage.getItem(DARK_PAGES_STORAGE_KEY)
     if (stored === "false") return false
@@ -104,7 +104,7 @@ export function readDarkPagesPreference(): boolean {
   } catch {
     // Ignore unavailable storage.
   }
-  return true
+  return false
 }
 
 export function writeDarkPagesPreference(enabled: boolean): void {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -43,7 +43,9 @@ export type LineSpacingDialogProps = Readonly<{
   onApply: (options: LineSpacingOptions) => void
 }>
 
-function matchPreset(value240ths: number | null | undefined): LineSpacingPresetId {
+function matchPreset(
+  value240ths: number | null | undefined
+): LineSpacingPresetId {
   if (value240ths == null) return "single"
   const preset = LINE_SPACING_PRESETS.find(
     (entry) => entry.value240ths === value240ths
@@ -69,6 +71,7 @@ export function LineSpacingDialog({
   const [spaceAfterPt, setSpaceAfterPt] = useState(
     String((initial?.spacingAfter ?? 0) / 20)
   )
+  const fieldId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -79,7 +82,9 @@ export function LineSpacingDialog({
   }, [open, initial])
 
   const buildOptions = (): LineSpacingOptions => {
-    const presetEntry = LINE_SPACING_PRESETS.find((entry) => entry.id === preset)
+    const presetEntry = LINE_SPACING_PRESETS.find(
+      (entry) => entry.id === preset
+    )
     const value240ths =
       preset === "custom"
         ? Math.max(1, Math.round(Number(custom240ths) || 240))
@@ -107,13 +112,15 @@ export function LineSpacingDialog({
             <RadioGroup
               value={preset}
               onValueChange={(value) => {
-                const next = LINE_SPACING_PRESETS.find((entry) => entry.id === value)
+                const next = LINE_SPACING_PRESETS.find(
+                  (entry) => entry.id === value
+                )
                 if (next) setPreset(next.id)
               }}
               className="grid gap-2"
             >
               {LINE_SPACING_PRESETS.map((entry) => (
-                <label
+                <Label
                   key={entry.id}
                   className="flex items-center gap-2 text-sm"
                 >
@@ -124,48 +131,70 @@ export function LineSpacingDialog({
                       ({entry.value240ths}/240)
                     </span>
                   ) : null}
-                </label>
+                </Label>
               ))}
             </RadioGroup>
             {preset === "custom" ? (
-              <label className="grid gap-1.5 text-sm">
-                <span className="text-muted-foreground">Custom (240ths)</span>
+              <div className="grid gap-1.5 text-sm">
+                <Label
+                  htmlFor={`${fieldId}-custom`}
+                  className="text-muted-foreground"
+                >
+                  Custom (240ths)
+                </Label>
                 <ScrubbableNumberInput
+                  id={`${fieldId}-custom`}
                   value={custom240ths}
                   scrubMin={1}
                   scrubStep={1}
                   onValueChange={setCustom240ths}
                 />
-              </label>
+              </div>
             ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-muted-foreground">Space before (pt)</span>
+            <div className="grid gap-1.5 text-sm">
+              <Label
+                htmlFor={`${fieldId}-before`}
+                className="text-muted-foreground"
+              >
+                Space before (pt)
+              </Label>
               <ScrubbableNumberInput
+                id={`${fieldId}-before`}
                 step="any"
                 value={spaceBeforePt}
                 scrubMin={0}
                 scrubStep={0.5}
                 onValueChange={setSpaceBeforePt}
               />
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-muted-foreground">Space after (pt)</span>
+            </div>
+            <div className="grid gap-1.5 text-sm">
+              <Label
+                htmlFor={`${fieldId}-after`}
+                className="text-muted-foreground"
+              >
+                Space after (pt)
+              </Label>
               <ScrubbableNumberInput
+                id={`${fieldId}-after`}
                 step="any"
                 value={spaceAfterPt}
                 scrubMin={0}
                 scrubStep={0.5}
                 onValueChange={setSpaceAfterPt}
               />
-            </label>
+            </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button

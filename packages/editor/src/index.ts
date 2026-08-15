@@ -168,6 +168,19 @@ export {
 export { MenuBar, type MenuBarProps } from "./ui/MenuBar"
 export { Toolbar, type ToolbarProps } from "./ui/Toolbar"
 export {
+  EDITOR_PREFERENCES_STORAGE_KEY,
+  normalizeEditorPreferences,
+  useEditorPreferences,
+  type EditorPreferencesState,
+  type EditorPreferenceValues,
+} from "./ui/editor-preferences"
+export {
+  ScrubbableNumberInput,
+  ScrubbableNumberLabel,
+  ScrubbableNumberDisclosure,
+  type ScrubbableNumberInputProps,
+} from "./ui/ScrubbableNumberInput"
+export {
   Ruler,
   alignmentFromRects,
   type RulerProps,

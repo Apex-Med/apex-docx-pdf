@@ -35,6 +35,7 @@ function useNumberScrub<T extends HTMLElement>({
 }: NumberScrubOptions) {
   const dragRef = useRef<{
     pointerId: number
+    startX: number
     startY: number
     startValue: number
     moved: boolean
@@ -45,11 +46,11 @@ function useNumberScrub<T extends HTMLElement>({
     if (event.button !== 0) return
     dragRef.current = {
       pointerId: event.pointerId,
+      startX: event.clientX,
       startY: event.clientY,
       startValue: value,
       moved: false,
     }
-    event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const onPointerMove = (event: PointerEvent<T>) => {
@@ -59,8 +60,19 @@ function useNumberScrub<T extends HTMLElement>({
       dragRef.current = null
       return
     }
+    const deltaX = event.clientX - drag.startX
     const deltaY = drag.startY - event.clientY
-    if (!drag.moved && Math.abs(deltaY) < 3) return
+    if (!drag.moved) {
+      if (Math.abs(deltaX) >= 3 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        dragRef.current = null
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId)
+        }
+        return
+      }
+      if (Math.abs(deltaY) < 3 || Math.abs(deltaY) <= Math.abs(deltaX)) return
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
     drag.moved = true
     event.preventDefault()
     const steps = Math.round(deltaY / pixelsPerStep)
@@ -122,6 +134,7 @@ export type ScrubbableNumberInputProps = Omit<
     scrubMax?: number
     scrubStep?: number
     scrubPixelsPerStep?: number
+    onScrubValueChange?: (value: number) => void
   }>
 
 export const ScrubbableNumberInput = forwardRef<
@@ -136,6 +149,7 @@ export const ScrubbableNumberInput = forwardRef<
     scrubMax,
     scrubStep = 1,
     scrubPixelsPerStep,
+    onScrubValueChange,
     className = "",
     title = "Click to type, or drag vertically to adjust",
     type = "number",
@@ -145,6 +159,7 @@ export const ScrubbableNumberInput = forwardRef<
     onPointerCancel: onPointerCancelProp,
     onLostPointerCapture: onLostPointerCaptureProp,
     onClick: onClickProp,
+    style,
     ...props
   },
   ref
@@ -153,7 +168,10 @@ export const ScrubbableNumberInput = forwardRef<
     scrubValue ?? (Number.isFinite(Number(value)) ? Number(value) : 0)
   const scrub = useNumberScrub<HTMLInputElement>({
     value: numericValue,
-    onChange: (next) => onValueChange(String(next)),
+    onChange: (next) => {
+      onValueChange(String(next))
+      onScrubValueChange?.(next)
+    },
     min: scrubMin,
     max: scrubMax,
     step: scrubStep,
@@ -168,6 +186,12 @@ export const ScrubbableNumberInput = forwardRef<
       value={value}
       title={title}
       className={`cursor-ns-resize touch-pan-x tabular-nums ${className}`}
+      style={{
+        cursor: "ns-resize",
+        touchAction: "pan-x",
+        userSelect: "text",
+        ...style,
+      }}
       onChange={(event) => onValueChange(event.target.value)}
       onPointerDown={(event) => {
         onPointerDownProp?.(event)
@@ -224,6 +248,7 @@ export function ScrubbableNumberLabel({
       htmlFor={htmlFor}
       className={`-mx-1 w-fit cursor-ns-resize rounded-sm px-1 hover:bg-(--apex-chrome-hover) ${className}`}
       title="Click to type, or drag vertically to adjust"
+      style={{ cursor: "ns-resize", touchAction: "pan-x" }}
       onPointerDown={scrub.onPointerDown}
       onPointerMove={scrub.onPointerMove}
       onPointerUp={scrub.onPointerUp}
@@ -270,6 +295,7 @@ export function ScrubbableNumberDisclosure({
       aria-expanded={expanded}
       aria-controls={controls}
       title={`Click to ${expanded ? "hide" : "show"} individual sides. Drag vertically to adjust ${label.toLowerCase()} padding.`}
+      style={{ cursor: "ns-resize", touchAction: "pan-x" }}
       onPointerDown={scrub.onPointerDown}
       onPointerMove={scrub.onPointerMove}
       onPointerUp={scrub.onPointerUp}

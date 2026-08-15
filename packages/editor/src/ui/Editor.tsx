@@ -98,12 +98,9 @@ import { editorSchema } from "../schema"
 import { EDITOR_CSS } from "../styles/editor-css"
 import { DivergenceOverlay } from "./DivergenceOverlay"
 import { EditorChrome } from "./EditorChrome"
-import {
-  readDarkPagesPreference,
-  writeDarkPagesPreference,
-  type EditorChromeActions,
-} from "./chrome-types"
+import type { EditorChromeActions } from "./chrome-types"
 import { ColumnsDialog } from "./ColumnsDialog"
+import { useEditorPreferences } from "./editor-preferences"
 import { FindReplaceDialog } from "./FindReplaceDialog"
 import { LinkDialog } from "./LinkDialog"
 import { LineSpacingDialog } from "./LineSpacingDialog"
@@ -422,9 +419,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const divergenceOnRef = useRef(divergenceOn)
     previewOnRef.current = previewOn
     divergenceOnRef.current = divergenceOn
-    const [rulerVisible, setRulerVisible] = useState(true)
-    const [darkPages, setDarkPages] = useState(readDarkPagesPreference)
-    const [zoom, setZoom] = useState(100)
+    const rulerVisible = useEditorPreferences((state) => state.rulerVisible)
+    const toggleRulerVisible = useEditorPreferences(
+      (state) => state.toggleRulerVisible
+    )
+    const darkPages = useEditorPreferences((state) => state.darkPages)
+    const toggleDarkPages = useEditorPreferences(
+      (state) => state.toggleDarkPages
+    )
+    const zoom = useEditorPreferences((state) => state.zoom)
+    const setZoom = useEditorPreferences((state) => state.setZoom)
     const [pageSetupOpen, setPageSetupOpen] = useState(false)
     const [linkOpen, setLinkOpen] = useState(false)
     const [findReplaceOpen, setFindReplaceOpen] = useState(false)
@@ -440,7 +444,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       })
     const [columnsOpen, setColumnsOpen] = useState(false)
     const [styleDialogOpen, setStyleDialogOpen] = useState(false)
-    const [pageUnit, setPageUnit] = useState<PageSetupUnit>("in")
+    const pageUnit = useEditorPreferences((state) => state.pageUnit)
+    const setPageUnit = useEditorPreferences((state) => state.setPageUnit)
     const openLinkRef = useRef<() => void>(() => undefined)
     const [selectionSnapshot, setSelectionSnapshot] =
       useState<EditorSelectionSnapshot>(EMPTY_SNAPSHOT)
@@ -694,7 +699,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         const snap = getSelectionSnapshot(state)
         if (snap) setSelectionSnapshot(snap)
       },
-      [forceInProcessLayout, updateDocument]
+      [forceInProcessLayout, setPageUnit, updateDocument]
     )
 
     useImperativeHandle(
@@ -928,14 +933,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onPaste: () => void runClipboard("paste"),
         onSelectAll: () => run(selectAll),
         onFindReplace: () => setFindReplaceOpen(true),
-        onToggleRuler: () => setRulerVisible((value) => !value),
-        onToggleDarkPages: () => {
-          setDarkPages((value) => {
-            const next = !value
-            writeDarkPagesPreference(next)
-            return next
-          })
-        },
+        onToggleRuler: toggleRulerVisible,
+        onToggleDarkPages: toggleDarkPages,
         onTogglePreview: () => {
           setDocument(documentRef.current)
           setPreviewOn((value) => !value)
@@ -1061,6 +1060,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         runClipboard,
         saveStyleFromSelection,
         selectionSnapshot,
+        setZoom,
+        toggleDarkPages,
+        toggleRulerVisible,
       ]
     )
 

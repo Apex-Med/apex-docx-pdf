@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
   RadioGroup,
@@ -23,6 +22,7 @@ import {
 } from "@workspace/ui/components/select"
 
 import { TWIPS_PER_INCH } from "./chrome-types"
+import { ScrubbableNumberInput } from "./ScrubbableNumberInput"
 
 export type PageSetupUnit = "in" | "cm" | "pt"
 
@@ -151,6 +151,7 @@ export function PageSetupDialog({
   const [marginRight, setMarginRight] = useState(defaults.marginRight)
   const [marginBottom, setMarginBottom] = useState(defaults.marginBottom)
   const [marginLeft, setMarginLeft] = useState(defaults.marginLeft)
+  const fieldId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -222,18 +223,18 @@ export function PageSetupDialog({
               }}
               className="flex gap-3"
             >
-              <label className="flex items-center gap-1.5 text-sm">
+              <Label className="flex items-center gap-1.5 text-sm">
                 <RadioGroupItem value="in" />
                 in
-              </label>
-              <label className="flex items-center gap-1.5 text-sm">
+              </Label>
+              <Label className="flex items-center gap-1.5 text-sm">
                 <RadioGroupItem value="cm" />
                 cm
-              </label>
-              <label className="flex items-center gap-1.5 text-sm">
+              </Label>
+              <Label className="flex items-center gap-1.5 text-sm">
                 <RadioGroupItem value="pt" />
                 pt
-              </label>
+              </Label>
             </RadioGroup>
           </div>
 
@@ -248,14 +249,14 @@ export function PageSetupDialog({
               }}
               className="flex gap-4"
             >
-              <label className="flex items-center gap-2 text-sm">
+              <Label className="flex items-center gap-2 text-sm">
                 <RadioGroupItem value="portrait" />
                 Portrait
-              </label>
-              <label className="flex items-center gap-2 text-sm">
+              </Label>
+              <Label className="flex items-center gap-2 text-sm">
                 <RadioGroupItem value="landscape" />
                 Landscape
-              </label>
+              </Label>
             </RadioGroup>
           </div>
 
@@ -294,30 +295,44 @@ export function PageSetupDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-muted-foreground">Width ({unit})</span>
-              <Input
-                type="number"
+            <div className="grid gap-1.5 text-sm">
+              <Label
+                htmlFor={`${fieldId}-width`}
+                className="text-muted-foreground"
+              >
+                Width ({unit})
+              </Label>
+              <ScrubbableNumberInput
+                id={`${fieldId}-width`}
                 step="any"
                 value={formatUnitValue(widthTwips, unit)}
-                onChange={(event) => {
+                scrubMin={unit === "pt" ? 1 : 0.1}
+                scrubStep={unit === "pt" ? 1 : 0.1}
+                onValueChange={(value) => {
                   setPaperSize("custom")
-                  setWidthTwips(unitToTwips(Number(event.target.value), unit))
+                  setWidthTwips(unitToTwips(Number(value), unit))
                 }}
               />
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-muted-foreground">Height ({unit})</span>
-              <Input
-                type="number"
+            </div>
+            <div className="grid gap-1.5 text-sm">
+              <Label
+                htmlFor={`${fieldId}-height`}
+                className="text-muted-foreground"
+              >
+                Height ({unit})
+              </Label>
+              <ScrubbableNumberInput
+                id={`${fieldId}-height`}
                 step="any"
                 value={formatUnitValue(heightTwips, unit)}
-                onChange={(event) => {
+                scrubMin={unit === "pt" ? 1 : 0.1}
+                scrubStep={unit === "pt" ? 1 : 0.1}
+                onValueChange={(value) => {
                   setPaperSize("custom")
-                  setHeightTwips(unitToTwips(Number(event.target.value), unit))
+                  setHeightTwips(unitToTwips(Number(value), unit))
                 }}
               />
-            </label>
+            </div>
           </div>
 
           <div className="grid gap-2">
@@ -331,19 +346,24 @@ export function PageSetupDialog({
                   ["Left", marginLeft, setMarginLeft],
                 ] as const
               ).map(([label, value, setter]) => (
-                <label key={label} className="grid gap-1.5 text-sm">
-                  <span className="text-muted-foreground">
+                <div key={label} className="grid gap-1.5 text-sm">
+                  <Label
+                    htmlFor={`${fieldId}-margin-${label.toLowerCase()}`}
+                    className="text-muted-foreground"
+                  >
                     {label} ({unit})
-                  </span>
-                  <Input
-                    type="number"
+                  </Label>
+                  <ScrubbableNumberInput
+                    id={`${fieldId}-margin-${label.toLowerCase()}`}
                     step="any"
                     value={formatUnitValue(value, unit)}
-                    onChange={(event) =>
-                      setter(unitToTwips(Number(event.target.value), unit))
+                    scrubMin={0}
+                    scrubStep={unit === "pt" ? 1 : 0.1}
+                    onValueChange={(nextValue) =>
+                      setter(unitToTwips(Number(nextValue), unit))
                     }
                   />
-                </label>
+                </div>
               ))}
             </div>
           </div>

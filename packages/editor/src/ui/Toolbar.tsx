@@ -77,6 +77,7 @@ import type { EditorChromeActions, ParagraphAlignment } from "./chrome-types"
 import { FONT_SIZE_OPTIONS, ZOOM_PRESETS } from "./chrome-types"
 import { FontPicker } from "./FontPicker"
 import { LINE_SPACING_PRESETS } from "./LineSpacingDialog"
+import { ScrubbableNumberInput } from "./ScrubbableNumberInput"
 
 export type ToolbarProps = Readonly<{
   actions: EditorChromeActions
@@ -243,15 +244,20 @@ function FontSizeControl({
       >
         <HugeiconsIcon icon={MinusSignIcon} strokeWidth={2} />
       </Button>
-      <Input
+      <ScrubbableNumberInput
+        type="text"
         list={listId}
         inputMode="decimal"
         aria-label="Font size"
         value={draft}
+        scrubValue={points}
+        scrubMin={2}
+        scrubStep={1}
+        onValueChange={setDraft}
+        onScrubValueChange={(next) => onFontSize(pointsToTwips(next))}
         onFocus={() => {
           focusedRef.current = true
         }}
-        onChange={(event) => setDraft(event.target.value)}
         onBlur={() => {
           focusedRef.current = false
           commit()
