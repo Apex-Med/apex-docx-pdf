@@ -1,7 +1,7 @@
 import { ApexEditor } from "@apexmed/editor"
 import { createFileRoute } from "@tanstack/react-router"
 
-export const Route = createFileRoute("/editor")({
+export const Route = createFileRoute("/_authenticated/editor")({
   component: EditorPlaygroundPage,
   head: () => ({
     meta: [

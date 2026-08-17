@@ -256,6 +256,29 @@ export type SemanticParagraph = Readonly<{
 
 export type TableLayout = "fixed" | "autofit"
 
+/** Responsive table sizing authored by the Apex editor. Absent on imported DOCX tables. */
+export type TableWidthMode = "fixed" | "fill" | "hug"
+
+export type TableColumnWidthMode = "fixed" | "fill" | "hug"
+
+export type TableColumnSizing = Readonly<{
+  mode: TableColumnWidthMode
+  /** Required by fixed columns and retained as the last resolved width for other modes. */
+  width: Twip
+  /** Applied only while multiline text is enabled. */
+  minWidth?: Twip | null
+  /** Applied only while multiline text is enabled. */
+  maxWidth?: Twip | null
+  allowMultiline: boolean
+}>
+
+export type TableSizing = Readonly<{
+  mode: TableWidthMode
+  /** Required for fixed tables; retained as the last resolved width otherwise. */
+  width: Twip
+  columns: readonly TableColumnSizing[]
+}>
+
 export type TableBorderStyle =
   "none" | "single" | "double" | "dotted" | "dashed"
 
@@ -333,6 +356,11 @@ export type SemanticTable = Readonly<{
   alignment?: "left" | "center" | "right"
   layout: TableLayout
   columnWidths: readonly Twip[]
+  /**
+   * Apex responsive sizing policy. Imported DOCX tables intentionally omit
+   * this field so their authored fixed grid remains byte-for-byte stable.
+   */
+  sizing?: TableSizing
   borders: TableBorders
   cellPadding: Insets
   /** Number of contiguous leading rows marked to repeat on every page. */

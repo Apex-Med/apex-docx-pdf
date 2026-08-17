@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { createBlankDocument, nodeId, twips, type SemanticDocument } from "@apexmed/core"
+import {
+  createBlankDocument,
+  nodeId,
+  twips,
+  type SemanticDocument,
+} from "@apexmed/core"
 
 import { fromSemanticDocument } from "../src/model/bridge"
 import {
+  authoredColumnWidthCss,
   authoredTableStyle,
 } from "../src/schema/table-geometry"
 
@@ -49,14 +55,95 @@ describe("authored table geometry", () => {
     expect(style).toContain("--apex-cell-pad-left:5.75pt")
   })
 
+  test("responsive table modes map to Fill, Hug, and Fixed CSS without changing legacy grids", () => {
+    const columns = [
+      {
+        mode: "hug" as const,
+        width: twips(2000),
+        minWidth: null,
+        maxWidth: null,
+        allowMultiline: true,
+      },
+      {
+        mode: "fill" as const,
+        width: twips(4000),
+        minWidth: null,
+        maxWidth: null,
+        allowMultiline: true,
+      },
+    ]
+    expect(
+      authoredTableStyle({
+        width: 6000,
+        columnWidths: [2000, 4000],
+        tableSizing: { mode: "fill", width: twips(6000), columns },
+      })
+    ).toContain("width:100%")
+    expect(
+      authoredTableStyle({
+        width: 6000,
+        columnWidths: [2000, 4000],
+        tableSizing: {
+          mode: "hug",
+          width: twips(6000),
+          columns: columns.map((column) => ({ ...column, mode: "hug" })),
+        },
+      })
+    ).toContain("width:max-content")
+    expect(authoredTableStyle({ width: 6000 })).toContain("width:300pt")
+    expect(
+      authoredTableStyle({
+        width: 6000,
+        columnWidths: [2000, 4000],
+        tableSizing: { mode: "fill", width: twips(6000), columns },
+      })
+    ).toContain("table-layout:fixed")
+    expect(
+      authoredTableStyle({
+        width: 6000,
+        columnWidths: [2000, 4000],
+        tableSizing: {
+          mode: "hug",
+          width: twips(6000),
+          columns: columns.map((column) => ({ ...column, mode: "hug" })),
+        },
+      })
+    ).toContain("table-layout:auto")
+  })
+
+  test("Fill columns stay auto so fixed table layout can share leftover space equally", () => {
+    const hug = {
+      mode: "hug" as const,
+      width: twips(1800),
+      minWidth: null,
+      maxWidth: null,
+      allowMultiline: true,
+    }
+    const fill = {
+      mode: "fill" as const,
+      width: twips(2400),
+      minWidth: null,
+      maxWidth: null,
+      allowMultiline: true,
+    }
+    expect(authoredColumnWidthCss(hug, hug.width)).toBe("1%")
+    expect(authoredColumnWidthCss(hug, hug.width, 131)).toBe("131px")
+    expect(authoredColumnWidthCss(fill, fill.width)).toBe("auto")
+    expect(
+      authoredColumnWidthCss({ ...fill, width: twips(4800) }, twips(4800))
+    ).toBe("auto")
+    expect(
+      authoredColumnWidthCss(
+        { ...fill, mode: "fixed", width: twips(1600) },
+        twips(2400)
+      )
+    ).toBe("80pt")
+  })
+
   test("spanned header cells keep left/right paragraph alignment", () => {
     const blank = createBlankDocument()
     const source = blank.source
-    const para = (
-      id: string,
-      text: string,
-      alignment: "left" | "right"
-    ) => ({
+    const para = (id: string, text: string, alignment: "left" | "right") => ({
       type: "paragraph" as const,
       id: nodeId(id),
       source,

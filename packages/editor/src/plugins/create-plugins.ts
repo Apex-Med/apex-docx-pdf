@@ -14,6 +14,7 @@ import {
 } from "../pagination/layout-client"
 import { createPaginationPlugin } from "../pagination/plugin"
 import { createSelectionStatePlugin } from "./selection-state"
+import { createTableCaretPlugin } from "./table-caret"
 import { createTableContextMenuPlugin } from "./table-context-menu"
 import { createImagePasteDropPlugin } from "./image-paste-drop"
 import { createNodeIdentityPlugin } from "./node-identity"
@@ -29,8 +30,8 @@ export type CreateEditorPluginsOptions = Readonly<{
 }>
 
 /**
- * Full plugin stack: history, keymap (Enter/Backspace), tables, gapcursor,
- * dropcursor, and engine-authoritative pagination.
+ * Full plugin stack: history, keymap (Enter/Backspace), tables, table caret,
+ * gapcursor, dropcursor, and engine-authoritative pagination.
  */
 export function createEditorPlugins(
   options: CreateEditorPluginsOptions = {}
@@ -52,6 +53,7 @@ export function createEditorPlugins(
     }),
     tableEditing({ allowTableNodeSelection: true }),
     createTableContextMenuPlugin(),
+    createTableCaretPlugin(),
     createImagePasteDropPlugin(),
     gapCursor(),
     dropCursor({ color: "#2563eb", width: 2 }),

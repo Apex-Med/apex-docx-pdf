@@ -80,6 +80,21 @@ export {
   selectedTableCellPositions,
   selectedTableCellGrid,
   selectedTableCellBorders,
+  selectedTableSizing,
+  setTableSizing,
+  setTableWidthMode,
+  setSelectedColumnSizing,
+  selectEnclosingTable,
+  selectCurrentTableColumn,
+  selectCurrentTableRow,
+  selectTableColumn,
+  selectTableRow,
+  moveTableRow,
+  moveTableColumn,
+  moveCurrentTableRow,
+  moveCurrentTableColumn,
+  findEnclosingTable,
+  tableHasMergedSpans,
   setTableAttrs,
   setRowAttrs,
   editorKeymap,
@@ -94,6 +109,9 @@ export {
   type SelectedCellBorderTarget,
   type SelectedTableCellGrid,
   type SelectedTableCellBorders,
+  type SelectedTableSizing,
+  type EnclosingTable,
+  type TableReorderAxis,
 } from "./commands"
 export {
   createLayoutClient,
@@ -138,6 +156,11 @@ export {
   selectionStatePluginKey,
   type EditorSelectionSnapshot,
 } from "./plugins/selection-state"
+export {
+  caretAroundTable,
+  createTableCaretPlugin,
+  tableClickSide,
+} from "./plugins/table-caret"
 export {
   createTableContextMenuPlugin,
   tableContextMenuItems,
@@ -225,6 +248,10 @@ export {
   type TablePropertiesDialogProps,
   type TablePropertiesOptions,
 } from "./ui/TablePropertiesDialog"
+export {
+  TableReorderOverlay,
+  type TableReorderOverlayProps,
+} from "./ui/TableReorderOverlay"
 export {
   FindReplaceDialog,
   findTextInDoc,

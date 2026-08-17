@@ -71,7 +71,7 @@ export const selectionStatePluginKey = new PluginKey<EditorSelectionSnapshot>(
 )
 
 const DEFAULT_TEXT: SelectionTextStyle = Object.freeze({
-  fontFamily: "Calibri",
+  fontFamily: "Inter",
   fontSize: 220,
   fontWeight: 400,
   fontStyle: "normal",
@@ -97,7 +97,7 @@ function readTextStyle(state: EditorState): SelectionTextStyle {
     }
   }
   return {
-    fontFamily: String(existing.attrs.fontFamily ?? "Calibri"),
+    fontFamily: String(existing.attrs.fontFamily ?? "Inter"),
     fontSize: Number(existing.attrs.fontSize ?? 220),
     fontWeight: Number(existing.attrs.fontWeight ?? 400),
     fontStyle: existing.attrs.fontStyle === "italic" ? "italic" : "normal",

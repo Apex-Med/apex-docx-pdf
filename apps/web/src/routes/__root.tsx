@@ -1,4 +1,4 @@
-import { ClerkProvider } from "@clerk/tanstack-react-start";
+import { ClerkProvider } from "@clerk/tanstack-react-start"
 import {
   HeadContent,
   Scripts,
@@ -137,9 +137,17 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="overscroll-none">
-        <ClerkProvider>
+        <ClerkProvider
+          signInFallbackRedirectUrl="/app"
+          signInUrl="/sign-in"
+          signUpFallbackRedirectUrl="/app"
+          signUpUrl="/sign-in"
+          taskUrls={{
+            "choose-organization": "/session-tasks/choose-organization",
+          }}
+        >
           <ThemeProvider defaultTheme="system" storageKey="apex-ui-theme">
-          {children}
+            {children}
           </ThemeProvider>
           <Scripts />
         </ClerkProvider>

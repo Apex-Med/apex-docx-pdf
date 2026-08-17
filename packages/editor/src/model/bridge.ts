@@ -33,6 +33,7 @@ import {
   type NumberingLabelState,
 } from "./list-label"
 import { editorSchema } from "../schema"
+import { normalizeTableSizing } from "../schema/table-sizing"
 
 type BridgeContext = Readonly<{
   assets: readonly SemanticImageAsset[]
@@ -275,7 +276,7 @@ function inlineFromPm(
         displayText: String(node.attrs.displayText ?? "1"),
         format: "decimal",
         style: {
-          fontFamily: String(node.attrs.fontFamily ?? "Calibri"),
+          fontFamily: String(node.attrs.fontFamily ?? "Inter"),
           fontSize: twips(Number(node.attrs.fontSize ?? 220)),
           fontWeight: Number(
             node.attrs.fontWeight ?? 400
@@ -431,7 +432,7 @@ function expandRowspans(
                           source: existing.source,
                           text: "",
                           style: {
-                            fontFamily: "Calibri",
+                            fontFamily: "Inter",
                             fontSize: twips(220),
                             fontWeight: 400,
                             fontStyle: "normal",
@@ -481,7 +482,7 @@ function expandRowspans(
                       source: target.source,
                       text: "",
                       style: {
-                        fontFamily: "Calibri",
+                        fontFamily: "Inter",
                         fontSize: twips(220),
                         fontWeight: 400,
                         fontStyle: "normal",
@@ -523,7 +524,7 @@ function cellFromPm(
   if (blocks.length === 0) {
     blocks.push(
       paragraphFromPm(
-        schema.nodes.paragraph!.createAndFill()!,
+        schema.nodes.paragraph?.createAndFill()!,
         schema,
         ctx,
         ids,
@@ -691,6 +692,7 @@ function tableFromPm(
   }))
   const expanded = expandRowspans(resolvedRows)
   const width = twips(columnWidths.reduce((sum, value) => sum + value, 0))
+  const sizing = normalizeTableSizing(node.attrs.tableSizing, columnWidths)
   return {
     type: "table",
     id: nodeIdentity(node.attrs.nodeId, "editor:table", ids),
@@ -708,6 +710,7 @@ function tableFromPm(
         : "left",
     layout: (node.attrs.layout as "fixed" | "autofit") ?? "fixed",
     columnWidths,
+    ...(sizing ? { sizing } : {}),
     borders: normalizeTableBorders(node.attrs.borders),
     cellPadding: (node.attrs.cellPadding as SemanticTable["cellPadding"]) ?? {
       top: twips(0),
@@ -757,7 +760,7 @@ function blockFromPm(
   }
   // Fallback
   return paragraphFromPm(
-    schema.nodes.paragraph!.createAndFill()!,
+    schema.nodes.paragraph?.createAndFill()!,
     schema,
     ctx,
     ids,
@@ -914,26 +917,26 @@ function pmInlinesFromSemantic(
     if (child.type === "break") {
       if (child.kind === "page") {
         result.push(
-          schema.nodes.page_break!.create({ nodeId: String(child.id) })
+          schema.nodes.page_break?.create({ nodeId: String(child.id) })
         )
       } else if (child.kind === "column") {
         result.push(
-          schema.nodes.column_break!.create({ nodeId: String(child.id) })
+          schema.nodes.column_break?.create({ nodeId: String(child.id) })
         )
       } else {
         result.push(
-          schema.nodes.line_break!.create({ nodeId: String(child.id) })
+          schema.nodes.line_break?.create({ nodeId: String(child.id) })
         )
       }
       continue
     }
     if (child.type === "tab") {
-      result.push(schema.nodes.tab!.create({ nodeId: String(child.id) }))
+      result.push(schema.nodes.tab?.create({ nodeId: String(child.id) }))
       continue
     }
     if (child.type === "pageField") {
       result.push(
-        schema.nodes.page_field!.create({
+        schema.nodes.page_field?.create({
           nodeId: String(child.id),
           field: child.field,
           displayText: child.displayText,
@@ -959,7 +962,7 @@ function pmInlinesFromSemantic(
         src = `data:${asset.mimeType};base64,${btoa(binary)}`
       }
       result.push(
-        schema.nodes.image!.create({
+        schema.nodes.image?.create({
           nodeId: String(child.id),
           assetId: child.assetId,
           src,
@@ -992,7 +995,7 @@ function pmParagraphFromSemantic(
   }>
 ): PMNode {
   const content = pmInlinesFromSemantic(schema, paragraph.children, assets)
-  return schema.nodes.paragraph!.create(
+  return schema.nodes.paragraph?.create(
     {
       nodeId: String(paragraph.id),
       alignment: paragraph.properties.alignment,
@@ -1096,7 +1099,7 @@ function pmTableFromSemantic(
       const content = cell.blocks.map((block) =>
         pmParagraphFromSemantic(schema, block, assets, numbering)
       )
-      return type!.create(
+      return type?.create(
         {
           nodeId: String(cell.id),
           colspan: cell.columnSpan,
@@ -1116,11 +1119,18 @@ function pmTableFromSemantic(
           borderLeft: borders.left,
           cellPadding: cell.cellPadding,
           background: cell.fillColor,
+          widthMode: table.sizing?.columns[cell.columnIndex]?.mode ?? "fixed",
+          minWidth: table.sizing?.columns[cell.columnIndex]?.minWidth ?? null,
+          maxWidth: table.sizing?.columns[cell.columnIndex]?.maxWidth ?? null,
+          allowMultiline:
+            table.sizing?.columns
+              .slice(cell.columnIndex, cell.columnIndex + cell.columnSpan)
+              .every((column) => column.allowMultiline !== false) ?? true,
         },
         content
       )
     })
-    return schema.nodes.table_row!.create(
+    return schema.nodes.table_row?.create(
       {
         nodeId: String(row.id),
         repeatAsHeader: row.repeatAsHeader,
@@ -1130,7 +1140,7 @@ function pmTableFromSemantic(
       cellNodes
     )
   })
-  return schema.nodes.table!.create(
+  return schema.nodes.table?.create(
     {
       nodeId: String(table.id),
       width: table.width,
@@ -1139,6 +1149,7 @@ function pmTableFromSemantic(
       alignment: table.alignment ?? "left",
       layout: table.layout,
       columnWidths: table.columnWidths.map(Number),
+      tableSizing: table.sizing ?? null,
       borders: table.borders,
       cellPadding: table.cellPadding,
       repeatHeaderRowCount: table.repeatHeaderRowCount,
@@ -1160,7 +1171,7 @@ function pmBlockFromSemantic(
     return pmParagraphFromSemantic(schema, block, assets, numbering)
   if (block.type === "table")
     return pmTableFromSemantic(schema, block, assets, numbering)
-  return schema.nodes.horizontal_rule!.create({
+  return schema.nodes.horizontal_rule?.create({
     nodeId: String(block.id),
     height: block.height,
     color: block.color,
@@ -1194,8 +1205,8 @@ export function fromSemanticDocument(
       pmBlockFromSemantic(schema, block, document.assets, numbering)
     )
     const content =
-      blocks.length > 0 ? blocks : [schema.nodes.paragraph!.createAndFill()!]
-    return schema.nodes.section!.create(
+      blocks.length > 0 ? blocks : [schema.nodes.paragraph?.createAndFill()!]
+    return schema.nodes.section?.create(
       {
         nodeId: String(section.id),
         pageWidth: section.properties.pageWidth,
@@ -1214,11 +1225,11 @@ export function fromSemanticDocument(
       content
     )
   })
-  return schema.nodes.doc!.create(
+  return schema.nodes.doc?.create(
     null,
     sections.length > 0
       ? Fragment.from(sections)
-      : Fragment.from(schema.nodes.section!.createAndFill()!)
+      : Fragment.from(schema.nodes.section?.createAndFill()!)
   )
 }
 

@@ -419,7 +419,7 @@
   min-height: 100%;
   caret-color: var(--apex-page-fg);
   color: var(--apex-page-fg);
-  font-family: Calibri, Inter, Arial, system-ui, sans-serif;
+  font-family: Inter, Arial, system-ui, sans-serif;
   font-size: 11pt;
   line-height: 1.35;
   white-space: pre-wrap;
@@ -580,6 +580,20 @@
   max-width: none;
 }
 
+.apex-editor-surface
+  .ProseMirror
+  .tableWrapper:has(table[data-table-width-mode="fill"]) {
+  width: 100%;
+}
+
+.apex-editor-surface .ProseMirror :is(td, th)[data-multiline="false"],
+.apex-editor-surface
+  .ProseMirror
+  :is(td, th)[data-width-mode="hug"][data-has-max-width="false"] {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 .apex-editor-surface .ProseMirror col {
   box-sizing: border-box;
 }
@@ -671,6 +685,117 @@
 
 .apex-editor-surface .ProseMirror.resize-cursor {
   cursor: col-resize;
+}
+
+/* ── Table row/column reorder (dnd-kit overlay) ── */
+.apex-table-dnd {
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+.apex-table-dnd__handle {
+  pointer-events: none;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: var(--apex-chrome-muted);
+  box-shadow: none;
+  font: inherit;
+  line-height: 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  opacity: 0;
+  transition:
+    opacity 90ms ease,
+    background-color 90ms ease,
+    color 90ms ease,
+    box-shadow 90ms ease;
+}
+
+.apex-table-dnd__handle.is-visible {
+  pointer-events: auto;
+  opacity: 1;
+  background: color-mix(
+    in oklab,
+    var(--apex-page-bg) 88%,
+    var(--apex-chrome-bg)
+  );
+  box-shadow: 0 0 0 1px
+    color-mix(in oklab, var(--apex-chrome-border) 75%, transparent);
+}
+
+.apex-table-dnd__handle.is-visible:hover,
+.apex-table-dnd__handle.is-visible:focus-visible,
+.apex-table-dnd.is-dragging .apex-table-dnd__handle.is-visible {
+  color: var(--apex-accent);
+  background: var(--apex-page-bg);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 0 0 1px color-mix(in oklab, var(--apex-accent) 42%, transparent);
+}
+
+.apex-table-dnd__handle:focus-visible {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: 1px;
+}
+
+.apex-table-dnd__handle:active,
+.apex-table-dnd.is-dragging .apex-table-dnd__handle {
+  cursor: grabbing;
+}
+
+.apex-table-dnd__handle:disabled {
+  cursor: not-allowed;
+}
+
+.apex-table-dnd__handle.is-visible:disabled {
+  opacity: 0.4;
+}
+
+.apex-table-dnd__grip {
+  display: grid;
+  grid-template-columns: repeat(2, 2.5px);
+  grid-template-rows: repeat(3, 2.5px);
+  gap: 2px;
+  width: 7px;
+  height: 11.5px;
+}
+
+.apex-table-dnd__handle[data-axis="column"] .apex-table-dnd__grip {
+  grid-template-columns: repeat(3, 2.5px);
+  grid-template-rows: repeat(2, 2.5px);
+  width: 11.5px;
+  height: 7px;
+}
+
+.apex-table-dnd__grip > span {
+  width: 2.5px;
+  height: 2.5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.apex-table-dnd__indicator {
+  pointer-events: none;
+  z-index: 4;
+  background: var(--apex-accent);
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--apex-accent) 40%, transparent);
+}
+
+.apex-editor-surface .ProseMirror .apex-table-drag-source {
+  opacity: 0.42;
 }
 
 .apex-editor-root :focus-visible {
@@ -822,21 +947,37 @@
   cursor: ew-resize;
 }
 
-/* Gapcursor */
+/* Gapcursor — used after tables/images when there is no textblock there.
+ * The official sheet hides the widget until `.ProseMirror-focused`. */
 .apex-editor-surface .ProseMirror-gapcursor {
   display: none;
   pointer-events: none;
   position: absolute;
 }
 
+.apex-editor-surface .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
 .apex-editor-surface .ProseMirror-gapcursor::after {
   content: "";
   display: block;
   position: absolute;
-  top: -2px;
-  width: 20px;
-  border-top: 1px solid var(--apex-page-fg);
+  top: 0;
+  width: 1px;
+  height: 1.2em;
+  border-left: 1px solid var(--apex-page-fg);
   animation: apex-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+/*
+ * A before-table gap sits at the table's top edge. Drawing the caret downward
+ * paints it under the first row. Sit it in the gap above instead.
+ */
+.apex-editor-surface .ProseMirror-gapcursor:has(+ .tableWrapper)::after,
+.apex-editor-surface .ProseMirror-gapcursor:has(+ table)::after {
+  top: auto;
+  bottom: 100%;
 }
 
 @keyframes apex-cursor-blink {
@@ -1012,109 +1153,113 @@
   border-bottom: 1px solid var(--apex-chrome-border);
 }
 
-.apex-cell-alignment {
-  display: grid;
-  grid-template-columns: repeat(3, 42px);
-  width: fit-content;
-  overflow: hidden;
-  border: 1px solid var(--apex-chrome-border);
-  border-radius: 6px;
-  background: color-mix(
-    in oklab,
-    var(--apex-chrome-bg) 88%,
-    var(--apex-chrome-hover)
-  );
-  margin: 0;
-  padding: 0;
-}
-
-.apex-cell-alignment__button {
+.apex-table-sizing__scope {
   display: flex;
-  width: 42px;
-  height: 36px;
-  padding: 7px;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 16px;
   border: 0;
-  border-right: 1px solid var(--apex-chrome-border);
   border-bottom: 1px solid var(--apex-chrome-border);
-  background: transparent;
   color: var(--apex-chrome-muted);
+  font-size: 12px;
 }
 
-.apex-cell-alignment__button:nth-child(3n) {
-  border-right: 0;
+.apex-table-sizing__scope button {
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
-.apex-cell-alignment__button:nth-last-child(-n + 3) {
-  border-bottom: 0;
-}
-
-.apex-cell-alignment__button:hover {
+.apex-table-sizing__scope button:hover:not(:disabled),
+.apex-table-sizing__scope button:focus-visible:not(:disabled) {
   background: var(--apex-chrome-hover);
   color: var(--apex-chrome-fg);
 }
 
-.apex-cell-alignment__button:focus-visible {
+.apex-table-sizing__modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--apex-chrome-border);
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--apex-chrome-hover) 55%, transparent);
+}
+
+.apex-table-sizing__modes button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--apex-chrome-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.apex-table-sizing__modes button:hover:not(:disabled) {
+  color: var(--apex-chrome-fg);
+}
+
+.apex-table-sizing__modes button[aria-pressed="true"] {
+  background: var(--apex-chrome-bg);
+  color: var(--apex-accent);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 0 0 1px color-mix(in oklab, var(--apex-accent) 20%, transparent);
+}
+
+.apex-table-sizing__modes button:disabled {
+  opacity: 0.38;
+}
+
+.apex-table-sizing__modes button:focus-visible,
+.apex-table-sizing__scope button:focus-visible {
   position: relative;
   z-index: 1;
   outline: 2px solid var(--apex-accent);
   outline-offset: -2px;
 }
 
-.apex-cell-alignment__button[aria-pressed="true"] {
-  background: color-mix(
-    in oklab,
-    var(--apex-accent) 16%,
-    var(--apex-chrome-bg)
-  );
-  color: var(--apex-accent);
+.apex-table-sizing__number {
+  position: relative;
 }
 
-.apex-cell-alignment__glyph {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  flex-direction: column;
-  gap: 2px;
+.apex-table-sizing__number input {
+  padding-right: 2rem;
 }
 
-.apex-cell-alignment__button[data-vertical="top"] .apex-cell-alignment__glyph {
-  justify-content: flex-start;
+.apex-table-sizing__number > span {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  color: var(--apex-chrome-muted);
+  font-size: 11px;
+  pointer-events: none;
 }
 
-.apex-cell-alignment__button[data-vertical="center"]
-  .apex-cell-alignment__glyph {
-  justify-content: center;
+.apex-table-sizing__hint,
+.apex-table-sizing__error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
-.apex-cell-alignment__button[data-vertical="bottom"]
-  .apex-cell-alignment__glyph {
-  justify-content: flex-end;
+.apex-table-sizing__hint {
+  color: var(--apex-chrome-muted);
 }
 
-.apex-cell-alignment__glyph span {
-  width: 15px;
-  height: 2px;
-  border-radius: 1px;
-  background: currentColor;
-}
-
-.apex-cell-alignment__glyph span:nth-child(2) {
-  width: 11px;
-}
-
-.apex-cell-alignment__button[data-horizontal="left"]
-  .apex-cell-alignment__glyph {
-  align-items: flex-start;
-}
-
-.apex-cell-alignment__button[data-horizontal="center"]
-  .apex-cell-alignment__glyph {
-  align-items: center;
-}
-
-.apex-cell-alignment__button[data-horizontal="right"]
-  .apex-cell-alignment__glyph {
-  align-items: flex-end;
+.apex-table-sizing__error {
+  color: var(--apex-chrome-danger);
 }
 
 .apex-cell-border {
@@ -1370,7 +1515,8 @@
 
 /* Print and PDF-style output stay on white paper with authored black ink. */
 @media print {
-  .apex-table-options {
+  .apex-table-options,
+  .apex-table-dnd {
     display: none;
   }
 

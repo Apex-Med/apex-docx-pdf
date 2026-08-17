@@ -206,7 +206,7 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     })
     expect(tableDom).toContain("colgroup")
     expect(tableDom).toContain("margin-left:auto")
-    expect(tableDom).not.toContain("width:100%")
+    expect(tableDom).toContain("width:100%")
   })
 
   test("unit conversion helpers use twips/in/cm/pt", () => {

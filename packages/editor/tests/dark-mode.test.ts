@@ -65,7 +65,10 @@ describe("dark mode adaptivity", () => {
       "utf8"
     )
     const route = readFileSync(
-      join(import.meta.dir, "../../../apps/web/src/routes/editor.tsx"),
+      join(
+        import.meta.dir,
+        "../../../apps/web/src/routes/_authenticated/editor.tsx"
+      ),
       "utf8"
     )
 

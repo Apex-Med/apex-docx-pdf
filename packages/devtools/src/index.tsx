@@ -53,15 +53,26 @@ export type LayoutTraceViewerProps = Omit<DisplayListPreviewProps, "overlays"> &
     initialOverlays?: Partial<LayoutTraceOverlayVisibility>
   }>
 
-const DEFAULT_TRACE_OVERLAYS: LayoutTraceOverlayVisibility = Object.freeze({
+const HIDDEN_TRACE_OVERLAYS: LayoutTraceOverlayVisibility = Object.freeze({
   pageBounds: false,
-  contentBounds: true,
+  contentBounds: false,
   blockBounds: false,
   lineBounds: false,
   tableBounds: false,
   rowFragments: false,
   baselines: false,
   sourceNodeIds: false,
+  pageBreakReasons: false,
+  keepDecisions: false,
+  overflows: false,
+  clipping: false,
+  fontFallbacks: false,
+  approximations: false,
+})
+
+const DEFAULT_TRACE_OVERLAYS: LayoutTraceOverlayVisibility = Object.freeze({
+  ...HIDDEN_TRACE_OVERLAYS,
+  contentBounds: true,
   pageBreakReasons: true,
   keepDecisions: true,
   overflows: true,
@@ -151,7 +162,7 @@ export function DisplayListPreview({
                 (event) => event.pageNumber === page.pageNumber
               ) ?? []
             }
-            overlays={{ ...DEFAULT_TRACE_OVERLAYS, ...overlays }}
+            overlays={{ ...HIDDEN_TRACE_OVERLAYS, ...overlays }}
           />
         ))}
       </div>
@@ -269,7 +280,7 @@ function PreviewPage({
           placeholderHighlight={placeholderHighlight}
         />
       ))}
-      {tracePage ? (
+      {tracePage && anyTraceOverlayEnabled(overlays) ? (
         <TraceOverlay
           page={page}
           tracePage={tracePage}
@@ -336,128 +347,128 @@ function TraceOverlay({
       ) : null}
       {overlays.blockBounds
         ? keyedBoundedEvents
-            .filter(({ event }) => event.kind === "block")
-            .map(({ event, key }) => (
-              <TraceRect
-                key={`block:${key}`}
-                bounds={event.bounds}
-                color="#2563eb"
-                strokeWidth={strokeWidth}
-              />
-            ))
-        : null}
-      {overlays.lineBounds
-        ? keyedBoundedEvents
-            .filter(({ event }) => event.kind === "line")
-            .map(({ event, key }) => (
-              <TraceRect
-                key={`line:${key}`}
-                bounds={event.bounds}
-                color="#16a34a"
-                strokeWidth={strokeWidth}
-              />
-            ))
-        : null}
-      {overlays.tableBounds
-        ? keyedBoundedEvents
-            .filter(({ event }) => event.kind === "table")
-            .map(({ event, key }) => (
-              <TraceRect
-                key={`table:${key}`}
-                bounds={event.bounds}
-                color="#0891b2"
-                strokeWidth={strokeWidth * 2}
-              />
-            ))
-        : null}
-      {overlays.rowFragments
-        ? keyedBoundedEvents
-            .filter(({ event }) => event.kind === "table-row-fragment")
-            .map(({ event, key }) => (
-              <TraceRect
-                key={`row:${key}`}
-                bounds={event.bounds}
-                color="#4f46e5"
-                strokeWidth={strokeWidth}
-              />
-            ))
-        : null}
-      {overlays.overflows
-        ? keyedBoundedEvents
-            .filter(({ event }) => event.kind === "overflow")
-            .map(({ event, key }) => (
-              <TraceRect
-                key={`overflow:${key}`}
-                bounds={event.bounds}
-                color="#dc2626"
-                strokeWidth={strokeWidth * 2}
-              />
-            ))
-        : null}
-      {overlays.clipping
-        ? keyedBoundedEvents
-            .filter(({ event }) => event.kind === "clipping")
-            .map(({ event, key }) => (
-              <TraceRect
-                key={`clipping:${key}`}
-                bounds={event.bounds}
-                color="#ea580c"
-                strokeWidth={strokeWidth * 2}
-              />
-            ))
-        : null}
-      {overlays.baselines
-        ? keyedGlyphEvents.map(({ event, key }) => (
-            <line
-              key={`baseline:${key}`}
-              x1={event.bounds.x}
-              y1={event.baselineY}
-              x2={event.bounds.x + Math.max(event.bounds.width, strokeWidth)}
-              y2={event.baselineY}
-              stroke="#db2777"
+          .filter(({ event }) => event.kind === "block")
+          .map(({ event, key }) => (
+            <TraceRect
+              key={`block:${key}`}
+              bounds={event.bounds}
+              color="#2563eb"
               strokeWidth={strokeWidth}
-              strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
             />
           ))
         : null}
+      {overlays.lineBounds
+        ? keyedBoundedEvents
+          .filter(({ event }) => event.kind === "line")
+          .map(({ event, key }) => (
+            <TraceRect
+              key={`line:${key}`}
+              bounds={event.bounds}
+              color="#16a34a"
+              strokeWidth={strokeWidth}
+            />
+          ))
+        : null}
+      {overlays.tableBounds
+        ? keyedBoundedEvents
+          .filter(({ event }) => event.kind === "table")
+          .map(({ event, key }) => (
+            <TraceRect
+              key={`table:${key}`}
+              bounds={event.bounds}
+              color="#0891b2"
+              strokeWidth={strokeWidth * 2}
+            />
+          ))
+        : null}
+      {overlays.rowFragments
+        ? keyedBoundedEvents
+          .filter(({ event }) => event.kind === "table-row-fragment")
+          .map(({ event, key }) => (
+            <TraceRect
+              key={`row:${key}`}
+              bounds={event.bounds}
+              color="#4f46e5"
+              strokeWidth={strokeWidth}
+            />
+          ))
+        : null}
+      {overlays.overflows
+        ? keyedBoundedEvents
+          .filter(({ event }) => event.kind === "overflow")
+          .map(({ event, key }) => (
+            <TraceRect
+              key={`overflow:${key}`}
+              bounds={event.bounds}
+              color="#dc2626"
+              strokeWidth={strokeWidth * 2}
+            />
+          ))
+        : null}
+      {overlays.clipping
+        ? keyedBoundedEvents
+          .filter(({ event }) => event.kind === "clipping")
+          .map(({ event, key }) => (
+            <TraceRect
+              key={`clipping:${key}`}
+              bounds={event.bounds}
+              color="#ea580c"
+              strokeWidth={strokeWidth * 2}
+            />
+          ))
+        : null}
+      {overlays.baselines
+        ? keyedGlyphEvents.map(({ event, key }) => (
+          <line
+            key={`baseline:${key}`}
+            x1={event.bounds.x}
+            y1={event.baselineY}
+            x2={event.bounds.x + Math.max(event.bounds.width, strokeWidth)}
+            y2={event.baselineY}
+            stroke="#db2777"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
+          />
+        ))
+        : null}
       {overlays.sourceNodeIds
         ? keyedBoundedEvents.map(({ event, key }) => (
-            <text
-              key={`source:${key}`}
-              x={event.bounds.x}
-              y={Math.max(fontSize, event.bounds.y - strokeWidth * 2)}
-              fill="#111827"
-              fontFamily="monospace"
-              fontSize={fontSize}
-              paintOrder="stroke"
-              stroke="#ffffff"
-              strokeWidth={strokeWidth * 2}
-            >
-              {event.sourceNodeId}
-            </text>
-          ))
+          <text
+            key={`source:${key}`}
+            x={event.bounds.x}
+            y={Math.max(fontSize, event.bounds.y - strokeWidth * 2)}
+            fill="#111827"
+            fontFamily="monospace"
+            fontSize={fontSize}
+            paintOrder="stroke"
+            stroke="#ffffff"
+            strokeWidth={strokeWidth * 2}
+          >
+            {event.sourceNodeId}
+          </text>
+        ))
         : null}
       {overlays.pageBreakReasons
         ? keyedBreakEvents.map(({ event, key }, index) => (
-            <text
-              key={`break:${key}`}
-              x={tracePage.contentBounds.x + strokeWidth * 3}
-              y={
-                tracePage.contentBounds.y +
-                fontSize * (index + 1) +
-                strokeWidth * 2
-              }
-              fill="#7c3aed"
-              fontFamily="monospace"
-              fontSize={fontSize}
-              fontWeight={700}
-              paintOrder="stroke"
-              stroke="#ffffff"
-              strokeWidth={strokeWidth * 2}
-            >
-              {`break: ${event.reason ?? "unspecified"} (${event.sourceNodeId})`}
-            </text>
-          ))
+          <text
+            key={`break:${key}`}
+            x={tracePage.contentBounds.x + strokeWidth * 3}
+            y={
+              tracePage.contentBounds.y +
+              fontSize * (index + 1) +
+              strokeWidth * 2
+            }
+            fill="#7c3aed"
+            fontFamily="monospace"
+            fontSize={fontSize}
+            fontWeight={700}
+            paintOrder="stroke"
+            stroke="#ffffff"
+            strokeWidth={strokeWidth * 2}
+          >
+            {`break: ${event.reason ?? "unspecified"} (${event.sourceNodeId})`}
+          </text>
+        ))
         : null}
       {keyedAnnotationEvents.map(({ event, key }, index) => (
         <text
@@ -480,6 +491,27 @@ function TraceOverlay({
         </text>
       ))}
     </g>
+  )
+}
+
+function anyTraceOverlayEnabled(
+  overlays: LayoutTraceOverlayVisibility
+): boolean {
+  return (
+    overlays.pageBounds ||
+    overlays.contentBounds ||
+    overlays.blockBounds ||
+    overlays.lineBounds ||
+    overlays.tableBounds ||
+    overlays.rowFragments ||
+    overlays.baselines ||
+    overlays.sourceNodeIds ||
+    overlays.pageBreakReasons ||
+    overlays.keepDecisions ||
+    overlays.overflows ||
+    overlays.clipping ||
+    overlays.fontFallbacks ||
+    overlays.approximations
   )
 }
 

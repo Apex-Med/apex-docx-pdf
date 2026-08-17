@@ -79,6 +79,15 @@ describe("Phase-1 commands end-to-end", () => {
     if (table?.type !== "table") return
     expect(table.rows).toHaveLength(2)
     expect(table.rows[0]?.cells).toHaveLength(3)
+    expect(table.sizing).toMatchObject({ mode: "fill" })
+    expect(table.sizing?.columns.map((column) => column.mode)).toEqual([
+      "fill",
+      "fill",
+      "fill",
+    ])
+    expect(table.sizing?.columns.every((column) => column.allowMultiline)).toBe(
+      true
+    )
   })
 
   test("matchStyleToSelection applies sampled run formatting across the paragraph", () => {
@@ -154,10 +163,13 @@ describe("Phase-1 commands end-to-end", () => {
 
   test("setSectionColumns and insertColumnBreak round-trip through the bridge", () => {
     const state = createEditorStateFromDocument(createBlankDocument())
-    const columns = applyCommandToSemantic(state, setSectionColumns(2, {
-      separator: true,
-      space: twips(720),
-    }))
+    const columns = applyCommandToSemantic(
+      state,
+      setSectionColumns(2, {
+        separator: true,
+        space: twips(720),
+      })
+    )
     expect(columns.applied).toBe(true)
     expect(columns.document.sections[0]?.properties.columns).toEqual({
       count: 2,

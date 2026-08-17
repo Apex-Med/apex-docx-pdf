@@ -181,7 +181,6 @@ describe("editor chrome components", () => {
     expect(source).toContain("apex-table-options")
     expect(source).toContain("Table options")
     expect(source).toContain("aria-expanded")
-    expect(source).toContain("apex-cell-alignment")
     expect(source).toContain("apex-cell-border")
     expect(source).toContain("selectionGrid.rows")
     expect(source).toContain("insideHorizontal")
@@ -196,6 +195,11 @@ describe("editor chrome components", () => {
     expect(source).toContain("VerticalResizeIcon")
     expect(source).toContain("paddingExpanded")
     expect(source).toContain('placeholder="Mixed"')
+    expect(source).toContain("Allow multiline text")
+    expect(source).toContain("At least one column must remain Fill")
+    expect(source).toContain("Hug matches the widest cell")
+    expect(source).toContain("Imported fixed grid")
+    expect(source).toContain("apex-table-sizing__modes")
     expect(source).not.toContain(">Apply<")
     expect(source).not.toContain("Sheet")
     expect(source).not.toContain("SheetContent")
@@ -208,11 +212,21 @@ describe("editor chrome components", () => {
     expect(css).toContain(".apex-cell-border__edge:hover")
     expect(css).toContain("cursor: context-menu")
     expect(css).toContain("var(--apex-accent) 13%")
+    expect(css).toContain(".apex-table-dnd")
+    expect(css).toContain(".apex-table-dnd__handle")
+    expect(css).toContain(".apex-table-dnd__handle.is-visible")
+    // Overlay must stay out of the page flex row — a gap-3 sibling
+    // shrinks the desk and recenters the sheet on click/hover.
+    expect(css).toMatch(
+      /\.apex-table-dnd\s*\{[^}]*position:\s*absolute/s
+    )
 
     const editorSource = readFileSync(
       join(import.meta.dir, "../src/ui/Editor.tsx"),
       "utf8"
     )
+    expect(editorSource).toContain("TableReorderOverlay")
+    expect(editorSource).toContain('className="relative min-h-0 min-w-0 flex-1"')
     expect(editorSource).toContain("tr.selectionSet")
     expect(editorSource).toContain("readTableOptionsSelection(next)")
     expect(editorSource).toContain("tableOptionsSelection.positions.join")
@@ -288,6 +302,12 @@ describe("editor chrome components", () => {
     expect(EDITOR_CSS).toContain("tableWrapper")
     expect(EDITOR_CSS).toContain("min-height: 0")
     expect(EDITOR_CSS).toContain("ProseMirror-trailingBreak:not(:only-child)")
+    expect(EDITOR_CSS).toContain(
+      ".apex-editor-surface .ProseMirror-focused .ProseMirror-gapcursor"
+    )
+    expect(EDITOR_CSS).toContain(
+      ".apex-editor-surface .ProseMirror-gapcursor:has(+ .tableWrapper)::after"
+    )
   })
 
   test("page sheets do not size a multi-page section as one Letter box", () => {
@@ -353,6 +373,9 @@ describe("editor chrome components", () => {
     expect(menu).toContain("Bullets &amp; numbering")
     expect(menu).toContain("PDF Document (.pdf)")
     expect(menu).not.toContain("Download as PDF")
+    expect(editor).toContain("printPdfBytes")
+    expect(editor).toContain("serializeEmbedPdf")
+    expect(editor).not.toContain("window.print()")
   })
 
   test("file menu actions use native labels instead of cancelled nested clicks", () => {
@@ -365,5 +388,22 @@ describe("editor chrome components", () => {
     expect(menu).toContain("id={openDocxInputId}")
     expect(menu).toContain("id={insertImageInputId}")
     expect(menu).not.toContain("event.preventDefault()")
+  })
+
+  test("print preview paints the display list without layout-trace font fallback labels", () => {
+    const preview = readFileSync(
+      join(import.meta.dir, "../src/ui/PrintPreview.tsx"),
+      "utf8"
+    )
+    const editor = readFileSync(
+      join(import.meta.dir, "../src/ui/Editor.tsx"),
+      "utf8"
+    )
+    expect(preview).toContain("DisplayListPreview")
+    expect(preview).not.toContain("layoutTrace")
+    expect(preview).not.toContain("font fallback")
+    expect(editor).toContain(
+      "<PrintPreview displayList={layoutResult.displayList} />"
+    )
   })
 })

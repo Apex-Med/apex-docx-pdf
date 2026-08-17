@@ -4,8 +4,20 @@ import type {
   StyleDefinition,
 } from "@apexmed/core"
 import { twips } from "@apexmed/core"
+import type {
+  TableColumnSizing,
+  TableSizing,
+  TableWidthMode,
+} from "@apexmed/core"
 
 import { initialNumberingLabel } from "../model/list-label"
+import {
+  defaultTableSizing,
+  importedFixedTableSizing,
+  normalizeTableSizing,
+  tableSizingConstraintMessage,
+  withTableWidthMode,
+} from "../schema/table-sizing"
 import {
   baseKeymap,
   chainCommands,
@@ -23,14 +35,19 @@ import {
 } from "prosemirror-commands"
 import { redo, undo } from "prosemirror-history"
 import { keymap } from "prosemirror-keymap"
-import type { Node as PMNode } from "prosemirror-model"
-import type { Command, EditorState, Transaction } from "prosemirror-state"
+import type { Node as PMNode, NodeType } from "prosemirror-model"
+import {
+  TextSelection,
+  type Command,
+  type EditorState,
+  type Transaction,
+} from "prosemirror-state"
 import {
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
   addRowBefore,
-  type CellSelection,
+  CellSelection,
   deleteColumn,
   deleteRow,
   deleteTable,
@@ -39,6 +56,23 @@ import {
   splitCell,
   TableMap,
 } from "prosemirror-tables"
+
+import { moveTableColumn, moveTableRow } from "./table-reorder"
+
+export {
+  findEnclosingTable,
+  moveCurrentTableColumn,
+  moveCurrentTableRow,
+  moveTableColumn,
+  moveTableRow,
+  permuteIndex,
+  selectCurrentTableRow,
+  selectTableColumn,
+  selectTableRow,
+  tableHasMergedSpans,
+  type EnclosingTable,
+  type TableReorderAxis,
+} from "./table-reorder"
 
 /** Transaction meta key for newly registered image assets (Editor merges into document.assets). */
 export const IMAGE_ASSET_META = "apexImageAsset"
@@ -781,7 +815,7 @@ export function insertImageFromBytes(options: {
   }
   let binary = ""
   for (let i = 0; i < options.bytes.length; i += 1) {
-    binary += String.fromCharCode(options.bytes[i]!)
+    binary += String.fromCharCode(options.bytes[i] ?? 0)
   }
   const previewMime =
     options.mimeType === "image/svg+xml" && options.rasterFallback
@@ -793,7 +827,7 @@ export function insertImageFromBytes(options: {
       : options.bytes
   let previewBinary = ""
   for (let i = 0; i < previewBytes.length; i += 1) {
-    previewBinary += String.fromCharCode(previewBytes[i]!)
+    previewBinary += String.fromCharCode(previewBytes[i] ?? 0)
   }
   const src =
     options.mimeType === "image/svg+xml" && !options.rasterFallback
@@ -855,6 +889,24 @@ export function setImageAltText(altText: string): Command {
   }
 }
 
+function tablePosNearSelection(
+  tr: Transaction,
+  tableType: NodeType
+): number | null {
+  const $from = tr.selection.$from
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type === tableType) return $from.before(depth)
+  }
+  if (tr.doc.nodeAt(tr.selection.from)?.type === tableType) {
+    return tr.selection.from
+  }
+  const previous = $from.nodeBefore
+  if (previous?.type === tableType) {
+    return tr.selection.from - previous.nodeSize
+  }
+  return null
+}
+
 /** Insert a simple N×M table at the selection. */
 export function insertTable(
   rows = 2,
@@ -863,15 +915,16 @@ export function insertTable(
 ): Command {
   return (state, dispatch) => {
     const schema = state.schema
-    if (
-      !schema.nodes.table ||
-      !schema.nodes.table_row ||
-      !schema.nodes.table_cell
-    )
-      return false
-    const emptyParagraph = () => schema.nodes.paragraph?.create(null, undefined)
+    const tableType = schema.nodes.table
+    const rowType = schema.nodes.table_row
+    const cellType = schema.nodes.table_cell
+    const paragraphType = schema.nodes.paragraph
+    if (!tableType || !rowType || !cellType || !paragraphType) return false
+    const emptyParagraph = () => paragraphType.create(null, undefined)
+    const columnWidths = Array.from({ length: cols }, () => columnWidthTwips)
+    const sizing = defaultTableSizing(columnWidths)
     const cell = (columnIndex: number) =>
-      schema.nodes.table_cell?.create(
+      cellType.create(
         {
           columnIndex,
           width: columnWidthTwips,
@@ -881,28 +934,45 @@ export function insertTable(
           borderRight: DEFAULT_INSERTED_TABLE_BORDER,
           borderBottom: DEFAULT_INSERTED_TABLE_BORDER,
           borderLeft: DEFAULT_INSERTED_TABLE_BORDER,
+          widthMode: sizing.columns[columnIndex]?.mode ?? "fill",
+          minWidth: null,
+          maxWidth: null,
+          allowMultiline: true,
         },
         emptyParagraph()
       )
     const rowNodes = Array.from({ length: rows }, (_, rowIndex) =>
-      schema.nodes.table_row?.create(
+      rowType.create(
         { nodeId: `table-row-${rowIndex}` },
         Array.from({ length: cols }, (_, col) => cell(col))
       )
     )
-    const table = schema.nodes.table?.create(
+    const table = tableType.create(
       {
         width: columnWidthTwips * cols,
         preferredWidth: columnWidthTwips * cols,
         layout: "fixed",
-        columnWidths: Array.from({ length: cols }, () => columnWidthTwips),
+        columnWidths,
+        tableSizing: sizing,
         borders: gridTableBorders(DEFAULT_INSERTED_TABLE_BORDER),
         repeatHeaderRowCount: 0,
       },
       rowNodes
     )
     if (dispatch) {
-      dispatch(state.tr.replaceSelectionWith(table).scrollIntoView())
+      const tr = state.tr.replaceSelectionWith(table)
+      const tablePos = tablePosNearSelection(tr, tableType)
+      if (tablePos !== null) {
+        const inserted = tr.doc.nodeAt(tablePos)
+        if (inserted?.type === tableType) {
+          const after = tablePos + inserted.nodeSize
+          if (!tr.doc.resolve(after).nodeAfter?.isTextblock) {
+            tr.insert(after, emptyParagraph())
+          }
+          tr.setSelection(TextSelection.near(tr.doc.resolve(tablePos + 1), 1))
+        }
+      }
+      dispatch(tr.scrollIntoView())
     }
     return true
   }
@@ -1303,6 +1373,254 @@ export function selectedTableCellGrid(
     rows: info.bounds.bottom - info.bounds.top > 1 ? 2 : 1,
     columns: info.bounds.right - info.bounds.left > 1 ? 2 : 1,
     cellCount: info.selected.length,
+  }
+}
+
+export type SelectedTableSizing = Readonly<{
+  sizing: TableSizing
+  importedFixed: boolean
+  columnCount: number
+  selectedColumns: readonly number[]
+  selectionKind: "cell" | "range" | "column" | "table"
+}>
+
+/** Responsive sizing state for the table and the columns touched by selection. */
+export function selectedTableSizing(
+  state: EditorState
+): SelectedTableSizing | null {
+  const tableInfo = enclosingTable(state)
+  const grid = selectedCellGridInfo(state)
+  if (!tableInfo || !grid) return null
+  const map = TableMap.get(tableInfo.node)
+  const widths = Array.isArray(tableInfo.node.attrs.columnWidths)
+    ? (tableInfo.node.attrs.columnWidths as unknown[])
+        .map(Number)
+        .filter((width) => Number.isSafeInteger(width) && width > 0)
+    : []
+  if (widths.length !== map.width) return null
+  const explicit = normalizeTableSizing(
+    tableInfo.node.attrs.tableSizing,
+    widths
+  )
+  const selectedColumns = Array.from(
+    { length: grid.bounds.right - grid.bounds.left },
+    (_, index) => grid.bounds.left + index
+  )
+  const wholeRows = grid.bounds.top === 0 && grid.bounds.bottom === map.height
+  const wholeColumns = grid.bounds.left === 0 && grid.bounds.right === map.width
+  const selectionKind =
+    wholeRows && wholeColumns
+      ? "table"
+      : wholeRows && selectedColumns.length === 1
+        ? "column"
+        : grid.selected.length === 1
+          ? "cell"
+          : "range"
+  return {
+    sizing: explicit ?? importedFixedTableSizing(widths),
+    importedFixed: explicit === null,
+    columnCount: map.width,
+    selectedColumns,
+    selectionKind,
+  }
+}
+
+function materializeTableSizingWidths(
+  sizing: TableSizing,
+  currentWidths: readonly number[]
+): number[] {
+  const target =
+    sizing.mode === "fixed"
+      ? sizing.width
+      : sizing.mode === "fill"
+        ? Math.max(
+            sizing.width,
+            currentWidths.reduce((sum, width) => sum + width, 0)
+          )
+        : sizing.columns.reduce((sum, column) => sum + column.width, 0)
+  const widths = sizing.columns.map((column, index) =>
+    column.mode === "fixed" || column.mode === "hug"
+      ? column.width
+      : Math.max(1, currentWidths[index] ?? column.width)
+  )
+  const fill = sizing.columns
+    .map((column, index) => (column.mode === "fill" ? index : -1))
+    .filter((index) => index >= 0)
+  if (fill.length > 0) {
+    const occupied = widths.reduce(
+      (sum, width, index) =>
+        sizing.columns[index]?.mode === "fill" ? sum : sum + width,
+      0
+    )
+    const share = Math.max(1, Math.floor((target - occupied) / fill.length))
+    for (const index of fill) {
+      const column = sizing.columns[index]
+      if (!column) continue
+      widths[index] = Math.max(
+        column.allowMultiline ? (column.minWidth ?? 1) : 1,
+        Math.min(
+          share,
+          column.allowMultiline ? (column.maxWidth ?? share) : share
+        )
+      )
+    }
+  }
+  return widths.map((width) => Math.max(1, Math.round(width)))
+}
+
+/** Apply a validated responsive sizing policy to the enclosing table. */
+export function setTableSizing(sizing: TableSizing): Command {
+  return (state, dispatch) => {
+    const selection = selectedTableSizing(state)
+    const tableInfo = enclosingTable(state)
+    if (!selection || !tableInfo || tableSizingConstraintMessage(sizing)) {
+      return false
+    }
+    if (sizing.columns.length !== selection.columnCount) return false
+    const currentWidths = tableInfo.node.attrs.columnWidths as number[]
+    const columnWidths = materializeTableSizingWidths(sizing, currentWidths)
+    const width = columnWidths.reduce((sum, value) => sum + value, 0)
+    if (!dispatch) return true
+    let tr = state.tr.setNodeMarkup(tableInfo.pos, undefined, {
+      ...tableInfo.node.attrs,
+      tableSizing: sizing,
+      columnWidths,
+      width,
+      preferredWidth: width,
+      layout: "fixed",
+    })
+    tableInfo.node.descendants((node, relativePos) => {
+      if (!isTableCell(node)) return
+      const columnIndex = Number(node.attrs.columnIndex ?? 0)
+      const span = Number(node.attrs.colspan ?? 1)
+      const policies = sizing.columns.slice(columnIndex, columnIndex + span)
+      const widths = columnWidths.slice(columnIndex, columnIndex + span)
+      const primary = policies[0]
+      if (!primary || widths.length === 0) return
+      tr = tr.setNodeMarkup(tableInfo.pos + 1 + relativePos, undefined, {
+        ...node.attrs,
+        width: widths.reduce((sum, value) => sum + value, 0),
+        colwidth: widths,
+        widthMode: policies.every((policy) => policy.mode === primary.mode)
+          ? primary.mode
+          : "fixed",
+        minWidth: primary.minWidth ?? null,
+        maxWidth: primary.maxWidth ?? null,
+        allowMultiline: policies.every(
+          (policy) => policy.allowMultiline !== false
+        ),
+      })
+    })
+    dispatch(tr)
+    return true
+  }
+}
+
+export function setTableWidthMode(
+  mode: TableWidthMode,
+  width?: number
+): Command {
+  return (state, dispatch) => {
+    const selected = selectedTableSizing(state)
+    if (!selected) return false
+    const next = withTableWidthMode(selected.sizing, mode)
+    return setTableSizing({
+      ...next,
+      width:
+        width !== undefined && Number.isSafeInteger(width) && width > 0
+          ? twips(width)
+          : next.width,
+    })(state, dispatch)
+  }
+}
+
+export function setSelectedColumnSizing(
+  patch: Partial<TableColumnSizing>,
+  columns?: readonly number[]
+): Command {
+  return (state, dispatch) => {
+    const selected = selectedTableSizing(state)
+    if (!selected) return false
+    const targets = columns ?? selected.selectedColumns
+    if (targets.length === 0) return false
+    let mode = selected.sizing.mode
+    const nextColumns = selected.sizing.columns.map((column, index) => {
+      if (!targets.includes(index)) return column
+      const allowMultiline =
+        patch.allowMultiline === undefined
+          ? column.allowMultiline
+          : patch.allowMultiline
+      return {
+        ...column,
+        ...patch,
+        allowMultiline,
+        minWidth: allowMultiline
+          ? (patch.minWidth ?? column.minWidth ?? null)
+          : null,
+        maxWidth: allowMultiline
+          ? (patch.maxWidth ?? column.maxWidth ?? null)
+          : null,
+      }
+    })
+    if (
+      mode === "hug" &&
+      nextColumns.some((column) => column.mode === "fill")
+    ) {
+      mode = "fill"
+    }
+    return setTableSizing({
+      ...selected.sizing,
+      mode,
+      columns: nextColumns,
+    })(state, dispatch)
+  }
+}
+
+export function selectEnclosingTable(): Command {
+  return (state, dispatch) => {
+    const tableInfo = enclosingTable(state)
+    if (!tableInfo) return false
+    const map = TableMap.get(tableInfo.node)
+    const first = map.map[0]
+    const last = map.map[map.map.length - 1]
+    if (first === undefined || last === undefined) return false
+    if (dispatch) {
+      dispatch(
+        state.tr.setSelection(
+          CellSelection.create(
+            state.doc,
+            tableInfo.pos + 1 + first,
+            tableInfo.pos + 1 + last
+          )
+        )
+      )
+    }
+    return true
+  }
+}
+
+export function selectCurrentTableColumn(): Command {
+  return (state, dispatch) => {
+    const tableInfo = enclosingTable(state)
+    const grid = selectedCellGridInfo(state)
+    if (!tableInfo || !grid) return false
+    const map = TableMap.get(tableInfo.node)
+    const column = grid.bounds.left
+    const first = map.map[column]
+    const last = map.map[(map.height - 1) * map.width + column]
+    if (first === undefined || last === undefined) return false
+    if (dispatch) {
+      dispatch(
+        state.tr.setSelection(
+          CellSelection.create(
+            state.doc,
+            tableInfo.pos + 1 + first,
+            tableInfo.pos + 1 + last
+          )
+        )
+      )
+    }
+    return true
   }
 }
 
@@ -1784,15 +2102,135 @@ export function createLinkKeymap(openLink: Command) {
   return keymap({ "Mod-k": openLink })
 }
 
+function withResponsiveColumnMutation(
+  command: Command,
+  placement: "before" | "after" | "delete"
+): Command {
+  return (state, dispatch) => {
+    const tableInfo = enclosingTable(state)
+    const grid = selectedCellGridInfo(state)
+    const selected = selectedTableSizing(state)
+    if (!tableInfo || !grid || !selected) return command(state, dispatch)
+    if (!dispatch) return command(state)
+    const oldWidths = (tableInfo.node.attrs.columnWidths as number[]).map(
+      Number
+    )
+    const first = grid.bounds.left
+    const last = grid.bounds.right
+    return command(state, (tr) => {
+      const mappedTablePos = tr.mapping.map(tableInfo.pos)
+      const nextTable = tr.doc.nodeAt(mappedTablePos)
+      if (nextTable?.type.name !== "table") {
+        dispatch(tr)
+        return
+      }
+      let widths = [...oldWidths]
+      let columns = [...selected.sizing.columns]
+      if (placement === "delete") {
+        widths.splice(first, Math.max(1, last - first))
+        columns.splice(first, Math.max(1, last - first))
+      } else {
+        const index = placement === "before" ? first : last
+        const neighbor = Math.max(0, Math.min(widths.length - 1, first))
+        const width = widths[neighbor] ?? 1440
+        const mode =
+          selected.sizing.mode === "hug" ? ("hug" as const) : ("fill" as const)
+        widths.splice(index, 0, width)
+        columns.splice(index, 0, {
+          mode,
+          width: twips(width),
+          minWidth: null,
+          maxWidth: null,
+          allowMultiline: true,
+        })
+      }
+      const map = TableMap.get(nextTable)
+      while (widths.length < map.width) widths.push(widths.at(-1) ?? 1440)
+      while (columns.length < map.width) {
+        columns.push({
+          mode: selected.sizing.mode === "hug" ? "hug" : "fill",
+          width: twips(widths[columns.length] ?? 1440),
+          minWidth: null,
+          maxWidth: null,
+          allowMultiline: true,
+        })
+      }
+      widths = widths.slice(0, map.width)
+      columns = columns.slice(0, map.width)
+      if (
+        selected.sizing.mode !== "hug" &&
+        !columns.some((column) => column.mode === "fill")
+      ) {
+        const final = columns.length - 1
+        const finalColumn = columns[final]
+        if (final >= 0 && finalColumn) {
+          columns[final] = { ...finalColumn, mode: "fill" }
+        }
+      }
+      const sizing: TableSizing = {
+        ...selected.sizing,
+        width: twips(widths.reduce((sum, width) => sum + width, 0)),
+        columns,
+      }
+      tr = tr.setNodeMarkup(mappedTablePos, undefined, {
+        ...nextTable.attrs,
+        columnWidths: widths,
+        width: sizing.width,
+        preferredWidth: sizing.width,
+        tableSizing: sizing,
+      })
+      const updatedTable = tr.doc.nodeAt(mappedTablePos)
+      if (updatedTable?.type.name === "table") {
+        const updatedMap = TableMap.get(updatedTable)
+        updatedTable.forEach((rowNode, rowOffset) => {
+          rowNode.forEach((cellNode, cellOffset) => {
+            if (!isTableCell(cellNode)) return
+            const relative = rowOffset + 1 + cellOffset
+            const columnIndex = updatedMap.colCount(relative)
+            const span = Number(cellNode.attrs.colspan ?? 1)
+            const cellWidths = widths.slice(columnIndex, columnIndex + span)
+            const policies = columns.slice(columnIndex, columnIndex + span)
+            const primary = policies[0]
+            if (!primary) return
+            tr = tr.setNodeMarkup(mappedTablePos + 1 + relative, undefined, {
+              ...cellNode.attrs,
+              columnIndex,
+              width: cellWidths.reduce((sum, width) => sum + width, 0),
+              colwidth: cellWidths,
+              widthMode: policies.every(
+                (policy) => policy.mode === primary.mode
+              )
+                ? primary.mode
+                : "fixed",
+              minWidth: primary.minWidth ?? null,
+              maxWidth: primary.maxWidth ?? null,
+              allowMultiline: policies.every(
+                (policy) => policy.allowMultiline !== false
+              ),
+            })
+          })
+        })
+      }
+      dispatch(tr)
+    })
+  }
+}
+
 export const tableCommands = {
-  addColumnAfter: withInheritedTableCellBorders(addColumnAfter),
-  addColumnBefore: withInheritedTableCellBorders(addColumnBefore),
+  addColumnAfter: withInheritedTableCellBorders(
+    withResponsiveColumnMutation(addColumnAfter, "after")
+  ),
+  addColumnBefore: withInheritedTableCellBorders(
+    withResponsiveColumnMutation(addColumnBefore, "before")
+  ),
   addRowAfter: withInheritedTableCellBorders(addRowAfter),
   addRowBefore: withInheritedTableCellBorders(addRowBefore),
-  deleteColumn,
+  deleteColumn: withResponsiveColumnMutation(deleteColumn, "delete"),
   deleteRow,
   deleteTable,
   mergeCells,
   splitCell,
   goToNextCell,
+  moveRow: moveTableRow,
+  moveColumn: moveTableColumn,
 }

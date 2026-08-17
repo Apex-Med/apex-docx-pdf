@@ -10,14 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as DocsRouteImport } from './routes/docs'
-import { Route as EditorRouteImport } from './routes/editor'
 import { Route as PlaygroundRouteImport } from './routes/playground'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SsoCallbackRouteImport } from './routes/sso-callback'
 import { Route as SupportRouteImport } from './routes/support'
+import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
+import { Route as AuthenticatedEditorRouteImport } from './routes/_authenticated/editor'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSplatRouteImport } from './routes/docs.$'
-import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
-import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
+import { Route as SessionTasksChooseOrganizationRouteImport } from './routes/session-tasks.choose-organization'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates.$templateId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -25,14 +29,13 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EditorRoute = EditorRouteImport.update({
-  id: '/editor',
-  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlaygroundRoute = PlaygroundRouteImport.update({
@@ -40,10 +43,35 @@ const PlaygroundRoute = PlaygroundRouteImport.update({
   path: '/playground',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SsoCallbackRoute = SsoCallbackRouteImport.update({
+  id: '/sso-callback',
+  path: '/sso-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SupportRoute = SupportRouteImport.update({
   id: '/support',
   path: '/support',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedEditorRoute = AuthenticatedEditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
   id: '/',
@@ -55,16 +83,12 @@ const DocsSplatRoute = DocsSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => DocsRoute,
 } as any)
-const SignInSplatRoute = SignInSplatRouteImport.update({
-  id: '/sign-in/$',
-  path: '/sign-in/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpSplatRoute = SignUpSplatRouteImport.update({
-  id: '/sign-up/$',
-  path: '/sign-up/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const SessionTasksChooseOrganizationRoute =
+  SessionTasksChooseOrganizationRouteImport.update({
+    id: '/session-tasks/choose-organization',
+    path: '/session-tasks/choose-organization',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
   id: '/templates/$templateId',
   path: '/templates/$templateId',
@@ -74,36 +98,46 @@ const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteWithChildren
-  '/editor': typeof EditorRoute
   '/playground': typeof PlaygroundRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/support': typeof SupportRoute
+  '/app': typeof AuthenticatedAppRoute
+  '/editor': typeof AuthenticatedEditorRoute
   '/docs/$': typeof DocsSplatRoute
-  '/sign-in/$': typeof SignInSplatRoute
-  '/sign-up/$': typeof SignUpSplatRoute
+  '/session-tasks/choose-organization': typeof SessionTasksChooseOrganizationRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/docs/': typeof DocsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/editor': typeof EditorRoute
   '/playground': typeof PlaygroundRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/support': typeof SupportRoute
+  '/app': typeof AuthenticatedAppRoute
+  '/editor': typeof AuthenticatedEditorRoute
   '/docs/$': typeof DocsSplatRoute
-  '/sign-in/$': typeof SignInSplatRoute
-  '/sign-up/$': typeof SignUpSplatRoute
+  '/session-tasks/choose-organization': typeof SessionTasksChooseOrganizationRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/docs': typeof DocsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/docs': typeof DocsRouteWithChildren
-  '/editor': typeof EditorRoute
   '/playground': typeof PlaygroundRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/support': typeof SupportRoute
+  '/_authenticated/app': typeof AuthenticatedAppRoute
+  '/_authenticated/editor': typeof AuthenticatedEditorRoute
   '/docs/$': typeof DocsSplatRoute
-  '/sign-in/$': typeof SignInSplatRoute
-  '/sign-up/$': typeof SignUpSplatRoute
+  '/session-tasks/choose-organization': typeof SessionTasksChooseOrganizationRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/docs/': typeof DocsIndexRoute
 }
@@ -112,47 +146,59 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/docs'
-    | '/editor'
     | '/playground'
+    | '/sign-in'
+    | '/sign-up'
+    | '/sso-callback'
     | '/support'
+    | '/app'
+    | '/editor'
     | '/docs/$'
-    | '/sign-in/$'
-    | '/sign-up/$'
+    | '/session-tasks/choose-organization'
     | '/templates/$templateId'
     | '/docs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/editor'
     | '/playground'
+    | '/sign-in'
+    | '/sign-up'
+    | '/sso-callback'
     | '/support'
+    | '/app'
+    | '/editor'
     | '/docs/$'
-    | '/sign-in/$'
-    | '/sign-up/$'
+    | '/session-tasks/choose-organization'
     | '/templates/$templateId'
     | '/docs'
   id:
     | '__root__'
     | '/'
+    | '/_authenticated'
     | '/docs'
-    | '/editor'
     | '/playground'
+    | '/sign-in'
+    | '/sign-up'
+    | '/sso-callback'
     | '/support'
+    | '/_authenticated/app'
+    | '/_authenticated/editor'
     | '/docs/$'
-    | '/sign-in/$'
-    | '/sign-up/$'
+    | '/session-tasks/choose-organization'
     | '/templates/$templateId'
     | '/docs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   DocsRoute: typeof DocsRouteWithChildren
-  EditorRoute: typeof EditorRoute
   PlaygroundRoute: typeof PlaygroundRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
+  SsoCallbackRoute: typeof SsoCallbackRoute
   SupportRoute: typeof SupportRoute
-  SignInSplatRoute: typeof SignInSplatRoute
-  SignUpSplatRoute: typeof SignUpSplatRoute
+  SessionTasksChooseOrganizationRoute: typeof SessionTasksChooseOrganizationRoute
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
 }
 
@@ -165,18 +211,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/docs': {
       id: '/docs'
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/editor': {
-      id: '/editor'
-      path: '/editor'
-      fullPath: '/editor'
-      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/playground': {
@@ -186,12 +232,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlaygroundRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sso-callback': {
+      id: '/sso-callback'
+      path: '/sso-callback'
+      fullPath: '/sso-callback'
+      preLoaderRoute: typeof SsoCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/support': {
       id: '/support'
       path: '/support'
       fullPath: '/support'
       preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/app': {
+      id: '/_authenticated/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AuthenticatedAppRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/editor': {
+      id: '/_authenticated/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof AuthenticatedEditorRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/docs/': {
       id: '/docs/'
@@ -207,18 +288,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSplatRouteImport
       parentRoute: typeof DocsRoute
     }
-    '/sign-in/$': {
-      id: '/sign-in/$'
-      path: '/sign-in/$'
-      fullPath: '/sign-in/$'
-      preLoaderRoute: typeof SignInSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up/$': {
-      id: '/sign-up/$'
-      path: '/sign-up/$'
-      fullPath: '/sign-up/$'
-      preLoaderRoute: typeof SignUpSplatRouteImport
+    '/session-tasks/choose-organization': {
+      id: '/session-tasks/choose-organization'
+      path: '/session-tasks/choose-organization'
+      fullPath: '/session-tasks/choose-organization'
+      preLoaderRoute: typeof SessionTasksChooseOrganizationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/templates/$templateId': {
@@ -230,6 +304,20 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedAppRoute: typeof AuthenticatedAppRoute
+  AuthenticatedEditorRoute: typeof AuthenticatedEditorRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAppRoute: AuthenticatedAppRoute,
+  AuthenticatedEditorRoute: AuthenticatedEditorRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
 
 interface DocsRouteChildren {
   DocsSplatRoute: typeof DocsSplatRoute
@@ -245,12 +333,14 @@ const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
   DocsRoute: DocsRouteWithChildren,
-  EditorRoute: EditorRoute,
   PlaygroundRoute: PlaygroundRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
+  SsoCallbackRoute: SsoCallbackRoute,
   SupportRoute: SupportRoute,
-  SignInSplatRoute: SignInSplatRoute,
-  SignUpSplatRoute: SignUpSplatRoute,
+  SessionTasksChooseOrganizationRoute: SessionTasksChooseOrganizationRoute,
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
 }
 export const routeTree = rootRouteImport

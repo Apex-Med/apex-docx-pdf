@@ -1202,6 +1202,80 @@ describe("paragraph layout", () => {
 })
 
 describe("table layout", () => {
+  test("responsive Fill tables consume the containing page column width", () => {
+    const base = table([["Label", "Value"]])
+    const responsive: ResolvedTable = {
+      ...base,
+      sizing: {
+        mode: "fill",
+        width: base.width,
+        columns: [
+          {
+            mode: "hug",
+            width: twips(400),
+            minWidth: null,
+            maxWidth: null,
+            allowMultiline: true,
+          },
+          {
+            mode: "fill",
+            width: twips(400),
+            minWidth: null,
+            maxWidth: null,
+            allowMultiline: true,
+          },
+        ],
+      },
+    }
+    const result = layoutDocument(documentWith([responsive]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    expect(
+      result.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { width: twips(1800) } })
+    expect(glyphRuns(result)[1]?.x).toBeGreaterThan(
+      glyphRuns(result)[0]?.x ?? 0
+    )
+  })
+
+  test("responsive Hug columns use the widest measured cell and honor max width", () => {
+    const base = table([
+      ["Widest", "x"],
+      ["n", "two"],
+    ])
+    const responsive: ResolvedTable = {
+      ...base,
+      sizing: {
+        mode: "hug",
+        width: base.width,
+        columns: [
+          {
+            mode: "hug",
+            width: twips(400),
+            minWidth: twips(200),
+            maxWidth: twips(500),
+            allowMultiline: true,
+          },
+          {
+            mode: "hug",
+            width: twips(400),
+            minWidth: null,
+            maxWidth: null,
+            allowMultiline: true,
+          },
+        ],
+      },
+    }
+    const result = layoutDocument(documentWith([responsive]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    expect(
+      result.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { width: twips(840) } })
+  })
+
   test("treats atLeast row height as the complete authored row box", () => {
     const border = {
       style: "single" as const,

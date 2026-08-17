@@ -389,8 +389,8 @@ export function Toolbar({
   const pickerCatalog = useMemo((): GoogleFontCatalog => {
     const base = fontCatalog ?? FALLBACK_FONT_CATALOG
     const extras = [
-      snapshot.textStyle.fontFamily || "Calibri",
-      "Calibri",
+      snapshot.textStyle.fontFamily || "Inter",
+      "Inter",
       ...fonts.families.map((entry) => entry.family),
       ...(googleFonts ?? []),
     ]
@@ -585,7 +585,7 @@ export function Toolbar({
             >
               <FontPicker
                 compact
-                value={snapshot.textStyle.fontFamily || "Calibri"}
+                value={snapshot.textStyle.fontFamily || "Inter"}
                 weight={snapshot.textStyle.fontWeight}
                 catalog={pickerCatalog}
                 onChange={(family, weight) => {

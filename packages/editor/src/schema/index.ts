@@ -10,7 +10,7 @@ import { authoredColumnWidthsTwips, authoredTableStyle } from "./table-geometry"
 
 const textStyleMark: MarkSpec = {
   attrs: {
-    fontFamily: { default: "Calibri" },
+    fontFamily: { default: "Inter" },
     fontSize: { default: 220 },
     fontWeight: { default: 400 },
     fontStyle: { default: "normal" },
@@ -28,7 +28,7 @@ const textStyleMark: MarkSpec = {
       getAttrs: (dom) => {
         const el = dom as HTMLElement
         return {
-          fontFamily: el.getAttribute("data-font-family") ?? "Calibri",
+          fontFamily: el.getAttribute("data-font-family") ?? "Inter",
           fontSize: Number(el.getAttribute("data-font-size") ?? 220),
           fontWeight: Number(el.getAttribute("data-font-weight") ?? 400),
           fontStyle: el.getAttribute("data-font-style") ?? "normal",
@@ -193,6 +193,8 @@ function cellDomAttrs(node: {
     | undefined
   const widthTwips = Number(node.attrs.width ?? 0)
   const verticalAlign = cssCellVerticalAlign(node.attrs.verticalAlignment)
+  const minWidth = Number(node.attrs.minWidth ?? 0)
+  const maxWidth = Number(node.attrs.maxWidth ?? 0)
   const style = [
     fill ? `background-color:${String(fill)}` : "",
     `border-top:${top}`,
@@ -203,7 +205,11 @@ function cellDomAttrs(node: {
     padding
       ? `padding:${Number(padding.top) / 20}pt ${Number(padding.right) / 20}pt ${Number(padding.bottom) / 20}pt ${Number(padding.left) / 20}pt`
       : "",
-    widthTwips > 0 ? `width:${widthTwips / 20}pt` : "",
+    widthTwips > 0 && node.attrs.widthMode === "fixed"
+      ? `width:${widthTwips / 20}pt`
+      : "",
+    minWidth > 0 ? `min-width:${minWidth / 20}pt` : "",
+    maxWidth > 0 ? `max-width:${maxWidth / 20}pt` : "",
   ]
     .filter(Boolean)
     .join(";")
@@ -216,6 +222,9 @@ function cellDomAttrs(node: {
     : []
   return {
     "data-node-id": node.attrs.nodeId ? String(node.attrs.nodeId) : "",
+    "data-width-mode": String(node.attrs.widthMode ?? "fixed"),
+    "data-multiline": String(node.attrs.allowMultiline !== false),
+    "data-has-max-width": String(maxWidth > 0),
     ...(fill ? { "data-fill-color": String(fill) } : {}),
     ...(colspan > 1 ? { colspan: String(colspan) } : {}),
     ...(rowspan > 1 ? { rowspan: String(rowspan) } : {}),
@@ -264,6 +273,10 @@ const tableCell: NodeSpec = {
     borderBottom: { default: null },
     borderLeft: { default: null },
     cellPadding: { default: null },
+    widthMode: { default: "fixed" },
+    minWidth: { default: null },
+    maxWidth: { default: null },
+    allowMultiline: { default: true },
   },
   toDOM: (node) => ["td", cellDomAttrs(node), 0],
 }
@@ -285,6 +298,10 @@ const tableHeader: NodeSpec = {
     borderBottom: { default: null },
     borderLeft: { default: null },
     cellPadding: { default: null },
+    widthMode: { default: "fixed" },
+    minWidth: { default: null },
+    maxWidth: { default: null },
+    allowMultiline: { default: true },
   },
   toDOM: (node) => ["th", cellDomAttrs(node), 0],
 }
@@ -439,6 +456,7 @@ const nodes: Record<string, NodeSpec> = {
       layout: { default: "fixed" },
       alignment: { default: "left" },
       columnWidths: { default: [] },
+      tableSizing: { default: null },
       borders: { default: null },
       cellPadding: {
         default: { top: 0, right: 108, bottom: 0, left: 108 },
@@ -461,6 +479,11 @@ const nodes: Record<string, NodeSpec> = {
         "table",
         {
           "data-node-id": node.attrs.nodeId ?? "",
+          ...(node.attrs.tableSizing &&
+          typeof node.attrs.tableSizing === "object" &&
+          typeof node.attrs.tableSizing.mode === "string"
+            ? { "data-table-width-mode": node.attrs.tableSizing.mode }
+            : {}),
           style: authoredTableStyle(node.attrs),
         },
         ...(colgroup ? [colgroup] : []),
@@ -607,7 +630,7 @@ const nodes: Record<string, NodeSpec> = {
       nodeId: { default: null },
       field: { default: "PAGE" },
       displayText: { default: "1" },
-      fontFamily: { default: "Calibri" },
+      fontFamily: { default: "Inter" },
       fontSize: { default: 220 },
       fontWeight: { default: 400 },
       fontStyle: { default: "normal" },

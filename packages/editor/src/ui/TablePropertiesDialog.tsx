@@ -1,4 +1,11 @@
-import { useId, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import {
+  twips,
+  type TableColumnSizing,
+  type TableSizing,
+  type TableWidthMode,
+  type Twip,
+} from "@apexmed/core"
 import {
   ArrowDown01Icon,
   Cancel01Icon,
@@ -16,10 +23,6 @@ import {
   PopoverTrigger,
 } from "@workspace/ui/components/popover"
 import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@workspace/ui/components/radio-group"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -34,17 +37,18 @@ import type {
   SelectedTableCellGrid,
 } from "../commands"
 import {
+  tableSizingConstraintMessage,
+  withTableWidthMode,
+} from "../schema/table-sizing"
+import {
   ScrubbableNumberDisclosure,
   ScrubbableNumberInput,
   ScrubbableNumberLabel,
 } from "./ScrubbableNumberInput"
 
 type BorderTarget = Exclude<SelectedCellBorderTarget, "all">
-type HorizontalAlignment = "left" | "center" | "right"
-type VerticalAlignment = "top" | "center" | "bottom"
 
 export type TablePropertiesOptions = Readonly<{
-  alignment: HorizontalAlignment
   columnWidths: readonly number[]
   rowHeight: number | null
   cellPadding: Readonly<{
@@ -54,33 +58,27 @@ export type TablePropertiesOptions = Readonly<{
     left: number
   }>
   cellShading: string | null
-  cellHorizontalAlignment: HorizontalAlignment
-  cellVerticalAlignment: VerticalAlignment
   headerRowRepeat: boolean
   allowBreakAcrossPages: boolean
+  tableSizing: TableSizing
 }>
 
 export type TablePropertiesChange =
-  | Readonly<{ type: "tableAlignment"; value: HorizontalAlignment }>
   | Readonly<{ type: "columnWidths"; value: readonly number[] }>
   | Readonly<{ type: "rowHeight"; value: number | null }>
   | Readonly<{
-      type: "cellPadding"
-      value: TablePropertiesOptions["cellPadding"]
-    }>
+    type: "cellPadding"
+    value: TablePropertiesOptions["cellPadding"]
+  }>
   | Readonly<{ type: "cellShading"; value: string | null }>
   | Readonly<{
-      type: "cellAlignment"
-      horizontal: HorizontalAlignment
-      vertical: VerticalAlignment
-    }>
-  | Readonly<{
-      type: "cellBorder"
-      target: SelectedCellBorderTarget
-      value: CellBorderSpec | null
-    }>
+    type: "cellBorder"
+    target: SelectedCellBorderTarget
+    value: CellBorderSpec | null
+  }>
   | Readonly<{ type: "headerRowRepeat"; value: boolean }>
   | Readonly<{ type: "allowBreakAcrossPages"; value: boolean }>
+  | Readonly<{ type: "tableSizing"; value: TableSizing }>
 
 export type TablePropertiesDialogProps = Readonly<{
   open: boolean
@@ -88,6 +86,10 @@ export type TablePropertiesDialogProps = Readonly<{
   selectionGrid: SelectedTableCellGrid
   initialBorders?: SelectedTableCellBorders
   initial?: Partial<TablePropertiesOptions>
+  selectedColumns?: readonly number[]
+  importedFixed?: boolean
+  onSelectTable?: () => void
+  onSelectColumn?: () => void
   onChange: (change: TablePropertiesChange) => void
 }>
 
@@ -148,64 +150,90 @@ function OptionsSection({
   )
 }
 
-function parsePositiveNumbers(value: string): number[] {
-  return value
-    .split(/[,\s]+/)
-    .map((part) => Number(part.trim()))
-    .filter((entry) => Number.isFinite(entry) && entry > 0)
+function points(twipValue: number | null | undefined): string {
+  return twipValue == null ? "" : String(Number((twipValue / 20).toFixed(2)))
 }
 
-function AlignmentGrid({
-  horizontal,
-  vertical,
+function SizingModeControl<T extends string>({
+  label,
+  value,
+  options,
+  disabled,
   onChange,
 }: {
-  horizontal: HorizontalAlignment
-  vertical: VerticalAlignment
-  onChange: (
-    horizontal: HorizontalAlignment,
-    vertical: VerticalAlignment
-  ) => void
+  label: string
+  value: T
+  options: readonly Readonly<{ value: T; label: string }>[]
+  disabled?: Partial<Record<T, string>>
+  onChange: (value: T) => void
 }) {
-  const horizontalValues: readonly HorizontalAlignment[] = [
-    "left",
-    "center",
-    "right",
-  ]
-  const verticalValues: readonly VerticalAlignment[] = [
-    "top",
-    "center",
-    "bottom",
-  ]
   return (
-    <fieldset className="apex-cell-alignment" aria-label="Cell alignment">
-      {verticalValues.flatMap((verticalValue) =>
-        horizontalValues.map((horizontalValue) => {
-          const selected =
-            horizontalValue === horizontal && verticalValue === vertical
-          const label = `${verticalValue} ${horizontalValue}`
-          return (
-            <button
-              key={label}
-              type="button"
-              className="apex-cell-alignment__button"
-              data-horizontal={horizontalValue}
-              data-vertical={verticalValue}
-              aria-label={`Align cell content ${label}`}
-              aria-pressed={selected}
-              title={label.replace(/^./, (value) => value.toUpperCase())}
-              onClick={() => onChange(horizontalValue, verticalValue)}
-            >
-              <span className="apex-cell-alignment__glyph" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-            </button>
-          )
-        })
-      )}
+    <fieldset className="apex-table-sizing__modes">
+      <legend className="sr-only">{label}</legend>
+      {options.map((option) => {
+        const disabledReason = disabled?.[option.value]
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            disabled={Boolean(disabledReason)}
+            title={disabledReason}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        )
+      })}
     </fieldset>
+  )
+}
+
+function PointInput({
+  id,
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: Twip | null | undefined
+  placeholder?: string
+  onChange: (value: Twip | null) => void
+}) {
+  const [text, setText] = useState(points(value))
+  useEffect(() => setText(points(value)), [value])
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id} className="text-muted-foreground">
+        {label}
+      </Label>
+      <div className="apex-table-sizing__number">
+        <Input
+          id={id}
+          type="number"
+          min="1"
+          step="1"
+          inputMode="decimal"
+          value={text}
+          placeholder={placeholder}
+          onChange={(event) => {
+            const next = event.target.value
+            setText(next)
+            if (next === "") {
+              onChange(null)
+              return
+            }
+            const numeric = Number(next)
+            if (Number.isFinite(numeric) && numeric > 0) {
+              onChange(twips(Math.round(numeric * 20)))
+            }
+          }}
+        />
+        <span aria-hidden="true">pt</span>
+      </div>
+    </div>
   )
 }
 
@@ -357,14 +385,16 @@ export function TablePropertiesDialog({
   selectionGrid,
   initialBorders,
   initial,
+  selectedColumns = [],
+  importedFixed = false,
+  onSelectTable,
+  onSelectColumn,
   onChange,
 }: TablePropertiesDialogProps) {
-  const [alignment, setAlignment] = useState<HorizontalAlignment>(
-    initial?.alignment ?? "left"
+  const [tableSizing, setTableSizingState] = useState<TableSizing | null>(
+    initial?.tableSizing ?? null
   )
-  const [columnWidthsText, setColumnWidthsText] = useState(
-    (initial?.columnWidths ?? []).join(", ")
-  )
+  const [sizingError, setSizingError] = useState<string | null>(null)
   const [rowHeight, setRowHeight] = useState(
     initial?.rowHeight != null ? String(initial.rowHeight) : ""
   )
@@ -377,10 +407,6 @@ export function TablePropertiesDialog({
   })
   const [paddingExpanded, setPaddingExpanded] = useState(false)
   const [cellShading, setCellShading] = useState(initial?.cellShading ?? "")
-  const [cellHorizontalAlignment, setCellHorizontalAlignment] =
-    useState<HorizontalAlignment>(initial?.cellHorizontalAlignment ?? "left")
-  const [cellVerticalAlignment, setCellVerticalAlignment] =
-    useState<VerticalAlignment>(initial?.cellVerticalAlignment ?? "top")
   const [headerRowRepeat, setHeaderRowRepeat] = useState(
     initial?.headerRowRepeat ?? false
   )
@@ -410,6 +436,37 @@ export function TablePropertiesDialog({
   const fieldId = useId()
 
   if (!open) return null
+
+  const applySizing = (next: TableSizing) => {
+    const error = tableSizingConstraintMessage(next)
+    if (error) {
+      setSizingError(error)
+      return
+    }
+    setSizingError(null)
+    setTableSizingState(next)
+    onChange({ type: "tableSizing", value: next })
+  }
+
+  const selectedColumn =
+    selectedColumns.length === 1 ? selectedColumns[0] : undefined
+  const selectedPolicy =
+    selectedColumn === undefined
+      ? undefined
+      : tableSizing?.columns[selectedColumn]
+  const fillCount =
+    tableSizing?.columns.filter((column) => column.mode === "fill").length ?? 0
+  const updateColumn = (patch: Partial<TableColumnSizing>) => {
+    if (!tableSizing || selectedColumn === undefined) return
+    let mode = tableSizing.mode
+    const columns = tableSizing.columns.map((column, index) =>
+      index === selectedColumn ? { ...column, ...patch } : column
+    )
+    if (mode === "hug" && columns.some((column) => column.mode === "fill")) {
+      mode = "fill"
+    }
+    applySizing({ ...tableSizing, mode, columns })
+  }
 
   const updatePaddingSides = (
     sides: readonly (keyof TablePropertiesOptions["cellPadding"])[],
@@ -444,15 +501,6 @@ export function TablePropertiesDialog({
   const verticalPaddingValue =
     (Number(paddingText.top) + Number(paddingText.bottom)) / 2 || 0
   const paddingDetailsId = `${fieldId}-padding-details`
-
-  const updateCellAlignment = (
-    horizontal: HorizontalAlignment,
-    vertical: VerticalAlignment
-  ) => {
-    setCellHorizontalAlignment(horizontal)
-    setCellVerticalAlignment(vertical)
-    onChange({ type: "cellAlignment", horizontal, vertical })
-  }
 
   const updateBorder = (target: BorderTarget, spec: CellBorderSpec | null) => {
     setActiveBorders((current) => ({ ...current, [target]: spec !== null }))
@@ -490,56 +538,175 @@ export function TablePropertiesDialog({
       </header>
 
       <div className="apex-table-options__body">
-        <OptionsSection title="Table">
-          <div className="grid gap-2">
-            <Label className="text-muted-foreground">Alignment</Label>
-            <RadioGroup
-              value={alignment}
-              onValueChange={(value) => {
-                if (
-                  value === "left" ||
-                  value === "center" ||
-                  value === "right"
-                ) {
-                  setAlignment(value)
-                  onChange({ type: "tableAlignment", value })
-                }
-              }}
-              className="flex gap-4"
+        {tableSizing ? (
+          <fieldset className="apex-table-sizing__scope">
+            <legend className="sr-only">Table selection</legend>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onSelectTable}
             >
-              {(["left", "center", "right"] as const).map((value) => (
-                <Label
-                  key={value}
-                  className="flex items-center gap-2 text-sm capitalize"
-                >
-                  <RadioGroupItem value={value} />
-                  {value}
-                </Label>
-              ))}
-            </RadioGroup>
-          </div>
-          <div className="grid gap-1.5 text-sm">
-            <Label
-              htmlFor={`${fieldId}-widths`}
-              className="text-muted-foreground"
+              Table
+            </button>
+            <span aria-hidden="true">/</span>
+            <button
+              type="button"
+              disabled={selectedColumn === undefined}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onSelectColumn}
             >
-              Column widths (twips)
-            </Label>
-            <Input
-              id={`${fieldId}-widths`}
-              value={columnWidthsText}
-              onChange={(event) => {
-                const value = event.target.value
-                setColumnWidthsText(value)
-                onChange({
-                  type: "columnWidths",
-                  value: parsePositiveNumbers(value),
-                })
-              }}
-              placeholder="2880, 2880"
-            />
-          </div>
-        </OptionsSection>
+              {selectedColumn === undefined
+                ? "Select one column"
+                : `Column ${selectedColumn + 1}`}
+            </button>
+          </fieldset>
+        ) : null}
+        {tableSizing ? (
+          <OptionsSection title="Table">
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label className="text-muted-foreground">Width</Label>
+                <SizingModeControl<TableWidthMode>
+                  label="Table width"
+                  value={tableSizing.mode}
+                  options={[
+                    { value: "fixed", label: "Fixed" },
+                    { value: "hug", label: "Hug" },
+                    { value: "fill", label: "Fill" },
+                  ]}
+                  onChange={(mode) =>
+                    applySizing(withTableWidthMode(tableSizing, mode))
+                  }
+                />
+              </div>
+              {tableSizing.mode === "fixed" ? (
+                <PointInput
+                  id={`${fieldId}-table-width`}
+                  label="Fixed width"
+                  value={tableSizing.width}
+                  onChange={(value) => {
+                    if (value !== null) {
+                      applySizing({ ...tableSizing, width: value })
+                    }
+                  }}
+                />
+              ) : null}
+              {importedFixed ? (
+                <p className="apex-table-sizing__hint">
+                  Imported fixed grid. Existing column widths stay unchanged
+                  until you choose a responsive sizing mode.
+                </p>
+              ) : null}
+              <p className="apex-table-sizing__hint">
+                Fill uses the page or section column width. Hug follows the
+                table&apos;s widest cell content.
+              </p>
+            </div>
+          </OptionsSection>
+        ) : null}
+
+        {tableSizing ? (
+          <OptionsSection
+            title={
+              selectedColumn === undefined
+                ? "Column"
+                : `Column ${selectedColumn + 1}`
+            }
+          >
+            {selectedPolicy && selectedColumn !== undefined ? (
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label className="text-muted-foreground">Width</Label>
+                  <SizingModeControl<TableColumnSizing["mode"]>
+                    label={`Column ${selectedColumn + 1} width`}
+                    value={selectedPolicy.mode}
+                    options={[
+                      { value: "fixed", label: "Fixed" },
+                      { value: "hug", label: "Hug" },
+                      { value: "fill", label: "Fill" },
+                    ]}
+                    disabled={
+                      tableSizing.mode !== "hug" &&
+                        selectedPolicy.mode === "fill" &&
+                        fillCount === 1
+                        ? {
+                          fixed: "At least one column must remain Fill.",
+                          hug: "At least one column must remain Fill.",
+                        }
+                        : undefined
+                    }
+                    onChange={(mode) => updateColumn({ mode })}
+                  />
+                </div>
+                {selectedPolicy.mode === "fixed" ? (
+                  <PointInput
+                    id={`${fieldId}-column-width`}
+                    label="Fixed width"
+                    value={selectedPolicy.width}
+                    onChange={(value) => {
+                      if (value !== null) updateColumn({ width: value })
+                    }}
+                  />
+                ) : null}
+                <div className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id={`${fieldId}-multiline`}
+                    checked={selectedPolicy.allowMultiline}
+                    onCheckedChange={(checked) =>
+                      updateColumn({
+                        allowMultiline: checked === true,
+                        ...(checked === true
+                          ? {}
+                          : { minWidth: null, maxWidth: null }),
+                      })
+                    }
+                  />
+                  <Label htmlFor={`${fieldId}-multiline`}>
+                    Allow multiline text
+                  </Label>
+                </div>
+                {selectedPolicy.allowMultiline ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <PointInput
+                      id={`${fieldId}-column-min`}
+                      label="Min width"
+                      value={selectedPolicy.minWidth}
+                      placeholder="None"
+                      onChange={(minWidth) => updateColumn({ minWidth })}
+                    />
+                    <PointInput
+                      id={`${fieldId}-column-max`}
+                      label="Max width"
+                      value={selectedPolicy.maxWidth}
+                      placeholder="None"
+                      onChange={(maxWidth) => updateColumn({ maxWidth })}
+                    />
+                  </div>
+                ) : (
+                  <p className="apex-table-sizing__hint">
+                    Single-line text keeps each cell on one line. Min and max
+                    constraints are available when multiline text is enabled.
+                  </p>
+                )}
+                {selectedPolicy.mode === "hug" ? (
+                  <p className="apex-table-sizing__hint">
+                    Hug matches the widest cell in this column.
+                  </p>
+                ) : null}
+                {sizingError ? (
+                  <p className="apex-table-sizing__error" role="status">
+                    {sizingError}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="apex-table-sizing__hint">
+                Place the caret in a column or choose Select column from the
+                table context menu.
+              </p>
+            )}
+          </OptionsSection>
+        ) : null}
 
         <OptionsSection title="Row">
           <div className="grid gap-1.5 text-sm">
@@ -605,14 +772,6 @@ export function TablePropertiesDialog({
         </OptionsSection>
 
         <OptionsSection title="Cell">
-          <div className="grid gap-2">
-            <Label className="text-muted-foreground">Cell alignment</Label>
-            <AlignmentGrid
-              horizontal={cellHorizontalAlignment}
-              vertical={cellVerticalAlignment}
-              onChange={updateCellAlignment}
-            />
-          </div>
           <div className="grid gap-2">
             <Label className="text-muted-foreground">
               Cell padding (twips)

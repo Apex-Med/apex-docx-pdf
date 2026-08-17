@@ -4283,11 +4283,11 @@ function parseRun(
         // advertises no extension namespace support, so the authored fallback
         // is the deterministic representation for shapes, diagrams, and other
         // producer-specific alternatives.
-        const fallbackPath = `${alternatePath}/${fallbacks[0]!.name}[1]`
+        const fallbackPath = `${alternatePath}/${fallbacks[0]?.name}[1]`
         const fallbackRun = parseRun(
           {
             name: "w:r",
-            children: fallbacks[0]!.element.children,
+            children: fallbacks[0]?.element.children,
             attributes: Object.freeze({}),
           },
           part,
@@ -6210,7 +6210,7 @@ function parseSectionColumns(
     widths.push(width)
   }
 
-  const equalWidth = equalWidthAttr ?? (widths.length === 0 ? true : false)
+  const equalWidth = equalWidthAttr ?? (widths.length === 0)
   const count =
     declaredNum !== undefined && declaredNum > 0
       ? declaredNum
@@ -6887,6 +6887,7 @@ function toDocumentStyles(sheet: StyleSheet): DocumentStyles {
     defaults: {
       text: {
         ...DEFAULT_TEXT_STYLE,
+        fontFamily: DEFAULT_RUN.fontFamily,
         ...partialRunToTextStyle(sheet.runDefaults),
       },
       paragraph: {

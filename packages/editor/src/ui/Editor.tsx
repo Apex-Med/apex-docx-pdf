@@ -45,9 +45,7 @@ import {
   matchStyleToSelection,
   numberingDefinitionFromTransaction,
   removeLink,
-  setCellHorizontalAlignment,
   setCellShading,
-  setCellVerticalAlignment,
   setFontFamily,
   setFontWeight,
   setFontSize,
@@ -58,6 +56,10 @@ import {
   setParagraphAttrs,
   setRowAttrs,
   setSelectedCellBorderStyle,
+  setTableSizing,
+  selectedTableSizing,
+  selectCurrentTableColumn,
+  selectEnclosingTable,
   setSectionColumns,
   setSectionPageSetup,
   selectedTableCellPositions,
@@ -105,8 +107,10 @@ import { FindReplaceDialog } from "./FindReplaceDialog"
 import { LinkDialog } from "./LinkDialog"
 import { LineSpacingDialog } from "./LineSpacingDialog"
 import { PageSetupDialog, type PageSetupUnit } from "./PageSetupDialog"
+import { printPdfBytes } from "./print-pdf"
 import { PrintPreview } from "./PrintPreview"
 import { TablePropertiesDialog } from "./TablePropertiesDialog"
+import { TableReorderOverlay } from "./TableReorderOverlay"
 import { StyleDialog } from "./StyleDialog"
 
 function ensureEditorStyles(): void {
@@ -128,7 +132,7 @@ const EMPTY_SNAPSHOT: EditorSelectionSnapshot = {
   underline: false,
   strikethrough: false,
   textStyle: {
-    fontFamily: "Calibri",
+    fontFamily: "Inter",
     fontSize: 220,
     fontWeight: 400,
     fontStyle: "normal",
@@ -191,19 +195,19 @@ function styleFromSelection(
     next: id,
     paragraph: paragraph
       ? {
-          alignment: paragraph.alignment,
-          spacingBefore: twips(paragraph.spacingBefore),
-          spacingAfter: twips(paragraph.spacingAfter),
-          lineSpacing: paragraph.lineSpacing as never,
-          indentStart: twips(paragraph.indentStart),
-          indentEnd: twips(paragraph.indentEnd),
-          firstLineIndent: twips(paragraph.firstLineIndent),
-          numbering: paragraph.numbering,
-          tabStops: paragraph.tabStops.map((stop) => ({
-            position: twips(stop.position),
-            alignment: stop.alignment,
-          })),
-        }
+        alignment: paragraph.alignment,
+        spacingBefore: twips(paragraph.spacingBefore),
+        spacingAfter: twips(paragraph.spacingAfter),
+        lineSpacing: paragraph.lineSpacing as never,
+        indentStart: twips(paragraph.indentStart),
+        indentEnd: twips(paragraph.indentEnd),
+        firstLineIndent: twips(paragraph.firstLineIndent),
+        numbering: paragraph.numbering,
+        tabStops: paragraph.tabStops.map((stop) => ({
+          position: twips(stop.position),
+          alignment: stop.alignment,
+        })),
+      }
       : null,
     text: {
       fontFamily: text.fontFamily,
@@ -377,6 +381,7 @@ type TableOptionsSelection = Readonly<{
   positions: readonly number[]
   grid: ReturnType<typeof selectedTableCellGrid>
   borders: ReturnType<typeof selectedTableCellBorders>
+  sizing: NonNullable<ReturnType<typeof selectedTableSizing>> | null
 }>
 
 function readTableOptionsSelection(state: EditorState): TableOptionsSelection {
@@ -384,6 +389,7 @@ function readTableOptionsSelection(state: EditorState): TableOptionsSelection {
     positions: selectedTableCellPositions(state),
     grid: selectedTableCellGrid(state),
     borders: selectedTableCellBorders(state),
+    sizing: selectedTableSizing(state),
   }
 }
 
@@ -441,6 +447,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         positions: [],
         grid: { rows: 1, columns: 1, cellCount: 0 },
         borders: {},
+        sizing: null,
       })
     const [columnsOpen, setColumnsOpen] = useState(false)
     const [styleDialogOpen, setStyleDialogOpen] = useState(false)
@@ -574,7 +581,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         dispatchTransaction(tr) {
           const next = view.state.apply(tr)
           view.updateState(next)
-          if (tablePropsOpenRef.current && tr.selectionSet) {
+          if (tablePropsOpenRef.current && (tr.selectionSet || tr.docChanged)) {
             const nextTableSelection = readTableOptionsSelection(next)
             if (nextTableSelection.grid.cellCount > 0) {
               setTableOptionsSelection(nextTableSelection)
@@ -597,11 +604,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             const numbering = numberingDefinitionFromTransaction(tr)
             const numberingDefinitions = numbering
               ? [
-                  ...current.numberingDefinitions.filter(
-                    (definition) => definition.id !== numbering.id
-                  ),
-                  numbering,
-                ]
+                ...current.numberingDefinitions.filter(
+                  (definition) => definition.id !== numbering.id
+                ),
+                numbering,
+              ]
               : current.numberingDefinitions
             const semantic = toSemanticDocument(next.doc, {
               assets,
@@ -779,33 +786,48 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       }
     }, [])
 
+    const onPrint = useCallback(async () => {
+      try {
+        setStatus("Preparing print…")
+        const bytes = await serializeEmbedPdf(documentRef.current)
+        const ownerDocument =
+          rootRef.current?.ownerDocument ?? window.document
+        await printPdfBytes(bytes, { ownerDocument })
+        setStatus("Print dialog opened")
+      } catch (error) {
+        setStatus(
+          `Print unavailable: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }, [])
+
     const onNew = useCallback(() => {
       const metadata = documentRef.current.editorMetadata as
         | {
-            defaultPageSetup?: {
-              pageWidth: number
-              pageHeight: number
-              marginTop: number
-              marginRight: number
-              marginBottom: number
-              marginLeft: number
-            }
-            pageUnit?: PageSetupUnit
+          defaultPageSetup?: {
+            pageWidth: number
+            pageHeight: number
+            marginTop: number
+            marginRight: number
+            marginBottom: number
+            marginLeft: number
           }
+          pageUnit?: PageSetupUnit
+        }
         | undefined
       const defaults = metadata?.defaultPageSetup
       const blank = createBlankDocument(
         defaults
           ? {
-              pageWidth: defaults.pageWidth,
-              pageHeight: defaults.pageHeight,
-              margins: {
-                top: defaults.marginTop,
-                right: defaults.marginRight,
-                bottom: defaults.marginBottom,
-                left: defaults.marginLeft,
-              },
-            }
+            pageWidth: defaults.pageWidth,
+            pageHeight: defaults.pageHeight,
+            margins: {
+              top: defaults.marginTop,
+              right: defaults.marginRight,
+              bottom: defaults.marginBottom,
+              left: defaults.marginLeft,
+            },
+          }
           : undefined
       )
       loadDocument({
@@ -924,7 +946,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onOpenDocx: (file) => void onOpenDocx(file),
         onSaveDocx,
         onExportPdf: () => void onExportPdf(),
-        onPrint: () => window.print(),
+        onPrint: () => void onPrint(),
         onPageSetup: () => setPageSetupOpen(true),
         onUndo: () => run(undo),
         onRedo: () => run(redo),
@@ -1020,8 +1042,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             .flatMap((block) =>
               block.type === "paragraph"
                 ? block.children
-                    .filter((child) => child.type === "text")
-                    .map((child) => (child.type === "text" ? child.text : ""))
+                  .filter((child) => child.type === "text")
+                  .map((child) => (child.type === "text" ? child.text : ""))
                 : []
             )
             .join(" ")
@@ -1052,6 +1074,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         applyStyleById,
         fontCatalog,
         onExportPdf,
+        onPrint,
         onInsertImage,
         onNew,
         onOpenDocx,
@@ -1155,37 +1178,48 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         >
           <div className="flex min-h-0 flex-1">
             <div className="flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-              <div
-                ref={hostRef}
-                className="apex-editor-surface flex-1 overflow-auto rounded-lg"
-              />
-              {previewOn && layoutResult ? (
-                <PrintPreview
-                  displayList={layoutResult.displayList}
-                  trace={layoutResult.trace}
+              <div className="relative min-h-0 min-w-0 flex-1">
+                <div
+                  ref={hostRef}
+                  className="apex-editor-surface h-full overflow-auto rounded-lg"
                 />
+                <TableReorderOverlay
+                  viewRef={viewRef}
+                  surfaceRef={hostRef}
+                  revision={selectionSnapshot.revision}
+                  inTable={selectionSnapshot.table.inTable}
+                  zoom={zoom}
+                  readOnly={readOnly}
+                />
+              </div>
+              {previewOn && layoutResult ? (
+                <PrintPreview displayList={layoutResult.displayList} />
               ) : null}
             </div>
             {tablePropsOpen ? (
               <TablePropertiesDialog
-                key={tableOptionsSelection.positions.join(":")}
+                key={`${tableOptionsSelection.positions.join(":")}:${tableOptionsSelection.sizing?.selectedColumns.join(",") ?? ""}`}
                 open
                 onOpenChange={setTablePropsOpen}
                 selectionGrid={tableOptionsSelection.grid}
                 initialBorders={tableOptionsSelection.borders}
+                selectedColumns={
+                  tableOptionsSelection.sizing?.selectedColumns ?? []
+                }
+                importedFixed={
+                  tableOptionsSelection.sizing?.importedFixed ?? false
+                }
+                onSelectTable={() => runLive(selectEnclosingTable())}
+                onSelectColumn={() => runLive(selectCurrentTableColumn())}
                 initial={{
-                  cellHorizontalAlignment:
-                    selectionSnapshot.paragraph?.alignment === "center" ||
-                    selectionSnapshot.paragraph?.alignment === "right"
-                      ? selectionSnapshot.paragraph.alignment
-                      : "left",
+                  ...(tableOptionsSelection.sizing
+                    ? { tableSizing: tableOptionsSelection.sizing.sizing }
+                    : {}),
                 }}
                 onChange={(change) => {
                   const positions = tableOptionsSelection.positions
                   const captured = positions.length > 0 ? positions : undefined
-                  if (change.type === "tableAlignment") {
-                    runLive(setTableAttrs({ alignment: change.value }))
-                  } else if (change.type === "columnWidths") {
+                  if (change.type === "columnWidths") {
                     const width = change.value.reduce(
                       (sum, value) => sum + value,
                       0
@@ -1196,6 +1230,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                         ...(width > 0 ? { width, preferredWidth: width } : {}),
                       })
                     )
+                  } else if (change.type === "tableSizing") {
+                    runLive(setTableSizing(change.value))
                   } else if (change.type === "rowHeight") {
                     runLive(
                       setRowAttrs({
@@ -1209,11 +1245,6 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                     runLive(setTableAttrs({ cellPadding: change.value }))
                   } else if (change.type === "cellShading") {
                     runLive(setCellShading(change.value, captured))
-                  } else if (change.type === "cellAlignment") {
-                    runLiveAll([
-                      setCellHorizontalAlignment(change.horizontal, captured),
-                      setCellVerticalAlignment(change.vertical, captured),
-                    ])
                   } else if (change.type === "cellBorder") {
                     runLive(
                       setSelectedCellBorderStyle(
@@ -1308,16 +1339,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             spacingAfter: selectionSnapshot.paragraph?.spacingAfter,
             value240ths:
               selectionSnapshot.paragraph?.lineSpacing &&
-              typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
-              "value240ths" in
+                typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
+                "value240ths" in
                 (selectionSnapshot.paragraph.lineSpacing as object)
                 ? Number(
-                    (
-                      selectionSnapshot.paragraph.lineSpacing as {
-                        value240ths: number
-                      }
-                    ).value240ths
-                  )
+                  (
+                    selectionSnapshot.paragraph.lineSpacing as {
+                      value240ths: number
+                    }
+                  ).value240ths
+                )
                 : null,
           }}
           onApply={(options) => {
@@ -1507,9 +1538,9 @@ function mountEditorHeadless(
         const asset = imageAssetFromTransaction(tr)
         const assets = asset
           ? [
-              ...documentRef.current.assets.filter((a) => a.id !== asset.id),
-              asset,
-            ]
+            ...documentRef.current.assets.filter((a) => a.id !== asset.id),
+            asset,
+          ]
           : documentRef.current.assets
         const semantic = toSemanticDocument(next.doc, {
           assets,

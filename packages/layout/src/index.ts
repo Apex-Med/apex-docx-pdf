@@ -1429,7 +1429,8 @@ function prepareParagraph(
   numbering: NumberingResolver,
   pageFieldDigits: number,
   assets: ReadonlySet<string>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  allowWrap = true
 ): PreparedParagraph {
   throwIfAborted(signal)
   addCompatibilityDiagnostics(paragraph, typography, diagnostics)
@@ -1443,7 +1444,8 @@ function prepareParagraph(
     properties,
     pageFieldDigits,
     assets,
-    signal
+    signal,
+    allowWrap
   )
   if (label && lines[0]) {
     const first = lines[0]
@@ -1469,6 +1471,233 @@ function prepareParagraph(
   return { paragraph, lines, lineHeights, label, properties, height }
 }
 
+function responsiveTableIntrinsicWidths(
+  table: ResolvedTable,
+  availableWidth: Twip,
+  typography: Typography,
+  diagnostics: Diagnostic[],
+  pageFieldDigits: number,
+  assets: ReadonlySet<string>,
+  signal?: AbortSignal
+): number[] {
+  const widths = table.columnWidths.map(() => 1)
+  const measurementWidth = twips(Math.max(availableWidth, 1_000_000))
+  for (const row of table.rows) {
+    for (const cell of row.cells) {
+      if (cell.verticalMerge === "continue") continue
+      const padding = cell.cellPadding ?? table.cellPadding
+      let contentWidth = 1
+      for (const paragraph of cell.blocks) {
+        const lines = measureParagraph(
+          paragraph,
+          measurementWidth,
+          typography,
+          diagnostics,
+          paragraph.properties,
+          pageFieldDigits,
+          assets,
+          signal,
+          false
+        )
+        contentWidth = Math.max(
+          contentWidth,
+          ...lines.map(
+            (line) =>
+              line.width +
+              paragraph.properties.indentStart +
+              paragraph.properties.indentEnd
+          )
+        )
+      }
+      const required = Math.max(1, contentWidth + padding.left + padding.right)
+      const first = cell.columnIndex
+      const last = first + cell.columnSpan
+      const current = widths
+        .slice(first, last)
+        .reduce((sum, width) => sum + width, 0)
+      if (required <= current) continue
+      const extra = required - current
+      const targets = Array.from(
+        { length: cell.columnSpan },
+        (_, index) => first + index
+      )
+      const share = Math.floor(extra / targets.length)
+      let remainder = extra - share * targets.length
+      for (const index of targets) {
+        widths[index] = (widths[index] ?? 1) + share + (remainder > 0 ? 1 : 0)
+        remainder -= 1
+      }
+    }
+  }
+  return widths
+}
+
+function resolveResponsiveTable(
+  table: ResolvedTable,
+  availableWidth: Twip,
+  typography: Typography,
+  diagnostics: Diagnostic[],
+  pageFieldDigits: number,
+  assets: ReadonlySet<string>,
+  signal?: AbortSignal
+): ResolvedTable {
+  const sizing = table.sizing
+  if (!sizing) return table
+  if (sizing.columns.length !== table.columnWidths.length) {
+    diagnostics.push({
+      code: "layout/table-sizing-invalid",
+      severity: "warning",
+      message:
+        "Responsive table sizing did not match the table grid; authored fixed widths were used",
+      source: table.source,
+      nodeId: table.id,
+    })
+    return table
+  }
+  const fillCount = sizing.columns.filter(
+    (column) => column.mode === "fill"
+  ).length
+  if (
+    (sizing.mode === "hug" && fillCount > 0) ||
+    (sizing.mode !== "hug" && fillCount === 0)
+  ) {
+    diagnostics.push({
+      code: "layout/table-sizing-constraint",
+      severity: "warning",
+      message:
+        "Responsive table sizing constraints were invalid; authored fixed widths were used",
+      source: table.source,
+      nodeId: table.id,
+    })
+    return table
+  }
+
+  const intrinsic = responsiveTableIntrinsicWidths(
+    table,
+    availableWidth,
+    typography,
+    diagnostics,
+    pageFieldDigits,
+    assets,
+    signal
+  )
+  const clamp = (value: number, index: number): number => {
+    const policy = sizing.columns[index]
+    if (!policy) return Math.max(1, value)
+    if (!policy.allowMultiline) return Math.max(1, value)
+    return Math.max(
+      policy.minWidth ?? 1,
+      Math.min(value, policy.maxWidth ?? Number.MAX_SAFE_INTEGER)
+    )
+  }
+  const widths = sizing.columns.map((column, index) =>
+    clamp(
+      column.mode === "hug"
+        ? (intrinsic[index] ?? column.width)
+        : column.mode === "fixed"
+          ? column.width
+          : (column.minWidth ?? 1),
+      index
+    )
+  )
+  const authoredIndent =
+    table.alignment === "left" ? (table.indentStart ?? 0) : 0
+  const maximumWidth = Math.max(1, availableWidth - authoredIndent)
+  const targetWidth =
+    sizing.mode === "fill"
+      ? maximumWidth
+      : sizing.mode === "fixed"
+        ? Math.min(maximumWidth, sizing.width)
+        : Math.min(
+            maximumWidth,
+            widths.reduce((sum, width) => sum + width, 0)
+          )
+
+  const fillIndexes = sizing.columns
+    .map((column, index) => (column.mode === "fill" ? index : -1))
+    .filter((index) => index >= 0)
+  if (fillIndexes.length > 0) {
+    const occupied = widths.reduce(
+      (sum, width, index) =>
+        sizing.columns[index]?.mode === "fill" ? sum : sum + width,
+      0
+    )
+    let remaining = Math.max(fillIndexes.length, targetWidth - occupied)
+    let active = [...fillIndexes]
+    while (active.length > 0) {
+      const share = Math.max(1, Math.floor(remaining / active.length))
+      const constrained = active.filter((index) => {
+        const value = clamp(share, index)
+        return value !== share
+      })
+      if (constrained.length === 0) {
+        for (const index of active) widths[index] = share
+        let remainder = remaining - share * active.length
+        for (const index of active) {
+          if (remainder <= 0) break
+          widths[index] = (widths[index] ?? 1) + 1
+          remainder -= 1
+        }
+        break
+      }
+      for (const index of constrained) {
+        const value = clamp(share, index)
+        widths[index] = value
+        remaining -= value
+      }
+      active = active.filter((index) => !constrained.includes(index))
+    }
+  }
+
+  let total = widths.reduce((sum, width) => sum + width, 0)
+  if (total > maximumWidth) {
+    const shrinkable = widths
+      .map((width, index) => {
+        const policy = sizing.columns[index]
+        return {
+          index,
+          room: policy?.allowMultiline ? width - (policy.minWidth ?? 1) : 0,
+        }
+      })
+      .filter((entry) => entry.room > 0)
+    let overflow = total - maximumWidth
+    while (overflow > 0 && shrinkable.length > 0) {
+      const share = Math.max(1, Math.ceil(overflow / shrinkable.length))
+      for (const entry of shrinkable) {
+        if (overflow <= 0) break
+        const reduction = Math.min(entry.room, share, overflow)
+        widths[entry.index] = (widths[entry.index] ?? 1) - reduction
+        entry.room -= reduction
+        overflow -= reduction
+      }
+      for (let index = shrinkable.length - 1; index >= 0; index -= 1) {
+        if ((shrinkable[index]?.room ?? 0) <= 0) shrinkable.splice(index, 1)
+      }
+    }
+    total = widths.reduce((sum, width) => sum + width, 0)
+  }
+
+  const columnWidths = Object.freeze(widths.map((width) => twips(width)))
+  const rows = table.rows.map((row) => ({
+    ...row,
+    cells: row.cells.map((cell) => ({
+      ...cell,
+      width: twips(
+        columnWidths
+          .slice(cell.columnIndex, cell.columnIndex + cell.columnSpan)
+          .reduce((sum, width) => sum + width, 0)
+      ),
+    })),
+  }))
+  return {
+    ...table,
+    width: twips(total),
+    preferredWidth: twips(total),
+    columnWidths,
+    rows,
+  }
+}
+
 function prepareTable(
   table: ResolvedTable,
   availableWidth: Twip,
@@ -1481,6 +1710,15 @@ function prepareTable(
   signal?: AbortSignal
 ): PreparedTable {
   throwIfAborted(signal)
+  table = resolveResponsiveTable(
+    table,
+    availableWidth,
+    typography,
+    diagnostics,
+    pageFieldDigits,
+    assets,
+    signal
+  )
   if (table.columnWidths.length === 0)
     throw new RangeError("Invalid table grid: at least one column is required")
   for (const width of table.columnWidths) {
@@ -1670,7 +1908,10 @@ function prepareTable(
             numbering,
             pageFieldDigits,
             assets,
-            signal
+            signal,
+            table.sizing?.columns
+              .slice(cell.columnIndex, cell.columnIndex + cell.columnSpan)
+              .every((column) => column.allowMultiline !== false) ?? true
           )
           if (
             prepared.lineHeights.some(
@@ -2027,12 +2268,7 @@ function paginateTable(
             )
             const fitsWithHeaders =
               headerCapacity > 0 &&
-              safeTableFragmentHeight(
-                prepared,
-                row,
-                offset,
-                headerCapacity
-              ) > 0
+              safeTableFragmentHeight(prepared, row, offset, headerCapacity) > 0
             if (!fitsWithHeaders) {
               if (!diagnosedHeaderDegradation) {
                 diagnosedHeaderDegradation = true
@@ -3437,7 +3673,8 @@ function measureParagraph(
   properties: ParagraphProperties = paragraph.properties,
   pageFieldDigits = 1,
   assets: ReadonlySet<string> = new Set(),
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  allowWrap = true
 ): readonly MeasuredLine[] {
   const tokens = prepareTokens(
     paragraph,
@@ -3556,7 +3793,7 @@ function measureParagraph(
         )
       }
       const advance = twips(stop.position - currentPosition)
-      if (width + advance > boxWidth()) {
+      if (allowWrap && width + advance > boxWidth()) {
         throw new RangeError("Word tab stop exceeds the writable line box")
       }
       append({
@@ -3582,6 +3819,10 @@ function measureParagraph(
       (total, cluster) => total + cluster.width,
       0
     )
+    if (!allowWrap) {
+      for (const cluster of token.clusters) append(cluster)
+      continue
+    }
     if (width + tokenWidth <= boxWidth()) {
       for (const cluster of token.clusters) append(cluster)
       continue

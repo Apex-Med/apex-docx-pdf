@@ -18,9 +18,9 @@ import type {
 } from "./document"
 import { twips } from "./units"
 
-/** Word-compatible default body text (Calibri 11pt black). */
+/** Authoring default body text (Inter 11pt black). */
 export const DEFAULT_TEXT_STYLE: TextStyle = Object.freeze({
-  fontFamily: "Calibri",
+  fontFamily: "Inter",
   fontSize: twips(220),
   fontWeight: 400,
   fontStyle: "normal",

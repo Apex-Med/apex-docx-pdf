@@ -24,9 +24,15 @@ describe("table context menu", () => {
     const items = tableContextMenuItems()
     const ids = items.map((item) => item.id)
     expect(ids).toContain("row-before")
+    expect(ids).toContain("select-column")
+    expect(ids).toContain("select-table")
     expect(ids).toContain("row-after")
     expect(ids).toContain("col-before")
     expect(ids).toContain("col-after")
+    expect(ids).toContain("row-up")
+    expect(ids).toContain("row-down")
+    expect(ids).toContain("col-left")
+    expect(ids).toContain("col-right")
     expect(ids).toContain("delete-row")
     expect(ids).toContain("delete-col")
     expect(ids).toContain("delete-table")
@@ -51,7 +57,10 @@ describe("table context menu", () => {
     let cellPos: number | null = null
     state.doc.descendants((node, pos) => {
       if (cellPos !== null) return false
-      if (node.type.name === "table_cell" || node.type.name === "table_header") {
+      if (
+        node.type.name === "table_cell" ||
+        node.type.name === "table_header"
+      ) {
         cellPos = pos + 1
         return false
       }
@@ -105,7 +114,9 @@ describe("table context menu", () => {
         TextSelection.create(afterAdd.state.doc, nextCell! + 1)
       )
     )
-    const afterCol = applyCommandToSemantic(withSel, (s, d) => addCol.run(s, d!))
+    const afterCol = applyCommandToSemantic(withSel, (s, d) =>
+      addCol.run(s, d!)
+    )
     expect(afterCol.applied).toBe(true)
     expect(countNodes(afterCol.state.doc, "table_cell")).toBeGreaterThan(
       beforeCells
@@ -135,7 +146,14 @@ describe("table context menu", () => {
   })
 })
 
-function countNodes(doc: { descendants: (f: (node: { type: { name: string } }, pos: number) => boolean | void) => void }, type: string): number {
+function countNodes(
+  doc: {
+    descendants: (
+      f: (node: { type: { name: string } }, pos: number) => boolean | void
+    ) => void
+  },
+  type: string
+): number {
   let count = 0
   doc.descendants((node) => {
     if (node.type.name === type) count += 1

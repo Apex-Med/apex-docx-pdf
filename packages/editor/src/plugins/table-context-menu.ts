@@ -1,11 +1,15 @@
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
-import { deleteTable, isInTable } from "prosemirror-tables"
+import { CellSelection, deleteTable, isInTable } from "prosemirror-tables"
 
 import {
   setCellBorderStyle,
   setCellShading,
+  selectCurrentTableColumn,
+  selectEnclosingTable,
   selectedTableCellPositions,
+  moveCurrentTableColumn,
+  moveCurrentTableRow,
   tableCommands,
   type CellBorderSide,
 } from "../commands"
@@ -26,14 +30,24 @@ let menuCellPositions: readonly number[] = []
 const solid = (
   side: CellBorderSide,
   style: "none" | "single" | "double" | "dotted" | "dashed" = "single"
-) =>
-  setCellBorderStyle(side, style, "#000000", 15, menuCellPositions)
+) => setCellBorderStyle(side, style, "#000000", 15, menuCellPositions)
 
 const MENU_ITEMS: readonly MenuItem[] = [
+  {
+    id: "select-column",
+    label: "Select column",
+    run: (state, dispatch) => selectCurrentTableColumn()(state, dispatch),
+  },
+  {
+    id: "select-table",
+    label: "Select table",
+    run: (state, dispatch) => selectEnclosingTable()(state, dispatch),
+  },
   {
     id: "row-before",
     label: "Insert row above",
     run: (state, dispatch) => tableCommands.addRowBefore(state, dispatch),
+    separatorBefore: true,
   },
   {
     id: "row-after",
@@ -49,6 +63,27 @@ const MENU_ITEMS: readonly MenuItem[] = [
     id: "col-after",
     label: "Insert column right",
     run: (state, dispatch) => tableCommands.addColumnAfter(state, dispatch),
+  },
+  {
+    id: "row-up",
+    label: "Move row up",
+    run: (state, dispatch) => moveCurrentTableRow(-1)(state, dispatch),
+    separatorBefore: true,
+  },
+  {
+    id: "row-down",
+    label: "Move row down",
+    run: (state, dispatch) => moveCurrentTableRow(1)(state, dispatch),
+  },
+  {
+    id: "col-left",
+    label: "Move column left",
+    run: (state, dispatch) => moveCurrentTableColumn(-1)(state, dispatch),
+  },
+  {
+    id: "col-right",
+    label: "Move column right",
+    run: (state, dispatch) => moveCurrentTableColumn(1)(state, dispatch),
   },
   {
     id: "delete-row",
@@ -242,6 +277,32 @@ export function createTableContextMenuPlugin(): Plugin {
     window.addEventListener("blur", dismiss)
   }
 
+  const selectClickedCell = (
+    view: EditorView,
+    clientX: number,
+    clientY: number
+  ): void => {
+    const hit = view.posAtCoords({ left: clientX, top: clientY })
+    if (!hit) return
+    const $hit = view.state.doc.resolve(hit.pos)
+    let depth = $hit.depth
+    while (
+      depth > 0 &&
+      $hit.node(depth).type.name !== "table_cell" &&
+      $hit.node(depth).type.name !== "table_header"
+    ) {
+      depth -= 1
+    }
+    if (depth === 0) return
+    const cellPos = $hit.before(depth)
+    if (selectedTableCellPositions(view.state).includes(cellPos)) return
+    view.dispatch(
+      view.state.tr.setSelection(
+        CellSelection.create(view.state.doc, cellPos, cellPos)
+      )
+    )
+  }
+
   return new Plugin({
     key: tableContextMenuPluginKey,
     view() {
@@ -263,6 +324,7 @@ export function createTableContextMenuPlugin(): Plugin {
             return false
           }
           event.preventDefault()
+          selectClickedCell(view, event.clientX, event.clientY)
           showMenu(view, event.clientX, event.clientY)
           return true
         },

@@ -18,7 +18,7 @@ describe("selection-state plugin", () => {
     const snap = getSelectionSnapshot(state)
     expect(snap).not.toBeNull()
     expect(snap?.bold).toBe(false)
-    expect(snap?.textStyle.fontFamily).toBe("Calibri")
+    expect(snap?.textStyle.fontFamily).toBe("Inter")
     expect(snap?.paragraph?.alignment).toBe("left")
     expect(snap?.section?.pageWidth).toBeGreaterThan(0)
     expect(snap?.table.inTable).toBe(false)

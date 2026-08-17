@@ -1,7 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalEnv": ["VITE_CONVEX_URL", "VITE_DOCS_URL", "VITE_SITE_URL"],
+  "globalEnv": [
+    "VITE_CONVEX_URL",
+    "VITE_DOCS_URL",
+    "VITE_SITE_URL",
+    "VITE_CLERK_PUBLISHABLE_KEY",
+    "CLERK_SECRET_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

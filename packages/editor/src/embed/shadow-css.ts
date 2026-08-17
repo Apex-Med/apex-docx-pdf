@@ -44,7 +44,7 @@ export function transformCssForShadowDom(css: string): ShadowCssTransformResult 
 :host {
   all: initial;
   display: block;
-  font-family: Calibri, Inter, system-ui, sans-serif;
+  font-family: Inter, system-ui, sans-serif;
   font-size: 11pt;
   line-height: normal;
   color: var(--apex-page-fg, #000000);

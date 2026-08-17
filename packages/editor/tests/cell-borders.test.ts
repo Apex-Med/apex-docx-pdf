@@ -160,8 +160,14 @@ describe("individual cell borders", () => {
 
     expect(result.applied).toBe(true)
     const alignments: unknown[] = []
-    result.state.doc.descendants((node) => {
-      if (node.type.name === "paragraph") alignments.push(node.attrs.alignment)
+    result.state.doc.descendants((node, _pos, parent) => {
+      if (
+        node.type.name === "paragraph" &&
+        (parent?.type.name === "table_cell" ||
+          parent?.type.name === "table_header")
+      ) {
+        alignments.push(node.attrs.alignment)
+      }
     })
     expect(alignments).toEqual(["right", "right"])
   })
@@ -246,6 +252,8 @@ describe("individual cell borders", () => {
       },
       editorSchema.nodes.paragraph?.createAndFill()!
     )
+    expect(cell).toBeDefined()
+    if (!cell) return
     const dom = cell.type.spec.toDOM?.(cell)
     expect(JSON.stringify(dom)).toContain("border-top:")
     expect(JSON.stringify(dom)).toContain("#00ff00")
@@ -265,6 +273,8 @@ describe("individual cell borders", () => {
       },
       editorSchema.nodes.paragraph?.createAndFill()!
     )
+    expect(cell).toBeDefined()
+    if (!cell) return
     const serialized = JSON.stringify(cell.type.spec.toDOM?.(cell))
     expect(serialized).toContain("vertical-align:middle")
     expect(serialized).not.toContain("vertical-align:center")
@@ -307,6 +317,8 @@ describe("individual cell borders", () => {
       null,
       editorSchema.nodes.paragraph?.createAndFill()!
     )
+    expect(empty).toBeDefined()
+    if (!empty) return
     expect(JSON.stringify(empty.type.spec.toDOM?.(empty))).toContain(
       "border-top:none"
     )
