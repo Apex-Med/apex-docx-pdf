@@ -1,4 +1,4 @@
-import type { ComponentProps, Ref } from "react"
+import * as React from "react"
 import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area"
 
 import { cn } from "@workspace/ui/lib/utils"
@@ -6,17 +6,8 @@ import { cn } from "@workspace/ui/lib/utils"
 function ScrollArea({
   className,
   children,
-  scrollFade: _scrollFade,
-  viewportClassName,
-  viewportProps,
-  viewportRef,
   ...props
-}: ScrollAreaPrimitive.Root.Props & {
-  scrollFade?: boolean
-  viewportClassName?: string
-  viewportProps?: ComponentProps<"div">
-  viewportRef?: Ref<HTMLDivElement>
-}) {
+}: ScrollAreaPrimitive.Root.Props) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
@@ -24,14 +15,8 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
-        ref={viewportRef}
         data-slot="scroll-area-viewport"
-        tabIndex={0}
-        className={cn(
-          "size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1",
-          viewportClassName
-        )}
-        {...viewportProps}
+        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
@@ -59,7 +44,7 @@ function ScrollBar({
     >
       <ScrollAreaPrimitive.Thumb
         data-slot="scroll-area-thumb"
-        className="relative flex-1 rounded-none bg-border"
+        className="relative flex-1 rounded-full bg-border"
       />
     </ScrollAreaPrimitive.Scrollbar>
   )
