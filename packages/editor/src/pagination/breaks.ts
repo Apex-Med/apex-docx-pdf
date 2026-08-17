@@ -1,6 +1,12 @@
 import type { LayoutTrace, NodeId, PageDisplayList } from "@apexmed/core"
 import type { Node as PMNode } from "prosemirror-model"
 
+import { templateTagLayoutText } from "../node-views/template-tag"
+
+function templateTagLayoutExtent(node: PMNode): number {
+  return Math.max(1, templateTagLayoutText(node).length)
+}
+
 const TWIPS_PER_PX = 15
 const DEFAULT_PAGE_GAP_PX = 32
 
@@ -300,6 +306,8 @@ export function mergeManualPageBreakPlacements(
       }
       if (child.isText) {
         layoutCharOffset += child.text?.length ?? 0
+      } else if (child.type.name === "template_tag") {
+        layoutCharOffset += templateTagLayoutExtent(child)
       } else {
         layoutCharOffset += 1
       }
@@ -364,7 +372,9 @@ export function positionForParagraphOffset(
       const layoutExtent =
         child.type.name === "page_field"
           ? String(child.attrs.displayText ?? "").length
-          : 1
+          : child.type.name === "template_tag"
+            ? templateTagLayoutExtent(child)
+            : 1
       if (charOffset <= layoutOffset) {
         offset = childOffset
         resolved = true

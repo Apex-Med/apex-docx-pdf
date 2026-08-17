@@ -8,6 +8,7 @@ import {
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view"
 
 import { toSemanticDocument } from "../model/bridge"
+import { TEMPLATE_TAG_VALUES_TR_META } from "../tags"
 import {
   applySpacerGeometryToDom,
   createBreakSpacerElement,
@@ -59,6 +60,7 @@ export type PaginationPluginState = Readonly<{
   pageCount: number
   diagnostics: readonly string[]
   iteration: number
+  valuesEpoch: number
 }>
 
 export const paginationPluginKey = new PluginKey<PaginationPluginState>(
@@ -99,6 +101,7 @@ const EMPTY_STATE: PaginationPluginState = {
   pageCount: 0,
   diagnostics: [],
   iteration: 0,
+  valuesEpoch: 0,
 }
 
 /** Build widget decorations from placements (exported for mapping tests). */
@@ -207,10 +210,13 @@ export function createPaginationPlugin(
       init: () => EMPTY_STATE,
       apply: (tr, value) => {
         const mapped = value.decorations.map(tr.mapping, tr.doc)
+        const valuesEpoch = tr.getMeta(TEMPLATE_TAG_VALUES_TR_META)
+          ? value.valuesEpoch + 1
+          : value.valuesEpoch
         const meta = tr.getMeta(paginationPluginKey) as
           Partial<PaginationPluginState> | undefined
         if (!meta) {
-          return { ...value, decorations: mapped }
+          return { ...value, decorations: mapped, valuesEpoch }
         }
         return {
           decorations: meta.decorations ?? mapped,
@@ -219,6 +225,7 @@ export function createPaginationPlugin(
           pageCount: meta.pageCount ?? value.pageCount,
           diagnostics: meta.diagnostics ?? value.diagnostics,
           iteration: meta.iteration ?? value.iteration,
+          valuesEpoch,
         }
       },
     },
@@ -321,7 +328,14 @@ export function createPaginationPlugin(
 
       return {
         update(view, prevState) {
-          if (!view.state.doc.eq(prevState.doc)) {
+          const prevEpoch =
+            paginationPluginKey.getState(prevState)?.valuesEpoch
+          const nextEpoch =
+            paginationPluginKey.getState(view.state)?.valuesEpoch
+          if (
+            !view.state.doc.eq(prevState.doc) ||
+            prevEpoch !== nextEpoch
+          ) {
             documentRevision += 1
             schedule()
           }
@@ -351,5 +365,8 @@ export function mapPaginationThroughTransaction(
   return {
     ...state,
     decorations: state.decorations.map(tr.mapping, doc),
+    valuesEpoch: tr.getMeta(TEMPLATE_TAG_VALUES_TR_META)
+      ? state.valuesEpoch + 1
+      : state.valuesEpoch,
   }
 }

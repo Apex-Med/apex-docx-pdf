@@ -71,7 +71,7 @@ Call these on the element instance (after `ready`, or await the methods — they
 | --- | --- | --- |
 | `loadDocx(bytes)` | `Promise<void>` | Parse DOCX (`normaliseDocxBytes`) and replace the open document. |
 | `getDocx()` | `Promise<Uint8Array>` | Serialize the current document to DOCX (`serializeDocx`). |
-| `getPdf()` | `Promise<Uint8Array>` | Layout (`layoutDocument`) then serialize PDF (`serializePdf`). |
+| `getPdf()` | `Promise<Uint8Array>` | Layout (`layoutDocument`) then serialize PDF (`serializePdf`). Assigned editor tags become their values; unset tags stay as `{{placeholders}}`. Built-in `printed_at` is always the current date-time at export. Built-in `today` keeps the date captured while editing. |
 | `setReadOnly(value)` | `void` | Toggle editability and sync the `readonly` attribute. |
 | `getDocument()` | `SemanticDocument \| null` | Current in-memory semantic document, or `null` before mount / after destroy. |
 | `getSelectionRoot()` | `Document \| ShadowRoot` | Shadow root for selection APIs (do not use `document.getSelection()` alone). |
@@ -87,6 +87,10 @@ const pdf = await el.getPdf()
 el.setReadOnly(true)
 const semantic = el.getDocument()
 ```
+
+## Template tags
+
+The editor can author typed value tags (`string`, `number`, `date`) as inline badges. Saving DOCX writes the library placeholder in the run text — `{{author_name:string}}` or `{{issued_at:date | date:"dd-MM-yyyy"}}` — plus the catalog and preview values in `word/apexEditor.json`. `getDocx()` never substitutes assigned values. `getPdf()` does: assigned tags become formatted text; unset tags remain the placeholder.
 
 ## Example page
 

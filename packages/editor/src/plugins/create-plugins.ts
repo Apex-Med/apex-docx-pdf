@@ -18,6 +18,8 @@ import { createTableCaretPlugin } from "./table-caret"
 import { createTableContextMenuPlugin } from "./table-context-menu"
 import { createImagePasteDropPlugin } from "./image-paste-drop"
 import { createNodeIdentityPlugin } from "./node-identity"
+import { createTemplateTagCaretPlugin } from "./template-tag-caret"
+import { createTemplateTagDropPlugin } from "./template-tag-drop"
 
 export type CreateEditorPluginsOptions = Readonly<{
   enablePagination?: boolean
@@ -54,9 +56,11 @@ export function createEditorPlugins(
     tableEditing({ allowTableNodeSelection: true }),
     createTableContextMenuPlugin(),
     createTableCaretPlugin(),
+    createTemplateTagCaretPlugin(),
     createImagePasteDropPlugin(),
+    createTemplateTagDropPlugin(),
     gapCursor(),
-    dropCursor({ color: "#2563eb", width: 2 }),
+    dropCursor({ color: "#2563eb", width: 2, class: "apex-pm-dropcursor" }),
   ]
 
   if (options.enablePagination !== false) {

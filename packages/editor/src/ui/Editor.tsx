@@ -38,10 +38,15 @@ import {
   applyNumberedList,
   applyParagraphStyle,
   clearFormatting,
+  decreaseIndent,
+  increaseIndent,
   imageAssetFromTransaction,
   insertColumnBreak,
   insertPageBreak,
   insertTable,
+  insertTemplateTag,
+  removeTemplateTagInstances,
+  updateTemplateTagInstances,
   matchStyleToSelection,
   numberingDefinitionFromTransaction,
   removeLink,
@@ -91,6 +96,17 @@ import {
 } from "../fonts"
 import { fromSemanticDocument, toSemanticDocument } from "../model/bridge"
 import { createImageNodeView } from "../node-views/image"
+import { createTemplateTagNodeView } from "../node-views/template-tag"
+import {
+  applyTemplateTagValues,
+  hydrateTemplateTagCatalog,
+  mergeDefaultTemplateTags,
+  readTemplateTagMetadata,
+  TEMPLATE_TAG_VALUES_TR_META,
+  useTemplateTagStore,
+  writeTemplateTagMetadata,
+  type TemplateTagDefinition,
+} from "../tags"
 import { createEditorPlugins } from "../plugins/create-plugins"
 import {
   getSelectionSnapshot,
@@ -112,6 +128,9 @@ import { PrintPreview } from "./PrintPreview"
 import { TablePropertiesDialog } from "./TablePropertiesDialog"
 import { TableReorderOverlay } from "./TableReorderOverlay"
 import { StyleDialog } from "./StyleDialog"
+import { InsertTagDialog } from "./InsertTagDialog"
+import { TagEditorDialog } from "./TagEditorDialog"
+import { TagsSidebar } from "./TagsSidebar"
 
 function ensureEditorStyles(): void {
   if (typeof document === "undefined") return
@@ -361,7 +380,7 @@ function createEditorState(
       options.forceInProcessLayout === true,
     toSemantic: (state) => {
       const ctx = options.getBridgeContext()
-      return toSemanticDocument(state.doc, ctx)
+      return applyTemplateTagValues(toSemanticDocument(state.doc, ctx))
     },
   })
   return EditorState.create({
@@ -374,6 +393,7 @@ function createEditorState(
 function editorNodeViews() {
   return {
     image: createImageNodeView,
+    template_tag: createTemplateTagNodeView,
   }
 }
 
@@ -451,6 +471,22 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       })
     const [columnsOpen, setColumnsOpen] = useState(false)
     const [styleDialogOpen, setStyleDialogOpen] = useState(false)
+    const [tagEditorOpen, setTagEditorOpen] = useState(false)
+    const [tagEditorMode, setTagEditorMode] = useState<"create" | "edit">(
+      "create"
+    )
+    const [editingTag, setEditingTag] = useState<TemplateTagDefinition | null>(
+      null
+    )
+    const [insertTagOpen, setInsertTagOpen] = useState(false)
+    const tagsSidebarOpen = useEditorPreferences(
+      (state) => state.tagsSidebarOpen
+    )
+    const toggleTagsSidebarOpen = useEditorPreferences(
+      (state) => state.toggleTagsSidebarOpen
+    )
+    const templateTags = useTemplateTagStore((state) => state.tags)
+    const templateTagValues = useTemplateTagStore((state) => state.values)
     const pageUnit = useEditorPreferences((state) => state.pageUnit)
     const setPageUnit = useEditorPreferences((state) => state.setPageUnit)
     const openLinkRef = useRef<() => void>(() => undefined)
@@ -492,10 +528,31 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       [onDocumentChange]
     )
 
+    const persistTemplateTags = useCallback(() => {
+      const { tags, values } = useTemplateTagStore.getState()
+      updateDocument({
+        ...documentRef.current,
+        editorMetadata: writeTemplateTagMetadata(
+          documentRef.current.editorMetadata,
+          tags,
+          values
+        ),
+      })
+    }, [updateDocument])
+
+    const notifyTagValuesChanged = useCallback(() => {
+      persistTemplateTags()
+      const view = viewRef.current
+      if (!view) return
+      view.dispatch(view.state.tr.setMeta(TEMPLATE_TAG_VALUES_TR_META, true))
+    }, [persistTemplateTags])
+
     const layoutResult = useMemo(() => {
       if (!previewOn && !divergenceOn) return null
       try {
-        return layoutDocument(document, { includeTrace: true })
+        return layoutDocument(applyTemplateTagValues(document), {
+          includeTrace: true,
+        })
       } catch {
         return null
       }
@@ -504,6 +561,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     useEffect(() => {
       setReadOnlyState(readOnlyProp)
     }, [readOnlyProp])
+
+    useEffect(() => {
+      const hydrated = hydrateTemplateTagCatalog(documentRef.current)
+      const meta = readTemplateTagMetadata(hydrated.editorMetadata)
+      useTemplateTagStore.getState().reset(meta.tags, meta.values)
+      if (hydrated !== documentRef.current) {
+        documentRef.current = hydrated
+        setDocument(hydrated)
+      }
+    }, [])
 
     useEffect(() => {
       ensureEditorStyles()
@@ -617,10 +684,14 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
               headers: current.headers,
               footers: current.footers,
               numberingDefinitions,
-              editorMetadata: {
-                ...(current.editorMetadata ?? {}),
-                customPalettes: customPalettesRef.current,
-              },
+              editorMetadata: writeTemplateTagMetadata(
+                {
+                  ...(current.editorMetadata ?? {}),
+                  customPalettes: customPalettesRef.current,
+                },
+                useTemplateTagStore.getState().tags,
+                useTemplateTagStore.getState().values
+              ),
             })
             updateDocument(semantic)
           }
@@ -672,9 +743,12 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const loadDocument = useCallback(
       (next: SemanticDocument) => {
-        updateDocument(next)
-        setDocument(next)
-        const metadata = next.editorMetadata as
+        const hydrated = hydrateTemplateTagCatalog(next)
+        const tagMeta = readTemplateTagMetadata(hydrated.editorMetadata)
+        useTemplateTagStore.getState().reset(tagMeta.tags, tagMeta.values)
+        updateDocument(hydrated)
+        setDocument(hydrated)
+        const metadata = hydrated.editorMetadata as
           | { customPalettes?: CustomPalette[]; pageUnit?: PageSetupUnit }
           | undefined
         setCustomPalettes(metadata?.customPalettes ?? [])
@@ -685,7 +759,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           openLinkRef.current()
           return true
         }
-        const state = createEditorState(next, {
+        const state = createEditorState(hydrated, {
           layoutEnabled: true,
           forceInProcessLayout,
           openLinkCommand,
@@ -764,12 +838,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const onExportPdf = useCallback(async () => {
       try {
-        const { serializePdf } = await import("@apexmed/pdf")
-        const layout = layoutDocument(documentRef.current, {
-          includeTrace: false,
-        })
-        const pdf = serializePdf(layout.displayList)
-        const blob = new Blob([pdf.bytes as BlobPart], {
+        const bytes = await serializeEmbedPdf(documentRef.current)
+        const blob = new Blob([bytes as BlobPart], {
           type: "application/pdf",
         })
         const url = URL.createObjectURL(blob)
@@ -789,7 +859,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const onPrint = useCallback(async () => {
       try {
         setStatus("Preparing print…")
-        const bytes = await serializeEmbedPdf(documentRef.current)
+        const bytes = await serializeEmbedPdf(
+          applyTemplateTagValues(documentRef.current)
+        )
         const ownerDocument =
           rootRef.current?.ownerDocument ?? window.document
         await printPdfBytes(bytes, { ownerDocument })
@@ -830,14 +902,20 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           }
           : undefined
       )
+      const seeded = mergeDefaultTemplateTags([], {})
+      useTemplateTagStore.getState().reset(seeded.tags, seeded.values)
       loadDocument({
         ...blank,
-        editorMetadata: {
-          ...(blank.editorMetadata ?? {}),
-          ...(defaults ? { defaultPageSetup: defaults } : {}),
-          pageUnit,
-          customPalettes: customPalettesRef.current,
-        },
+        editorMetadata: writeTemplateTagMetadata(
+          {
+            ...(blank.editorMetadata ?? {}),
+            ...(defaults ? { defaultPageSetup: defaults } : {}),
+            pageUnit,
+            customPalettes: customPalettesRef.current,
+          },
+          seeded.tags,
+          seeded.values
+        ),
       })
       setStatus("New blank document")
     }, [loadDocument, pageUnit])
@@ -981,6 +1059,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           )
         },
         onInsertPageBreak: () => run(insertPageBreak()),
+        onInsertTag: () => setInsertTagOpen(true),
+        onToggleTagsSidebar: toggleTagsSidebarOpen,
         onInsertLink: () => setLinkOpen(true),
         onInsertColumnBreak: () => {
           run(insertColumnBreak())
@@ -1021,14 +1101,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onPaintFormat: () => run(matchStyleToSelection()),
         onBulletList: () => run(applyBulletList()),
         onNumberedList: () => run(applyNumberedList()),
-        onIndentDecrease: () => {
-          const current = selectionSnapshot.paragraph?.indentStart ?? 0
-          run(setParagraphAttrs({ indentStart: Math.max(0, current - 720) }))
-        },
-        onIndentIncrease: () => {
-          const current = selectionSnapshot.paragraph?.indentStart ?? 0
-          run(setParagraphAttrs({ indentStart: current + 720 }))
-        },
+        onIndentDecrease: () => run(decreaseIndent()),
+        onIndentIncrease: () => run(increaseIndent()),
         onFontFamily: (family, weight) => {
           const metadata = findGoogleFontFamily(fontCatalog, family)
           if (metadata) injectGoogleFontFamilyStylesheet(metadata)
@@ -1086,6 +1160,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         setZoom,
         toggleDarkPages,
         toggleRulerVisible,
+        toggleTagsSidebarOpen,
       ]
     )
 
@@ -1156,6 +1231,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             divergenceOn,
             printLayout: true,
             tableOptionsOpen: tablePropsOpen,
+            tagsSidebarOpen,
           }}
           resources={{
             fonts: BUILTIN_FONT_INDEX,
@@ -1196,6 +1272,39 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                 <PrintPreview displayList={layoutResult.displayList} />
               ) : null}
             </div>
+            <TagsSidebar
+              open={tagsSidebarOpen}
+              tags={templateTags}
+              values={templateTagValues}
+              onToggle={toggleTagsSidebarOpen}
+              onCreate={() => {
+                setEditingTag(null)
+                setTagEditorMode("create")
+                setTagEditorOpen(true)
+              }}
+              onEdit={(tag) => {
+                setEditingTag(tag)
+                setTagEditorMode("edit")
+                setTagEditorOpen(true)
+              }}
+              onDelete={(tag) => {
+                if (
+                  !window.confirm(
+                    `Delete “${tag.label}” and remove it from the document?`
+                  )
+                ) {
+                  return
+                }
+                useTemplateTagStore.getState().removeTag(tag.id)
+                persistTemplateTags()
+                run(removeTemplateTagInstances(tag.id))
+                setStatus(`Deleted tag ${tag.label}`)
+              }}
+              onValueChange={(tag, value) => {
+                useTemplateTagStore.getState().setValue(tag.id, value)
+                notifyTagValuesChanged()
+              }}
+            />
             {tablePropsOpen ? (
               <TablePropertiesDialog
                 key={`${tableOptionsSelection.positions.join(":")}:${tableOptionsSelection.sizing?.selectedColumns.join(",") ?? ""}`}
@@ -1273,6 +1382,51 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             ) : null}
           </div>
         </EditorChrome>
+        <TagEditorDialog
+          open={tagEditorOpen}
+          mode={tagEditorMode}
+          initial={editingTag ?? undefined}
+          takenSlugs={templateTags.map((tag) => tag.slug)}
+          onOpenChange={setTagEditorOpen}
+          onSubmit={(draft) => {
+            const tag: TemplateTagDefinition = {
+              id: draft.id ?? crypto.randomUUID(),
+              label: draft.label,
+              slug: draft.slug,
+              kind: draft.kind,
+              ...(draft.date ? { date: draft.date } : {}),
+              ...(draft.source ? { source: draft.source } : {}),
+            }
+            const previous = useTemplateTagStore
+              .getState()
+              .tags.find((entry) => entry.id === tag.id)
+            useTemplateTagStore.getState().upsertTag(tag)
+            if (previous && previous.kind !== tag.kind) {
+              useTemplateTagStore.getState().setValue(tag.id, null)
+            }
+            persistTemplateTags()
+            if (draft.id) {
+              run(updateTemplateTagInstances(tag))
+              setStatus(`Updated tag ${tag.label}`)
+            } else {
+              setStatus(`Created tag ${tag.label}`)
+            }
+          }}
+        />
+        <InsertTagDialog
+          open={insertTagOpen}
+          tags={templateTags}
+          onOpenChange={setInsertTagOpen}
+          onInsert={(tag) => {
+            run(insertTemplateTag(tag))
+            setStatus(`Inserted ${tag.label}`)
+          }}
+          onCreate={() => {
+            setEditingTag(null)
+            setTagEditorMode("create")
+            setTagEditorOpen(true)
+          }}
+        />
         <LinkDialog
           open={linkOpen}
           initialHref={selectionSnapshot.textStyle.href}

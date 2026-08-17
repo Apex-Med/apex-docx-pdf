@@ -34,6 +34,15 @@ import {
 } from "./list-label"
 import { editorSchema } from "../schema"
 import { normalizeTableSizing } from "../schema/table-sizing"
+import {
+  definitionFromNodeAttrs,
+  definitionFromPlaceholder,
+  encodeTemplatePlaceholder,
+  findValuePlaceholders,
+  readTemplateTagMetadata,
+  TEMPLATE_TAG_CARET_ZWSP,
+  type TemplateTagDefinition,
+} from "../tags"
 
 type BridgeContext = Readonly<{
   assets: readonly SemanticImageAsset[]
@@ -213,17 +222,54 @@ function inlineFromPm(
     )
     const linkMark = node.marks.find((entry) => entry.type.name === "link")
     const href = linkMark ? String(linkMark.attrs.href ?? "") : null
+    const text = (node.text ?? "").replaceAll(TEMPLATE_TAG_CARET_ZWSP, "")
+    if (text.length === 0) return []
     return [
       {
         type: "text",
         id: nodeId(nextId("editor:text", ids)),
         source: source(ctx.sourcePart, path),
-        text: node.text ?? "",
-        preserveSpace: /^\s|\s$/u.test(node.text ?? ""),
+        text,
+        preserveSpace: /^\s|\s$/u.test(text),
         style,
         styleId,
         directStyle,
         ...(href ? { href } : {}),
+      },
+    ]
+  }
+  if (node.type.name === "template_tag") {
+    const tag = definitionFromNodeAttrs(node.attrs)
+    const { style, styleId, directStyle } = textStyleFromMarks(
+      marksFromTextStyle(
+        schema,
+        {
+          fontFamily: String(node.attrs.fontFamily ?? "Inter"),
+          fontSize: twips(Number(node.attrs.fontSize ?? 220)),
+          fontWeight: Number(node.attrs.fontWeight ?? 400) as TextStyle["fontWeight"],
+          fontStyle:
+            (node.attrs.fontStyle as TextStyle["fontStyle"]) ?? "normal",
+          underline: Boolean(node.attrs.underline),
+          strikethrough: Boolean(node.attrs.strikethrough),
+          color: String(node.attrs.color ?? "#000000"),
+          highlightColor: (node.attrs.highlightColor as string | null) ?? null,
+          verticalAlignment:
+            (node.attrs.verticalAlignment as TextStyle["verticalAlignment"]) ??
+            "baseline",
+        },
+        (node.attrs.styleId as string | null) ?? null
+      ),
+      ctx.styles.defaults.text
+    )
+    return [
+      {
+        type: "text",
+        id: nodeIdentity(node.attrs.nodeId, "editor:tag", ids),
+        source: source(ctx.sourcePart, path),
+        text: encodeTemplatePlaceholder(tag),
+        style,
+        styleId,
+        directStyle,
       },
     ]
   }
@@ -890,9 +936,11 @@ export function toSemanticDocument(
 function pmInlinesFromSemantic(
   schema: Schema,
   children: readonly SemanticInline[],
-  assets: readonly SemanticImageAsset[]
+  assets: readonly SemanticImageAsset[],
+  tags: readonly TemplateTagDefinition[]
 ): PMNode[] {
   const result: PMNode[] = []
+  const bySlug = new Map(tags.map((tag) => [tag.slug, tag]))
   for (const child of children) {
     if (child.type === "text") {
       if ((child.text ?? "").length === 0 && children.length === 1) {
@@ -901,16 +949,7 @@ function pmInlinesFromSemantic(
       }
       if (child.text.length === 0) continue
       result.push(
-        schema.text(
-          child.text,
-          marksFromTextStyle(
-            schema,
-            child.style,
-            child.styleId,
-            child.href ?? null,
-            child.anchor ?? null
-          )
-        )
+        ...pmNodesFromTemplateText(schema, child, bySlug)
       )
       continue
     }
@@ -985,6 +1024,63 @@ function pmInlinesFromSemantic(
   return result
 }
 
+function pmNodesFromTemplateText(
+  schema: Schema,
+  child: Extract<SemanticInline, { type: "text" }>,
+  bySlug: ReadonlyMap<string, TemplateTagDefinition>
+): PMNode[] {
+  const marks = marksFromTextStyle(
+    schema,
+    child.style,
+    child.styleId,
+    child.href ?? null,
+    child.anchor ?? null
+  )
+  const matches = findValuePlaceholders(child.text)
+  if (matches.length === 0) {
+    return [schema.text(child.text, marks)]
+  }
+  const nodes: PMNode[] = []
+  let cursor = 0
+  for (const match of matches) {
+    if (match.start > cursor) {
+      nodes.push(schema.text(child.text.slice(cursor, match.start), marks))
+    }
+    const tag = bySlug.get(match.slug) ?? definitionFromPlaceholder(match)
+    const type = schema.nodes.template_tag
+    if (type && tag) {
+      nodes.push(
+        type.create({
+          nodeId: String(child.id),
+          tagId: tag.id,
+          slug: tag.slug,
+          kind: tag.kind,
+          label: tag.label,
+          datePattern: tag.date?.pattern ?? null,
+          includeTime: tag.date?.includeTime ?? false,
+          fontFamily: child.style.fontFamily,
+          fontSize: child.style.fontSize,
+          fontWeight: child.style.fontWeight,
+          fontStyle: child.style.fontStyle,
+          underline: child.style.underline,
+          strikethrough: child.style.strikethrough ?? false,
+          color: child.style.color,
+          highlightColor: child.style.highlightColor ?? null,
+          verticalAlignment: child.style.verticalAlignment ?? "baseline",
+          styleId: child.styleId ?? null,
+        })
+      )
+    } else {
+      nodes.push(schema.text(child.text.slice(match.start, match.end), marks))
+    }
+    cursor = match.end
+  }
+  if (cursor < child.text.length) {
+    nodes.push(schema.text(child.text.slice(cursor), marks))
+  }
+  return nodes
+}
+
 function pmParagraphFromSemantic(
   schema: Schema,
   paragraph: SemanticParagraph,
@@ -992,9 +1088,10 @@ function pmParagraphFromSemantic(
   numbering?: Readonly<{
     definitions: SemanticDocument["numberingDefinitions"]
     counters: NumberingLabelState
-  }>
+  }>,
+  tags: readonly TemplateTagDefinition[] = []
 ): PMNode {
-  const content = pmInlinesFromSemantic(schema, paragraph.children, assets)
+  const content = pmInlinesFromSemantic(schema, paragraph.children, assets, tags)
   return schema.nodes.paragraph?.create(
     {
       nodeId: String(paragraph.id),
@@ -1065,7 +1162,8 @@ function pmTableFromSemantic(
   numbering?: Readonly<{
     definitions: SemanticDocument["numberingDefinitions"]
     counters: NumberingLabelState
-  }>
+  }>,
+  tags: readonly TemplateTagDefinition[] = []
 ): PMNode {
   const collapsed = collapseVMergeToRowspan(table.rows)
   const rowNodes = collapsed.map((cells, rowIndex) => {
@@ -1097,7 +1195,7 @@ function pmTableFromSemantic(
           ? schema.nodes.table_header
           : schema.nodes.table_cell
       const content = cell.blocks.map((block) =>
-        pmParagraphFromSemantic(schema, block, assets, numbering)
+        pmParagraphFromSemantic(schema, block, assets, numbering, tags)
       )
       return type?.create(
         {
@@ -1165,12 +1263,13 @@ function pmBlockFromSemantic(
   numbering?: Readonly<{
     definitions: SemanticDocument["numberingDefinitions"]
     counters: NumberingLabelState
-  }>
+  }>,
+  tags: readonly TemplateTagDefinition[] = []
 ): PMNode {
   if (block.type === "paragraph")
-    return pmParagraphFromSemantic(schema, block, assets, numbering)
+    return pmParagraphFromSemantic(schema, block, assets, numbering, tags)
   if (block.type === "table")
-    return pmTableFromSemantic(schema, block, assets, numbering)
+    return pmTableFromSemantic(schema, block, assets, numbering, tags)
   return schema.nodes.horizontal_rule?.create({
     nodeId: String(block.id),
     height: block.height,
@@ -1200,9 +1299,10 @@ export function fromSemanticDocument(
     definitions: document.numberingDefinitions,
     counters: new Map() as NumberingLabelState,
   }
+  const tags = readTemplateTagMetadata(document.editorMetadata).tags
   const sections = document.sections.map((section) => {
     const blocks = section.blocks.map((block) =>
-      pmBlockFromSemantic(schema, block, document.assets, numbering)
+      pmBlockFromSemantic(schema, block, document.assets, numbering, tags)
     )
     const content =
       blocks.length > 0 ? blocks : [schema.nodes.paragraph?.createAndFill()!]

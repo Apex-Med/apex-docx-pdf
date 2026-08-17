@@ -46,3 +46,8 @@ export {
   fontRegistryForDocument,
   injectEmbeddedDocumentFonts,
 } from "./embedded"
+
+export {
+  fontRegistryForExport,
+  resetExportFontRegistryCacheForTests,
+} from "./export-registry"

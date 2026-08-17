@@ -1513,10 +1513,234 @@
   color: color-mix(in oklab, #fde68a 80%, var(--apex-chrome-fg));
 }
 
+/* ── Template tags ──
+ * Wrapper stays contenteditable so the caret can sit on the same line
+ * immediately before/after the chip. Chrome drops the caret next to a
+ * contenteditable=false inline, so only the inner chip is inert.
+ */
+.apex-editor-surface .ProseMirror .apex-template-tag {
+  display: inline;
+  font: inherit;
+  font-size: 1em;
+  line-height: inherit;
+  vertical-align: baseline;
+  cursor: text;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-tag__chip {
+  display: inline;
+  font: inherit;
+  font-size: 1em;
+  line-height: inherit;
+  vertical-align: baseline;
+  padding: 0 0.28em;
+  margin: 0 0.04em;
+  border: 0;
+  border-radius: 0.2em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  white-space: nowrap;
+  cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-tag--empty .apex-template-tag__chip {
+  background: color-mix(in oklab, var(--apex-accent) 18%, transparent);
+  color: inherit;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-tag--filled .apex-template-tag__chip {
+  background: color-mix(in oklab, var(--apex-accent) 7%, transparent);
+  color: inherit;
+  opacity: 0.82;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-tag.is-selected .apex-template-tag__chip,
+.apex-editor-surface
+  .ProseMirror
+  .apex-template-tag.ProseMirror-selectednode
+  .apex-template-tag__chip {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--apex-accent) 70%, transparent);
+}
+
+.apex-template-tag-drop-cursor {
+  position: fixed;
+  z-index: 80;
+  width: 2px;
+  pointer-events: none;
+  background: var(--apex-accent, #2563eb);
+}
+
+.apex-template-tag-drag-ghost {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  padding: 0 0.4em;
+  border-radius: 0.2em;
+  background: color-mix(in oklab, var(--apex-accent, #2563eb) 18%, #fff);
+  color: #202124;
+  font: 11pt Inter, system-ui, sans-serif;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.apex-editor-root[data-apex-tag-dragging] .apex-pm-dropcursor,
+.apex-editor-root[data-apex-tag-dragging] .prosemirror-dropcursor-inline,
+.apex-editor-root[data-apex-tag-dragging] .prosemirror-dropcursor-block,
+body:has(.apex-editor-root[data-apex-tag-dragging]) > .apex-pm-dropcursor {
+  display: none !important;
+}
+
+/* contenteditable=false chips skip the native ::selection paint. */
+.apex-editor-surface
+  .ProseMirror
+  .apex-template-tag--in-selection
+  .apex-template-tag__chip {
+  background: Highlight;
+  color: HighlightText;
+  opacity: 1;
+}
+
+.apex-tags-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 280px;
+  width: 280px;
+  min-width: 240px;
+  max-width: 280px;
+  min-height: 0;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+  border-left: 1px solid var(--apex-chrome-border);
+}
+
+.apex-tags-sidebar--collapsed {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.apex-tags-sidebar__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 10px 8px 8px 16px;
+  border-bottom: 1px solid var(--apex-chrome-border);
+}
+
+.apex-tags-sidebar__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.apex-tags-sidebar__subtitle {
+  margin: 2px 0 0;
+  color: var(--apex-chrome-muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.apex-tags-sidebar__tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 0 8px 12px;
+}
+
+.apex-tags-sidebar__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 10px;
+}
+
+.apex-tags-sidebar__empty {
+  margin: 0;
+  color: var(--apex-chrome-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.apex-tags-sidebar__list,
+.apex-tags-sidebar__fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.apex-tags-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--apex-chrome-border);
+  background: color-mix(in oklab, var(--apex-chrome-hover) 35%, transparent);
+}
+
+.apex-tags-sidebar__drag {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: grab;
+}
+
+.apex-tags-sidebar__drag:active {
+  cursor: grabbing;
+}
+
+.apex-tags-sidebar__grip {
+  flex-shrink: 0;
+  width: 12px;
+  color: var(--apex-chrome-muted);
+  font-size: 11px;
+  letter-spacing: -1px;
+  text-align: center;
+}
+
+.apex-tags-sidebar__kind {
+  flex-shrink: 0;
+  color: var(--apex-chrome-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .apex-tags-sidebar:not(.apex-tags-sidebar--collapsed) {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+  }
+}
+
 /* Print and PDF-style output stay on white paper with authored black ink. */
 @media print {
   .apex-table-options,
-  .apex-table-dnd {
+  .apex-table-dnd,
+  .apex-tags-sidebar {
     display: none;
   }
 

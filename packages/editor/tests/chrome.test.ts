@@ -83,6 +83,8 @@ const noopActions: EditorChromeActions = {
   onInsertImage: () => undefined,
   onInsertTable: () => undefined,
   onInsertPageBreak: () => undefined,
+  onInsertTag: () => undefined,
+  onToggleTagsSidebar: () => undefined,
   onInsertLink: () => undefined,
   onInsertColumnBreak: () => undefined,
   onBold: () => undefined,
@@ -372,6 +374,8 @@ describe("editor chrome components", () => {
     expect(menu).toContain("Align &amp; indent")
     expect(menu).toContain("Bullets &amp; numbering")
     expect(menu).toContain("PDF Document (.pdf)")
+    expect(menu).toContain("Tag…")
+    expect(menu).toContain("Tags sidebar")
     expect(menu).not.toContain("Download as PDF")
     expect(editor).toContain("printPdfBytes")
     expect(editor).toContain("serializeEmbedPdf")

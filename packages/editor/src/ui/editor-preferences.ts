@@ -11,6 +11,7 @@ export type EditorPreferenceValues = Readonly<{
   rulerVisible: boolean
   darkPages: boolean
   pageUnit: PageSetupUnit
+  tagsSidebarOpen: boolean
 }>
 
 type EditorPreferenceActions = Readonly<{
@@ -20,6 +21,8 @@ type EditorPreferenceActions = Readonly<{
   setDarkPages: (enabled: boolean) => void
   toggleDarkPages: () => void
   setPageUnit: (unit: PageSetupUnit) => void
+  setTagsSidebarOpen: (open: boolean) => void
+  toggleTagsSidebarOpen: () => void
 }>
 
 export type EditorPreferencesState = EditorPreferenceValues &
@@ -57,6 +60,9 @@ export function normalizeEditorPreferences(
   if (isPageSetupUnit(candidate.pageUnit)) {
     normalized.pageUnit = candidate.pageUnit
   }
+  if (typeof candidate.tagsSidebarOpen === "boolean") {
+    normalized.tagsSidebarOpen = candidate.tagsSidebarOpen
+  }
 
   return normalized
 }
@@ -69,6 +75,7 @@ export const useEditorPreferences = create<EditorPreferencesState>()(
       // Preserve the original standalone preference on first migration.
       darkPages: readDarkPagesPreference(),
       pageUnit: "in",
+      tagsSidebarOpen: true,
       setZoom: (zoom) => set({ zoom }),
       setRulerVisible: (rulerVisible) => set({ rulerVisible }),
       toggleRulerVisible: () =>
@@ -76,16 +83,26 @@ export const useEditorPreferences = create<EditorPreferencesState>()(
       setDarkPages: (darkPages) => set({ darkPages }),
       toggleDarkPages: () => set((state) => ({ darkPages: !state.darkPages })),
       setPageUnit: (pageUnit) => set({ pageUnit }),
+      setTagsSidebarOpen: (tagsSidebarOpen) => set({ tagsSidebarOpen }),
+      toggleTagsSidebarOpen: () =>
+        set((state) => ({ tagsSidebarOpen: !state.tagsSidebarOpen })),
     }),
     {
       name: EDITOR_PREFERENCES_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       version: 1,
-      partialize: ({ zoom, rulerVisible, darkPages, pageUnit }) => ({
+      partialize: ({
         zoom,
         rulerVisible,
         darkPages,
         pageUnit,
+        tagsSidebarOpen,
+      }) => ({
+        zoom,
+        rulerVisible,
+        darkPages,
+        pageUnit,
+        tagsSidebarOpen,
       }),
       merge: (persisted, current) => ({
         ...current,

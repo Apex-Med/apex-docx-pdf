@@ -6,10 +6,16 @@ import {
   applyBulletList,
   applyDefinedParagraphStyle,
   applyCommandToSemantic,
+  backspaceCommand,
   BULLET_NUMBERING_ID,
   clearFormatting,
   createEditorStateFromDocx,
   createEditorStateFromDocument,
+  decreaseIndent,
+  handleShiftTab,
+  handleTab,
+  increaseIndent,
+  INDENT_STEP_TWIPS,
   insertTable,
   setParagraphAttrs,
   setTableAttrs,
@@ -38,6 +44,181 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     expect(paragraph.properties.alignment).toBe("center")
     expect(Number(paragraph.properties.indentStart)).toBe(720)
     expect(Number(paragraph.properties.firstLineIndent)).toBe(-360)
+  })
+
+  test("increaseIndent and decreaseIndent step left indent by half an inch", () => {
+    const state = createEditorStateFromDocument(createBlankDocument())
+    const indented = applyCommandToSemantic(state, increaseIndent())
+    expect(indented.applied).toBe(true)
+    const paragraph = indented.document.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(Number(paragraph.properties.indentStart)).toBe(INDENT_STEP_TWIPS)
+
+    const again = applyCommandToSemantic(indented.state, increaseIndent())
+    const twice = again.document.sections[0]?.blocks[0]
+    expect(twice?.type).toBe("paragraph")
+    if (twice?.type !== "paragraph") return
+    expect(Number(twice.properties.indentStart)).toBe(INDENT_STEP_TWIPS * 2)
+
+    const outdented = applyCommandToSemantic(again.state, decreaseIndent())
+    const once = outdented.document.sections[0]?.blocks[0]
+    expect(once?.type).toBe("paragraph")
+    if (once?.type !== "paragraph") return
+    expect(Number(once.properties.indentStart)).toBe(INDENT_STEP_TWIPS)
+
+    const cleared = applyCommandToSemantic(outdented.state, decreaseIndent())
+    const flush = cleared.document.sections[0]?.blocks[0]
+    expect(flush?.type).toBe("paragraph")
+    if (flush?.type !== "paragraph") return
+    expect(Number(flush.properties.indentStart)).toBe(0)
+
+    const stillFlush = applyCommandToSemantic(cleared.state, decreaseIndent())
+    expect(stillFlush.applied).toBe(false)
+  })
+
+  test("increaseIndent applies to every paragraph in the selection", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["First", "Second"] })
+    )
+    const textStarts: number[] = []
+    const textEnds: number[] = []
+    state.doc.descendants((node, pos) => {
+      if (!node.isText) return
+      textStarts.push(pos)
+      textEnds.push(pos + node.nodeSize)
+    })
+    expect(textStarts.length).toBeGreaterThanOrEqual(2)
+    const selected = state.apply(
+      state.tr.setSelection(
+        TextSelection.create(
+          state.doc,
+          textStarts[0]!,
+          textEnds[textEnds.length - 1]!
+        )
+      )
+    )
+    const result = applyCommandToSemantic(selected, increaseIndent())
+    expect(result.applied).toBe(true)
+    const blocks = result.document.sections[0]?.blocks ?? []
+    const paragraphs = blocks.filter((block) => block.type === "paragraph")
+    expect(paragraphs).toHaveLength(2)
+    expect(
+      paragraphs.every(
+        (block) =>
+          block.type === "paragraph" &&
+          Number(block.properties.indentStart) === INDENT_STEP_TWIPS
+      )
+    ).toBe(true)
+  })
+
+  test("Tab indents outside tables and still navigates cells inside tables", () => {
+    const body = createEditorStateFromDocument(createBlankDocument())
+    const indented = applyCommandToSemantic(body, handleTab())
+    expect(indented.applied).toBe(true)
+    const paragraph = indented.document.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(Number(paragraph.properties.indentStart)).toBe(INDENT_STEP_TWIPS)
+
+    const outdented = applyCommandToSemantic(indented.state, handleShiftTab())
+    expect(outdented.applied).toBe(true)
+    const flush = outdented.document.sections[0]?.blocks[0]
+    expect(flush?.type).toBe("paragraph")
+    if (flush?.type !== "paragraph") return
+    expect(Number(flush.properties.indentStart)).toBe(0)
+
+    expect(handleShiftTab()(outdented.state)).toBe(true)
+
+    const table = applyCommandToSemantic(body, insertTable(2, 2))
+    const before = table.document.sections[0]?.blocks.find(
+      (block) => block.type === "table"
+    )
+    expect(before?.type).toBe("table")
+    if (before?.type !== "table") return
+    const firstCellIndent = Number(
+      before.rows[0]?.cells[0]?.blocks[0]?.type === "paragraph"
+        ? before.rows[0].cells[0].blocks[0].properties.indentStart
+        : -1
+    )
+    const tabbed = applyCommandToSemantic(table.state, handleTab())
+    const after = tabbed.document.sections[0]?.blocks.find(
+      (block) => block.type === "table"
+    )
+    expect(after?.type).toBe("table")
+    if (after?.type !== "table") return
+    const nextCell = after.rows[0]?.cells[1]?.blocks[0]
+    expect(nextCell?.type).toBe("paragraph")
+    if (nextCell?.type !== "paragraph") return
+    expect(Number(nextCell.properties.indentStart)).toBe(firstCellIndent)
+    expect(tabbed.state.selection.from).not.toBe(table.state.selection.from)
+  })
+
+  test("Backspace at the start of an indented paragraph removes one indent step", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["Hello"] })
+    )
+    const indented = applyCommandToSemantic(state, increaseIndent())
+    const twice = applyCommandToSemantic(indented.state, increaseIndent())
+    let paraStart = 0
+    twice.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "paragraph") return true
+      paraStart = pos + 1
+      return false
+    })
+    const atStart = twice.state.apply(
+      twice.state.tr.setSelection(
+        TextSelection.create(twice.state.doc, paraStart)
+      )
+    )
+    const outdented = applyCommandToSemantic(atStart, backspaceCommand)
+    expect(outdented.applied).toBe(true)
+    const paragraph = outdented.document.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(Number(paragraph.properties.indentStart)).toBe(INDENT_STEP_TWIPS)
+    expect(
+      paragraph.children
+        .filter((child) => child.type === "text")
+        .map((child) => (child.type === "text" ? child.text : ""))
+        .join("")
+    ).toBe("Hello")
+
+    const flush = applyCommandToSemantic(outdented.state, backspaceCommand)
+    const flushed = flush.document.sections[0]?.blocks[0]
+    expect(flushed?.type).toBe("paragraph")
+    if (flushed?.type !== "paragraph") return
+    expect(Number(flushed.properties.indentStart)).toBe(0)
+  })
+
+  test("Backspace in the middle of an indented paragraph does not outdent", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["Hello"] })
+    )
+    const indented = applyCommandToSemantic(state, increaseIndent())
+    let textPos = 0
+    indented.state.doc.descendants((node, pos) => {
+      if (!node.isText) return
+      textPos = pos
+      return false
+    })
+    const inMiddle = indented.state.apply(
+      indented.state.tr.setSelection(
+        TextSelection.create(indented.state.doc, textPos + 2)
+      )
+    )
+    const result = applyCommandToSemantic(inMiddle, backspaceCommand)
+    expect(result.applied).toBe(false)
+    const paragraph = result.document.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(Number(paragraph.properties.indentStart)).toBe(INDENT_STEP_TWIPS)
+    expect(
+      paragraph.children
+        .filter((child) => child.type === "text")
+        .map((child) => (child.type === "text" ? child.text : ""))
+        .join("")
+    ).toBe("Hello")
   })
 
   test("clearFormatting removes run marks and resets paragraph attrs", () => {

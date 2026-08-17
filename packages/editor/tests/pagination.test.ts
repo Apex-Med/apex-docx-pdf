@@ -172,6 +172,7 @@ describe("pagination from layout path", () => {
         pageCount: layout.displayList.pages.length,
         diagnostics: [],
         iteration: 0,
+        valuesEpoch: 0,
       },
       tr,
       tr.doc

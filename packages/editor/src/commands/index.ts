@@ -18,6 +18,12 @@ import {
   tableSizingConstraintMessage,
   withTableWidthMode,
 } from "../schema/table-sizing"
+import { isTemplateTagCaretAnchor } from "../plugins/template-tag-caret"
+import {
+  DEFAULT_TEMPLATE_TAG_STYLE,
+  type TemplateTagDefinition,
+  type TemplateTagTextStyleAttrs,
+} from "../tags"
 import {
   baseKeymap,
   chainCommands,
@@ -37,6 +43,7 @@ import { redo, undo } from "prosemirror-history"
 import { keymap } from "prosemirror-keymap"
 import type { Node as PMNode, NodeType } from "prosemirror-model"
 import {
+  NodeSelection,
   TextSelection,
   type Command,
   type EditorState,
@@ -52,6 +59,7 @@ import {
   deleteRow,
   deleteTable,
   goToNextCell,
+  isInTable,
   mergeCells,
   splitCell,
   TableMap,
@@ -265,6 +273,13 @@ function updateTextStyle(attrs: Record<string, unknown>): Command {
     }
     let tr = state.tr
     state.doc.nodesBetween(from, to, (node, pos) => {
+      if (node.type.name === "template_tag") {
+        tr = tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          ...pickTemplateTagStyle(attrs),
+        })
+        return
+      }
       if (!node.isText) return
       const existing = markType.isInSet(node.marks)
       const next = markType.create({
@@ -278,6 +293,31 @@ function updateTextStyle(attrs: Record<string, unknown>): Command {
     if (dispatch) dispatch(tr.scrollIntoView())
     return true
   }
+}
+
+function pickTemplateTagStyle(
+  attrs: Record<string, unknown>
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {}
+  if (typeof attrs.fontFamily === "string") next.fontFamily = attrs.fontFamily
+  if (typeof attrs.fontSize === "number") next.fontSize = attrs.fontSize
+  if (typeof attrs.fontWeight === "number") next.fontWeight = attrs.fontWeight
+  if (typeof attrs.fontStyle === "string") next.fontStyle = attrs.fontStyle
+  if (typeof attrs.underline === "boolean") next.underline = attrs.underline
+  if (typeof attrs.strikethrough === "boolean") {
+    next.strikethrough = attrs.strikethrough
+  }
+  if (typeof attrs.color === "string") next.color = attrs.color
+  if (attrs.highlightColor === null || typeof attrs.highlightColor === "string") {
+    next.highlightColor = attrs.highlightColor
+  }
+  if (typeof attrs.verticalAlignment === "string") {
+    next.verticalAlignment = attrs.verticalAlignment
+  }
+  if (attrs.styleId === null || typeof attrs.styleId === "string") {
+    next.styleId = attrs.styleId
+  }
+  return next
 }
 
 export function toggleBold(): Command {
@@ -429,6 +469,112 @@ export function setParagraphAttrs(attrs: Record<string, unknown>): Command {
       )
     }
     return true
+  }
+}
+
+/** Word-style indent step: 0.5 inch. */
+export const INDENT_STEP_TWIPS = 720
+
+function selectedParagraphPositions(state: EditorState): number[] {
+  const positions: number[] = []
+  const seen = new Set<number>()
+  const { from, to, $from } = state.selection
+  const add = (pos: number) => {
+    if (seen.has(pos)) return
+    seen.add(pos)
+    positions.push(pos)
+  }
+  const depth = findNodeDepth($from, "paragraph")
+  if ($from.node(depth).type.name === "paragraph") {
+    add($from.before(depth))
+  }
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name === "paragraph") {
+      add(pos)
+      return false
+    }
+    return true
+  })
+  return positions
+}
+
+function applyIndentDelta(delta: number): Command {
+  return (state, dispatch) => {
+    const positions = selectedParagraphPositions(state)
+    if (positions.length === 0) return false
+    let tr = state.tr
+    let changed = false
+    for (const pos of positions) {
+      const mapped = tr.mapping.map(pos)
+      const node = tr.doc.nodeAt(mapped)
+      if (node?.type.name !== "paragraph") continue
+      const current = Number(node.attrs.indentStart ?? 0)
+      const next = Math.max(0, current + delta)
+      if (next === current) continue
+      changed = true
+      tr = tr.setNodeMarkup(mapped, undefined, {
+        ...node.attrs,
+        indentStart: next,
+      })
+    }
+    if (!changed) return false
+    if (dispatch) dispatch(tr.scrollIntoView())
+    return true
+  }
+}
+
+/** Increase left indent of every selected paragraph by {@link INDENT_STEP_TWIPS}. */
+export function increaseIndent(): Command {
+  return applyIndentDelta(INDENT_STEP_TWIPS)
+}
+
+/** Decrease left indent of every selected paragraph by {@link INDENT_STEP_TWIPS}. */
+export function decreaseIndent(): Command {
+  return applyIndentDelta(-INDENT_STEP_TWIPS)
+}
+
+/**
+ * Tab: next table cell, otherwise increase indent. Consumes the key so the
+ * browser does not move focus out of the editor.
+ */
+export function handleTab(): Command {
+  return (state, dispatch) => {
+    if (isInTable(state)) return goToNextCell(1)(state, dispatch)
+    return increaseIndent()(state, dispatch)
+  }
+}
+
+/**
+ * Shift-Tab: previous table cell, otherwise decrease indent. Still handled
+ * when indent is already 0 so focus stays in the editor.
+ */
+export function handleShiftTab(): Command {
+  return (state, dispatch) => {
+    if (isInTable(state)) return goToNextCell(-1)(state, dispatch)
+    if (decreaseIndent()(state, dispatch)) return true
+    return selectedParagraphPositions(state).length > 0
+  }
+}
+
+function caretAtParagraphStart(state: EditorState): boolean {
+  const { selection } = state
+  if (!selection.empty) return false
+  const { $from } = selection
+  const depth = findNodeDepth($from, "paragraph")
+  return (
+    $from.node(depth).type.name === "paragraph" &&
+    $from.pos === $from.start(depth)
+  )
+}
+
+/**
+ * Backspace at the start of an indented paragraph removes one indent step
+ * instead of joining with the previous block.
+ */
+export function backspaceDecreaseIndent(): Command {
+  return (state, dispatch) => {
+    if (!caretAtParagraphStart(state)) return false
+    return decreaseIndent()(state, dispatch)
   }
 }
 
@@ -715,6 +861,233 @@ export function insertColumnBreak(): Command {
     if (!type) return false
     if (dispatch) {
       dispatch(state.tr.replaceSelectionWith(type.create()).scrollIntoView())
+    }
+    return true
+  }
+}
+
+function templateTagStyleFromState(
+  state: EditorState
+): TemplateTagTextStyleAttrs {
+  const markType = state.schema.marks.textStyle
+  const marks = state.storedMarks ?? state.selection.$from.marks()
+  const existing = markType ? markType.isInSet(marks) : undefined
+  return {
+    fontFamily: String(
+      existing?.attrs.fontFamily ?? DEFAULT_TEMPLATE_TAG_STYLE.fontFamily
+    ),
+    fontSize: Number(
+      existing?.attrs.fontSize ?? DEFAULT_TEMPLATE_TAG_STYLE.fontSize
+    ),
+    fontWeight: Number(
+      existing?.attrs.fontWeight ?? DEFAULT_TEMPLATE_TAG_STYLE.fontWeight
+    ),
+    fontStyle: String(
+      existing?.attrs.fontStyle ?? DEFAULT_TEMPLATE_TAG_STYLE.fontStyle
+    ),
+    underline: Boolean(
+      existing?.attrs.underline ?? DEFAULT_TEMPLATE_TAG_STYLE.underline
+    ),
+    strikethrough: Boolean(
+      existing?.attrs.strikethrough ?? DEFAULT_TEMPLATE_TAG_STYLE.strikethrough
+    ),
+    color: String(existing?.attrs.color ?? DEFAULT_TEMPLATE_TAG_STYLE.color),
+    highlightColor:
+      (existing?.attrs.highlightColor as string | null | undefined) ??
+      DEFAULT_TEMPLATE_TAG_STYLE.highlightColor,
+    verticalAlignment: String(
+      existing?.attrs.verticalAlignment ??
+        DEFAULT_TEMPLATE_TAG_STYLE.verticalAlignment
+    ),
+    styleId:
+      (existing?.attrs.styleId as string | null | undefined) ??
+      DEFAULT_TEMPLATE_TAG_STYLE.styleId,
+  }
+}
+
+export function insertTemplateTag(
+  tag: TemplateTagDefinition,
+  position?: number
+): Command {
+  return (state, dispatch) => {
+    const type = state.schema.nodes.template_tag
+    if (!type) return false
+    const style = templateTagStyleFromState(state)
+    const node = type.create({
+      tagId: tag.id,
+      slug: tag.slug,
+      kind: tag.kind,
+      label: tag.label,
+      datePattern: tag.date?.pattern ?? null,
+      includeTime: tag.date?.includeTime ?? false,
+      ...style,
+    })
+    if (position !== undefined) {
+      const $pos = state.doc.resolve(
+        Math.max(0, Math.min(position, state.doc.content.size))
+      )
+      if (!$pos.parent.inlineContent) return false
+      if (dispatch) {
+        const tr = state.tr.insert($pos.pos, node)
+        const caret = $pos.pos + node.nodeSize
+        dispatch(
+          tr
+            .setSelection(TextSelection.near(tr.doc.resolve(caret), 1))
+            .scrollIntoView()
+        )
+      }
+      return true
+    }
+    if (dispatch) {
+      const tr = state.tr.replaceSelectionWith(node)
+      const after =
+        tr.selection instanceof NodeSelection
+          ? tr.selection.to
+          : tr.selection.head
+      dispatch(
+        tr
+          .setSelection(TextSelection.near(tr.doc.resolve(after), 1))
+          .scrollIntoView()
+      )
+    }
+    return true
+  }
+}
+
+/** Move the text caret past a neighboring tag instead of node-selecting it. */
+export function arrowPastTemplateTag(direction: -1 | 1): Command {
+  return (state, dispatch) => {
+    const { selection } = state
+    if (
+      selection instanceof NodeSelection &&
+      selection.node.type.name === "template_tag"
+    ) {
+      const pos = direction < 0 ? selection.from : selection.to
+      if (dispatch) {
+        dispatch(
+          state.tr
+            .setSelection(TextSelection.near(state.doc.resolve(pos), direction))
+            .scrollIntoView()
+        )
+      }
+      return true
+    }
+    if (!selection.empty) return false
+    const pos = skipTemplateTagAround(state, selection.from, direction)
+    if (pos === null) return false
+    if (dispatch) {
+      dispatch(
+        state.tr
+          .setSelection(TextSelection.near(state.doc.resolve(pos), direction))
+          .scrollIntoView()
+      )
+    }
+    return true
+  }
+}
+
+/** Delete the tag immediately before/after the caret as if it were a character. */
+export function deleteAdjacentTemplateTag(direction: -1 | 1): Command {
+  return (state, dispatch) => {
+    const { selection } = state
+    if (!selection.empty) return false
+    const range = templateTagDeleteRange(state, selection.from, direction)
+    if (!range) return false
+    if (dispatch) {
+      dispatch(state.tr.delete(range.from, range.to).scrollIntoView())
+    }
+    return true
+  }
+}
+
+function skipTemplateTagAround(
+  state: EditorState,
+  pos: number,
+  direction: -1 | 1
+): number | null {
+  if (direction > 0) {
+    let at = pos
+    let node = state.doc.resolve(at).nodeAfter
+    if (isTemplateTagCaretAnchor(node) && node) {
+      at += node.nodeSize
+      node = state.doc.resolve(at).nodeAfter
+    }
+    if (node?.type.name !== "template_tag") return null
+    at += node.nodeSize
+    const after = state.doc.resolve(at).nodeAfter
+    if (isTemplateTagCaretAnchor(after) && after) at += after.nodeSize
+    return at
+  }
+  let at = pos
+  let node = state.doc.resolve(at).nodeBefore
+  if (isTemplateTagCaretAnchor(node) && node) {
+    at -= node.nodeSize
+    node = state.doc.resolve(at).nodeBefore
+  }
+  if (node?.type.name !== "template_tag") return null
+  at -= node.nodeSize
+  const before = state.doc.resolve(at).nodeBefore
+  if (isTemplateTagCaretAnchor(before) && before) at -= before.nodeSize
+  return at
+}
+
+function templateTagDeleteRange(
+  state: EditorState,
+  pos: number,
+  direction: -1 | 1
+): { from: number; to: number } | null {
+  if (direction < 0) {
+    const end = skipTemplateTagAround(state, pos, -1)
+    if (end === null) return null
+    return { from: end, to: pos }
+  }
+  const end = skipTemplateTagAround(state, pos, 1)
+  if (end === null) return null
+  return { from: pos, to: end }
+}
+
+export function updateTemplateTagInstances(
+  tag: TemplateTagDefinition
+): Command {
+  return (state, dispatch) => {
+    const type = state.schema.nodes.template_tag
+    if (!type) return false
+    let tr = state.tr
+    let changed = false
+    state.doc.descendants((node, pos) => {
+      if (node.type !== type || String(node.attrs.tagId) !== tag.id) return
+      tr = tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        slug: tag.slug,
+        kind: tag.kind,
+        label: tag.label,
+        datePattern: tag.date?.pattern ?? null,
+        includeTime: tag.date?.includeTime ?? false,
+      })
+      changed = true
+    })
+    if (changed && dispatch) dispatch(tr)
+    return changed
+  }
+}
+
+export function removeTemplateTagInstances(tagId: string): Command {
+  return (state, dispatch) => {
+    const type = state.schema.nodes.template_tag
+    if (!type) return false
+    const positions: number[] = []
+    state.doc.descendants((node, pos) => {
+      if (node.type === type && String(node.attrs.tagId) === tagId) {
+        positions.push(pos)
+      }
+    })
+    if (positions.length === 0) return false
+    if (dispatch) {
+      let tr = state.tr
+      for (const pos of positions.sort((left, right) => right - left)) {
+        tr = tr.delete(pos, pos + 1)
+      }
+      dispatch(tr)
     }
     return true
   }
@@ -2044,6 +2417,8 @@ export const splitOrCreateParagraph: Command = chainCommands(
  */
 export const backspaceCommand: Command = chainCommands(
   deleteSelection,
+  deleteAdjacentTemplateTag(-1),
+  backspaceDecreaseIndent(),
   joinBackward,
   selectNodeBackward
 )
@@ -2053,6 +2428,7 @@ export const backspaceCommand: Command = chainCommands(
  */
 export const deleteCommand: Command = chainCommands(
   deleteSelection,
+  deleteAdjacentTemplateTag(1),
   joinForward,
   selectNodeForward
 )
@@ -2072,12 +2448,14 @@ export const editorKeymap = keymap({
   "Mod-Shift-Enter": insertColumnBreak(),
   "Shift-Enter": chainCommands(exitCode, insertLineBreak()),
   Enter: splitOrCreateParagraph,
+  ArrowLeft: arrowPastTemplateTag(-1),
+  ArrowRight: arrowPastTemplateTag(1),
   Backspace: backspaceCommand,
   "Mod-Backspace": backspaceCommand,
   Delete: deleteCommand,
   "Mod-Delete": deleteCommand,
-  Tab: goToNextCell(1),
-  "Shift-Tab": goToNextCell(-1),
+  Tab: handleTab(),
+  "Shift-Tab": handleShiftTab(),
   // Fall through to ProseMirror's base map for arrows, etc.
   ...Object.fromEntries(
     Object.entries(baseKeymap).filter(
@@ -2089,6 +2467,8 @@ export const editorKeymap = keymap({
           "Mod-a",
           "Mod-Backspace",
           "Mod-Delete",
+          "ArrowLeft",
+          "ArrowRight",
         ].includes(key)
     )
   ),

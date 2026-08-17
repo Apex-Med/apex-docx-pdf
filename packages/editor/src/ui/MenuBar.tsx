@@ -133,6 +133,12 @@ export function MenuBar({
               Show ruler
             </MenubarCheckboxItem>
             <MenubarCheckboxItem
+              checked={view.tagsSidebarOpen}
+              onCheckedChange={() => actions.onToggleTagsSidebar()}
+            >
+              Tags sidebar
+            </MenubarCheckboxItem>
+            <MenubarCheckboxItem
               checked={view.darkPages}
               onCheckedChange={() => actions.onToggleDarkPages()}
             >
@@ -201,6 +207,7 @@ export function MenuBar({
                 </MenubarItem>
               </MenubarSubContent>
             </MenubarSub>
+            <MenubarItem onClick={actions.onInsertTag}>Tag…</MenubarItem>
             <MenubarItem onClick={actions.onInsertLink}>Link…</MenubarItem>
           </MenubarContent>
         </MenubarMenu>
@@ -291,9 +298,11 @@ export function MenuBar({
                 <MenubarSeparator />
                 <MenubarItem onClick={actions.onIndentDecrease}>
                   Decrease indent
+                  <MenubarShortcut>⇧Tab</MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem onClick={actions.onIndentIncrease}>
                   Increase indent
+                  <MenubarShortcut>Tab</MenubarShortcut>
                 </MenubarItem>
               </MenubarSubContent>
             </MenubarSub>

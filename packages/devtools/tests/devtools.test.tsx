@@ -20,4 +20,12 @@ describe("devtools public API", () => {
     expect(source).toContain("...DEFAULT_TRACE_OVERLAYS,")
     expect(source).toContain("...initialOverlays")
   })
+
+  test("glyph-run SVG preserves spaces so tag-adjacent gaps do not collapse", () => {
+    const source = readFileSync(join(import.meta.dir, "../src/index.tsx"), "utf8")
+    expect(source).toContain('xmlSpace="preserve"')
+    expect(source).toContain('whiteSpace: "pre"')
+    expect(source).toContain("isWhitespaceOnlyGlyphText")
+    expect(source).toContain("textLength")
+  })
 })

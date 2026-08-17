@@ -522,15 +522,20 @@ export function parseParagraph(
         continue
       }
       const raw = text.slice(open + 2, close)
-      const result = parseValueBody(raw, node.source, node, limits)
+      const contentOffset = raw.search(/\S/u)
+      const styleNode = nodeAt(
+        paragraph,
+        contentOffset === -1 ? base + open : base + open + 2 + contentOffset
+      )
+      const result = parseValueBody(raw, styleNode.source, styleNode, limits)
       if ("code" in result) diagnostics.push(result)
       else
         placeholders.push({
           ...result,
           start: base + open,
           end: base + close + 2,
-          source: node.source,
-          node,
+          source: styleNode.source,
+          node: styleNode,
         })
       cursor = close + 2
     }

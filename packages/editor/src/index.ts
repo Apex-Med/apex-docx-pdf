@@ -47,6 +47,12 @@ export {
   setParagraphAlignment,
   setParagraphSpacing,
   setParagraphAttrs,
+  INDENT_STEP_TWIPS,
+  increaseIndent,
+  decreaseIndent,
+  handleTab,
+  handleShiftTab,
+  backspaceDecreaseIndent,
   clearFormatting,
   setVerticalAlignment,
   applyBulletList,
@@ -58,6 +64,11 @@ export {
   matchStyleToSelection,
   insertPageBreak,
   insertColumnBreak,
+  insertTemplateTag,
+  updateTemplateTagInstances,
+  removeTemplateTagInstances,
+  arrowPastTemplateTag,
+  deleteAdjacentTemplateTag,
   insertImage,
   insertImageFromBytes,
   setImageAltText,
@@ -128,6 +139,7 @@ export {
   injectGoogleFontStylesheet,
   injectEmbeddedDocumentFonts,
   fontRegistryForDocument,
+  fontRegistryForExport,
   workerFontUrls,
   loadWorkerFontBytes,
   loadGoogleFontCatalog,
@@ -147,6 +159,26 @@ export {
 } from "./fonts"
 export { createEditorPlugins } from "./plugins/create-plugins"
 export {
+  applyTemplateTagValues,
+  defaultTemplateTags,
+  encodeTemplatePlaceholder,
+  findValuePlaceholders,
+  hydrateTemplateTagCatalog,
+  isPrintedAtTag,
+  isSystemTemplateTag,
+  isTodayTag,
+  isValidTemplatePath,
+  mergeDefaultTemplateTags,
+  readTemplateTagMetadata,
+  slugifyLabel,
+  uniqueSlug,
+  writeTemplateTagMetadata,
+  type TemplateTagDefinition,
+  type TemplateTagKind,
+  type TemplateTagSource,
+  type TemplateTagValue,
+} from "./tags"
+export {
   createImagePasteDropPlugin,
   insertImageFile,
 } from "./plugins/image-paste-drop"
@@ -161,6 +193,20 @@ export {
   createTableCaretPlugin,
   tableClickSide,
 } from "./plugins/table-caret"
+export {
+  createTemplateTagCaretPlugin,
+  ensureTemplateTagCaretAnchors,
+  isTemplateTagCaretAnchor,
+  tagSelectionDecorations,
+  templateTagClickSide,
+  templateTagPositionsInSelection,
+  TEMPLATE_TAG_IN_SELECTION_CLASS,
+} from "./plugins/template-tag-caret"
+export {
+  createTemplateTagDropPlugin,
+  parsePlainTagId,
+  resolveTagDropPosition,
+} from "./plugins/template-tag-drop"
 export {
   createTableContextMenuPlugin,
   tableContextMenuItems,

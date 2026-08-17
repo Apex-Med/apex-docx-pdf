@@ -3,7 +3,8 @@ import { normaliseDocxBytes, serializeDocx } from "@apexmed/docx"
 import { prepareImageAssetsAsync } from "@apexmed/images"
 import { layoutDocument } from "@apexmed/layout"
 
-import { fontRegistryForDocument } from "../fonts/embedded"
+import { fontRegistryForExport } from "../fonts/export-registry"
+import { applyTemplateTagValues } from "../tags"
 
 /** Detail payload for the embed `change` event. */
 export type EmbedChangeDetail = Readonly<{
@@ -48,15 +49,16 @@ export async function serializeEmbedPdf(
   document: SemanticDocument
 ): Promise<Uint8Array> {
   const { serializePdf } = await import("@apexmed/pdf")
-  const fonts = await fontRegistryForDocument(document)
+  const resolved = applyTemplateTagValues(document)
+  const fonts = await fontRegistryForExport(resolved)
   const layout = fonts
-    ? layoutDocument(document, {
+    ? layoutDocument(resolved, {
         includeTrace: false,
         fonts,
         shaper: fonts,
       })
-    : layoutDocument(document, { includeTrace: false })
-  const images = await prepareImageAssetsAsync(document.assets)
+    : layoutDocument(resolved, { includeTrace: false })
+  const images = await prepareImageAssetsAsync(resolved.assets)
   return serializePdf(layout.displayList, {
     images,
     ...(fonts ? { fonts } : {}),

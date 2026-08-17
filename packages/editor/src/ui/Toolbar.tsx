@@ -945,7 +945,7 @@ export function Toolbar({
               className="apex-editor-toolbar__item"
             >
               <ToolbarIconButton
-                label="Decrease indent"
+                label="Decrease indent (Shift+Tab)"
                 icon={ListIndentDecreaseIcon}
                 onClick={actions.onIndentDecrease}
               />
@@ -959,7 +959,7 @@ export function Toolbar({
               className="apex-editor-toolbar__item"
             >
               <ToolbarIconButton
-                label="Increase indent"
+                label="Increase indent (Tab)"
                 icon={ListIndentIncreaseIcon}
                 onClick={actions.onIndentIncrease}
               />

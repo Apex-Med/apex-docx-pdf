@@ -315,7 +315,7 @@ describe("template compilation", () => {
     expect(compiled.starterData).toEqual({ patient: { fullName: "" } })
   })
 
-  test("uses the style and source location of the tag's first character for replacement", async () => {
+  test("uses the style and source location of the tag's first content character for replacement", async () => {
     const source = documentWithRuns([
       "Hello {{pat",
       "ient.full",
@@ -340,6 +340,28 @@ describe("template compilation", () => {
         ? source.sections[0].blocks[0].children[0]?.source
         : undefined
     )
+  })
+
+  test("uses the field body's font weight when the braces sit in a lighter run", async () => {
+    const source = documentWithRuns([
+      "Hello {{",
+      "patient.fullName:string",
+      "}}.",
+    ])
+    const compiled = await compileTemplate(source)
+    const result = resolveTemplate(compiled, {
+      patient: { fullName: "Ada Lovelace" },
+    })
+
+    expect(resolvedText(result)).toBe("Hello Ada Lovelace.")
+    if (!result.ok) throw new Error("Expected resolution to succeed")
+    const firstBlock = result.value.sections[0]?.blocks[0]
+    const children = firstBlock?.type === "paragraph" ? firstBlock.children : []
+    const value = children.find(
+      (child): child is SemanticText =>
+        child.type === "text" && child.text === "Ada Lovelace"
+    )
+    expect(value?.style.fontWeight).toBe(700)
   })
 
   test("produces a sorted nested schema and deterministic starter data", async () => {

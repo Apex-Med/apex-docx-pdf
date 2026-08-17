@@ -243,4 +243,10 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
     expect(editorKeymap).toBeTruthy()
     expect(editorKeymap.spec).toBeTruthy()
   })
+
+  test("keymap binds Tab to indent-or-next-cell", () => {
+    const { handleTab, handleShiftTab } = require("../src/commands") as typeof import("../src/commands")
+    expect(handleTab).toBeTypeOf("function")
+    expect(handleShiftTab).toBeTypeOf("function")
+  })
 })

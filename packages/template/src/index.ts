@@ -4,6 +4,12 @@ export {
   type TemplateCompileOptions,
 } from "./compile"
 export {
+  DEFAULT_DATE_FORMAT,
+  formatDateTime,
+  parseDateTimeFormat,
+  type ParsedDateTimeFormat,
+} from "./date-format"
+export {
   resolve,
   resolveTemplate,
   resolveTemplateWithUsage,

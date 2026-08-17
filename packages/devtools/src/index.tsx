@@ -653,13 +653,23 @@ function PreviewItem({
         fontSize={item.fontSize}
         fontWeight={item.fontWeight ?? 400}
         fontStyle={item.fontStyle ?? "normal"}
-        textLength={item.width > 0 ? item.width : undefined}
+        xmlSpace="preserve"
+        style={{ whiteSpace: "pre" }}
+        textLength={
+          item.width > 0 && !isWhitespaceOnlyGlyphText(item.text)
+            ? item.width
+            : undefined
+        }
         lengthAdjust="spacingAndGlyphs"
       >
         {item.text}
       </text>
     </g>
   )
+}
+
+function isWhitespaceOnlyGlyphText(text: string): boolean {
+  return text.length > 0 && /^[\t \u00a0\u200b]+$/u.test(text)
 }
 
 function displayItemKey(item: DisplayListItem): string {

@@ -33,6 +33,8 @@ export type EditorChromeActions = Readonly<{
   onInsertPageBreak: () => void
   onInsertLink: () => void
   onInsertColumnBreak: () => void
+  onInsertTag: () => void
+  onToggleTagsSidebar: () => void
   onBold: () => void
   onItalic: () => void
   onUnderline: () => void
@@ -91,6 +93,7 @@ export type EditorChromeViewState = Readonly<{
   divergenceOn: boolean
   printLayout: boolean
   tableOptionsOpen: boolean
+  tagsSidebarOpen: boolean
 }>
 
 export const DARK_PAGES_STORAGE_KEY = "apex-editor-dark-pages"
