@@ -3,11 +3,18 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { EDITOR_CSS } from "../src/styles/editor-css"
+import { TAILWIND_PALETTES } from "../src/fonts"
+import { hexToHsv, hsvToHex, normalizeHexColor } from "../src/ui/color-utils"
 import type { EditorChromeActions } from "../src/ui/chrome-types"
 import { EditorChrome } from "../src/ui/EditorChrome"
 import { MenuBar } from "../src/ui/MenuBar"
 import { alignmentFromRects, Ruler } from "../src/ui/Ruler"
 import { Toolbar } from "../src/ui/Toolbar"
+import { paragraphStyleOptions } from "../src/ui/paragraph-style-options"
+import {
+  styleFromSelection,
+  styleIdFromName,
+} from "../src/ui/style-from-selection"
 import type { EditorSelectionSnapshot } from "../src/plugins/selection-state"
 
 const snapshot: EditorSelectionSnapshot = {
@@ -48,6 +55,7 @@ const snapshot: EditorSelectionSnapshot = {
     marginRight: 1440,
     marginBottom: 1440,
     marginLeft: 1440,
+    differentFirstPage: false,
     columnCount: 1,
     columnEqualWidth: true,
     columnSpace: 720,
@@ -81,6 +89,8 @@ const noopActions: EditorChromeActions = {
   onToggleDivergence: () => undefined,
   onZoomChange: () => undefined,
   onInsertImage: () => undefined,
+  onInsertHeader: () => undefined,
+  onInsertFooter: () => undefined,
   onInsertTable: () => undefined,
   onInsertPageBreak: () => undefined,
   onInsertTag: () => undefined,
@@ -127,6 +137,79 @@ const noopActions: EditorChromeActions = {
 }
 
 describe("editor chrome components", () => {
+  test("built-in typography options remain visible with document styles", () => {
+    const options = paragraphStyleOptions([
+      {
+        id: "Heading1",
+        name: "Imported Heading 1",
+        type: "paragraph",
+        basedOn: "Normal",
+        next: "Normal",
+        paragraph: null,
+        text: null,
+      },
+      {
+        id: "Apex-Callout",
+        name: "Callout",
+        type: "paragraph",
+        basedOn: null,
+        next: "Apex-Callout",
+        paragraph: null,
+        text: null,
+      },
+    ])
+
+    expect(options).toEqual([
+      { id: "Normal", name: "Normal" },
+      { id: "Heading1", name: "Imported Heading 1" },
+      { id: "Heading2", name: "Heading 2" },
+      { id: "Title", name: "Title" },
+      { id: "Apex-Callout", name: "Callout" },
+    ])
+  })
+
+  test("styleFromSelection captures typography metadata from selected text", () => {
+    expect(styleIdFromName("Callout Block")).toBe("Apex-Callout-Block")
+    const definition = styleFromSelection("Heading1", "Heading 1", {
+      ...snapshot,
+      empty: false,
+      bold: true,
+      textStyle: {
+        ...snapshot.textStyle,
+        fontFamily: "Aptos",
+        fontSize: 320,
+        fontWeight: 500,
+        color: "#2563eb",
+        highlightColor: "#fef08a",
+        styleId: "Heading1",
+      },
+      paragraph: {
+        ...snapshot.paragraph!,
+        styleId: "Heading1",
+        spacingBefore: 160,
+        spacingAfter: 240,
+        lineSpacing: { rule: "auto", value240ths: 360 },
+      },
+    })
+    expect(definition).toMatchObject({
+      id: "Heading1",
+      name: "Heading 1",
+      type: "paragraph",
+      text: {
+        fontFamily: "Aptos",
+        fontSize: 320,
+        fontWeight: 500,
+        color: "#2563eb",
+        highlightColor: "#fef08a",
+      },
+      paragraph: {
+        spacingBefore: 160,
+        spacingAfter: 240,
+        lineSpacing: { rule: "auto", value240ths: 360 },
+      },
+    })
+  })
+
   test("imports MenuBar, Toolbar, Ruler, and EditorChrome", () => {
     expect(MenuBar).toBeDefined()
     expect(Toolbar).toBeDefined()
@@ -148,7 +231,28 @@ describe("editor chrome components", () => {
     expect(source).toContain("onParagraphSpacing")
     expect(source).toContain('variant="ghost"')
     expect(source).toContain("DropdownMenu")
+    expect(source).toContain('className="w-40 min-w-40"')
+    expect(source).toContain("icon={AlignLeftIcon}")
+    expect(source).toContain("icon={TextAlignCenterIcon}")
+    expect(source).toContain("icon={TextAlignRightIcon}")
+    expect(source).toContain("icon={TextAlignJustifyCenterIcon}")
+    expect(source).toContain('className="w-64 min-w-64"')
+    expect(source).toContain("icon={ArrowUpFromLineIcon}")
+    expect(source).toContain("icon={ArrowDownFromLineIcon}")
+    expect(source).toContain("icon={SlidersVerticalIcon}")
     expect(source).toContain("ParagraphSpacingIcon")
+    expect(source).toContain("Update style to match selected text")
+    expect(source).toContain("Update selected text to match style")
+    expect(source).toContain("actions.onUpdateStyle(menu.id)")
+    expect(source).toContain("actions.onApplyStyle(menu.id)")
+    expect(source).toContain("alignItemWithTrigger={false}")
+    expect(source).toContain("max-h-80!")
+    expect(source).toContain(
+      "if (event.button === 0) event.preventDefault()"
+    )
+    expect(source).toContain("onMouseDown={(event) => {")
+    expect(source).toContain("onContextMenu")
+    expect(source).not.toContain("ContextMenuTrigger")
     expect(source).toContain("apex-editor-toolbar__sep")
     expect(source).toContain("canUndo")
     expect(source).not.toContain("ToggleGroup")
@@ -169,6 +273,9 @@ describe("editor chrome components", () => {
     expect(raw).toContain("apex-editor-toolbar__font")
     expect(raw).toContain("min-width: 11rem")
     expect(raw).toContain("apex-editor-toolbar__font-size-input")
+    expect(raw).toMatch(
+      /\.apex-editor-toolbar__font-size-input\s*\{[^}]*min-width:\s*3\.5rem/s
+    )
     expect(EDITOR_CSS).toContain("flex-shrink: 0")
     // Manual page-break atom is a zero-size marker; spacers paint the sheet.
     expect(raw).toContain("apex-manual-page-break")
@@ -210,7 +317,10 @@ describe("editor chrome components", () => {
       "utf8"
     )
     expect(css).toContain(".apex-table-options")
-    expect(css).toContain("flex: 0 0 300px")
+    expect(css).toContain("width: 340px")
+    expect(css).toContain("max-width: 520px")
+    expect(css).toContain(".apex-sidebar-resize-handle")
+    expect(source).toContain("Resize table options sidebar")
     expect(css).toContain(".apex-cell-border__edge:hover")
     expect(css).toContain("cursor: context-menu")
     expect(css).toContain("var(--apex-accent) 13%")
@@ -219,16 +329,16 @@ describe("editor chrome components", () => {
     expect(css).toContain(".apex-table-dnd__handle.is-visible")
     // Overlay must stay out of the page flex row — a gap-3 sibling
     // shrinks the desk and recenters the sheet on click/hover.
-    expect(css).toMatch(
-      /\.apex-table-dnd\s*\{[^}]*position:\s*absolute/s
-    )
+    expect(css).toMatch(/\.apex-table-dnd\s*\{[^}]*position:\s*absolute/s)
 
     const editorSource = readFileSync(
       join(import.meta.dir, "../src/ui/Editor.tsx"),
       "utf8"
     )
     expect(editorSource).toContain("TableReorderOverlay")
-    expect(editorSource).toContain('className="relative min-h-0 min-w-0 flex-1"')
+    expect(editorSource).toContain(
+      'className="relative min-h-0 min-w-0 flex-1"'
+    )
     expect(editorSource).toContain("tr.selectionSet")
     expect(editorSource).toContain("readTableOptionsSelection(next)")
     expect(editorSource).toContain("tableOptionsSelection.positions.join")
@@ -238,6 +348,28 @@ describe("editor chrome components", () => {
       editorSource.indexOf("const runLiveAll = useCallback")
     )
     expect(runLiveSource).not.toContain("view.focus()")
+  })
+
+  test("tags and table options sidebars are resizable", () => {
+    const tags = readFileSync(
+      join(import.meta.dir, "../src/ui/TagsSidebar.tsx"),
+      "utf8"
+    )
+    const table = readFileSync(
+      join(import.meta.dir, "../src/ui/TablePropertiesDialog.tsx"),
+      "utf8"
+    )
+    const handle = readFileSync(
+      join(import.meta.dir, "../src/ui/ResizableSidebarHandle.tsx"),
+      "utf8"
+    )
+    expect(tags).toContain("Resize tags sidebar")
+    expect(table).toContain("Resize table options sidebar")
+    expect(handle).toContain("<hr")
+    expect(handle).toContain('aria-orientation="vertical"')
+    expect(handle).toContain('event.key === "ArrowLeft"')
+    expect(handle).toContain('event.key === "ArrowRight"')
+    expect(handle).toContain("setPointerCapture")
   })
 
   test("editor numeric inputs share vertical scrubbing", () => {
@@ -269,24 +401,56 @@ describe("editor chrome components", () => {
     }
   })
 
-  test("toolbar color palette uses vertical hue columns", () => {
+  test("shared color picker uses vertical families and horizontal shades", () => {
     const toolbarPath = join(import.meta.dir, "../src/ui/Toolbar.tsx")
-    const source = readFileSync(toolbarPath, "utf8")
-    expect(source).toContain("Columns = hue families")
-    expect(source).toContain("gridTemplateColumns")
-    expect(source).toContain("gridAutoFlow")
-    expect(source).toContain("size-7")
-    expect(source).toContain("grid w-fit gap-1")
+    const tablePath = join(
+      import.meta.dir,
+      "../src/ui/TablePropertiesDialog.tsx"
+    )
+    const pickerPath = join(import.meta.dir, "../src/ui/ColorPicker.tsx")
+    const toolbarSource = readFileSync(toolbarPath, "utf8")
+    const tableSource = readFileSync(tablePath, "utf8")
+    const pickerSource = readFileSync(pickerPath, "utf8")
+    expect(toolbarSource).toContain("<ColorPicker")
+    expect(tableSource).toContain("<ColorPicker")
+    expect(pickerSource).toContain('TabsTrigger value="swatches"')
+    expect(pickerSource).toContain('TabsTrigger value="custom"')
+    expect(pickerSource).toContain("gridTemplateColumns")
+    expect(pickerSource).toContain("1.5rem")
+    expect(pickerSource).toContain("TAILWIND_SHADE_LABELS")
+    expect(pickerSource).toContain('data-selected={selected ? "true"')
+    expect(pickerSource).toContain("inset 0 0 0 2px var(--popover)")
+    expect(pickerSource).toContain("0 0 0 2px var(--foreground)")
+    expect(pickerSource).toContain("Hue and saturation color wheel")
+    expect(pickerSource).toContain("Enter a 3- or 6-digit hex value")
+    expect(Object.keys(TAILWIND_PALETTES)).toHaveLength(18)
+    expect(Object.keys(TAILWIND_PALETTES)).not.toContain("slate")
+    expect(Object.keys(TAILWIND_PALETTES)).not.toContain("gray")
+    expect(Object.keys(TAILWIND_PALETTES)).not.toContain("zinc")
+    expect(Object.keys(TAILWIND_PALETTES)).not.toContain("stone")
+    expect(Object.keys(TAILWIND_PALETTES)).toContain("neutral")
+    expect(
+      Object.values(TAILWIND_PALETTES).every((colors) => colors.length === 11)
+    ).toBe(true)
     // Overflow should not recompute on every selection revision (layout shift).
-    expect(source).not.toContain("snapshot.revision, zoom")
-    expect(source).toContain("h-12 min-h-12")
-    expect(source).toContain('variant="ghost"')
-    expect(source).toContain("FONT_SIZE_OPTIONS")
-    expect(source).toContain("FontSizeControl")
-    expect(source).toContain('label="Open table options"')
-    expect(source).toContain("tableOptionsOpen")
-    expect(source).toContain('event.key !== "Enter"')
-    expect(source).toContain("apex-editor-toolbar__font-size-input")
+    expect(toolbarSource).not.toContain("snapshot.revision, zoom")
+    expect(toolbarSource).toContain("h-12 min-h-12")
+    expect(toolbarSource).toContain('variant="ghost"')
+    expect(toolbarSource).toContain("FONT_SIZE_OPTIONS")
+    expect(toolbarSource).toContain("FontSizeControl")
+    expect(toolbarSource).toContain('label="Open table options"')
+    expect(toolbarSource).toContain("tableOptionsOpen")
+    expect(toolbarSource).toContain('event.key !== "Enter"')
+    expect(toolbarSource).toContain("apex-editor-toolbar__font-size-input")
+  })
+
+  test("custom color picker normalizes hex and round-trips HSV colors", () => {
+    expect(normalizeHexColor("abc")).toBe("#aabbcc")
+    expect(normalizeHexColor("#2563EB")).toBe("#2563eb")
+    expect(normalizeHexColor("#12xz89")).toBeNull()
+    expect(hsvToHex(hexToHsv("#2563eb"))).toBe("#2563eb")
+    expect(hsvToHex(hexToHsv("#ffffff"))).toBe("#ffffff")
+    expect(hsvToHex(hexToHsv("#000000"))).toBe("#000000")
   })
 
   test("authored table grids are not overridden by browser cell minimums", () => {
@@ -316,6 +480,8 @@ describe("editor chrome components", () => {
     expect(EDITOR_CSS).not.toContain("content-visibility: auto")
     expect(EDITOR_CSS).not.toContain("contain-intrinsic-size")
     expect(EDITOR_CSS).toContain("apex-engine-page-sheet")
+    expect(EDITOR_CSS).toContain("--apex-sheet-height")
+    expect(EDITOR_CSS).toContain("var(--apex-section-pages, 1)")
     expect(EDITOR_CSS).toContain("overscroll-behavior: contain")
     expect(EDITOR_CSS).toContain("prefers-reduced-motion: reduce")
     expect(EDITOR_CSS).toContain("display: flow-root")
@@ -373,6 +539,8 @@ describe("editor chrome components", () => {
     expect(menu).toContain("onToggleDarkPages")
     expect(menu).toContain("Align &amp; indent")
     expect(menu).toContain("Bullets &amp; numbering")
+    expect(menu).toContain("Microsoft Word (.docx)")
+    expect(menu).toContain("<MenubarItem onClick={actions.onSaveDocx}>")
     expect(menu).toContain("PDF Document (.pdf)")
     expect(menu).toContain("Tag…")
     expect(menu).toContain("Tags sidebar")

@@ -7,6 +7,7 @@ import {
   type DocumentHash,
   type FormatterReference,
   type ResourceLimits,
+  type SemanticBlock,
   type SemanticDocument,
   type SemanticParagraph,
   type SemanticTable,
@@ -655,6 +656,29 @@ function compileTable(table: SemanticTable, state: CompileState): void {
   }
 }
 
+function compileBlocks(
+  blocks: readonly SemanticBlock[],
+  state: CompileState,
+  containerName: string
+): void {
+  let paragraphs: SemanticParagraph[] = []
+  const flushParagraphs = (): void => {
+    if (paragraphs.length === 0) return
+    compileParagraphs(paragraphs, [], state, containerName)
+    paragraphs = []
+  }
+  for (const block of blocks) {
+    if (block.type === "paragraph") paragraphs.push(block)
+    else if (block.type === "table") {
+      flushParagraphs()
+      compileTable(block, state)
+    } else {
+      flushParagraphs()
+    }
+  }
+  flushParagraphs()
+}
+
 /** Compiles deterministic inline values plus paragraph- and table-row blocks. */
 export async function compileTemplate(
   source: SemanticDocument,
@@ -673,29 +697,14 @@ export async function compileTemplate(
   }
 
   for (const header of source.headers) {
-    compileParagraphs(header.blocks, [], state, "header")
+    compileBlocks(header.blocks, state, "header")
   }
   for (const footer of source.footers) {
-    compileParagraphs(footer.blocks, [], state, "footer")
+    compileBlocks(footer.blocks, state, "footer")
   }
 
   for (const section of source.sections) {
-    let paragraphs: SemanticParagraph[] = []
-    const flushParagraphs = (): void => {
-      if (paragraphs.length === 0) return
-      compileParagraphs(paragraphs, [], state, "section paragraph sequence")
-      paragraphs = []
-    }
-    for (const block of section.blocks) {
-      if (block.type === "paragraph") paragraphs.push(block)
-      else if (block.type === "table") {
-        flushParagraphs()
-        compileTable(block, state)
-      } else {
-        flushParagraphs()
-      }
-    }
-    flushParagraphs()
+    compileBlocks(section.blocks, state, "section paragraph sequence")
   }
 
   for (const [path, field] of fields) {

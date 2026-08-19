@@ -324,8 +324,11 @@ const nodes: Record<string, NodeSpec> = {
       marginLeft: { default: 1440 },
       headerDistance: { default: 720 },
       footerDistance: { default: 720 },
+      differentFirstPage: { default: false },
       defaultHeaderId: { default: null },
       defaultFooterId: { default: null },
+      firstPageHeaderId: { default: null },
+      firstPageFooterId: { default: null },
       columnCount: { default: 1 },
       columnEqualWidth: { default: true },
       columnSpace: { default: 720 },
@@ -341,7 +344,8 @@ const nodes: Record<string, NodeSpec> = {
         "data-column-count": String(node.attrs.columnCount ?? 1),
         style: [
           `width:${Number(node.attrs.pageWidth) / 20}pt`,
-          `min-height:${Number(node.attrs.pageHeight) / 20}pt`,
+          `--apex-sheet-height:${Number(node.attrs.pageHeight) / 20}pt`,
+          "min-height:calc(var(--apex-sheet-height) * var(--apex-section-pages, 1) + var(--apex-page-gap, 32px) * (var(--apex-section-pages, 1) - 1))",
           `padding:${Number(node.attrs.marginTop) / 20}pt ${Number(node.attrs.marginRight) / 20}pt ${Number(node.attrs.marginBottom) / 20}pt ${Number(node.attrs.marginLeft) / 20}pt`,
           Number(node.attrs.columnCount ?? 1) > 1
             ? `column-count:${Number(node.attrs.columnCount)}`

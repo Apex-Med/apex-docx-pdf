@@ -121,6 +121,7 @@ for (const name of packages) {
     for (const required of [
       "assets/catalog/PROVENANCE.md",
       "assets/catalog/bricolage-grotesque/OFL.txt",
+      "assets/catalog/geist/OFL.txt",
       "assets/catalog/geist-mono/OFL.txt",
       "assets/catalog/instrument-sans/OFL.txt",
       "assets/catalog/instrument-serif/OFL.txt",

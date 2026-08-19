@@ -9,8 +9,10 @@ import {
   createBreakSpacerElement,
   createEditorStateFromDocument,
   createEditorStateFromDocx,
+  editorSchema,
   insertPageBreak,
   insertTable,
+  PAGE_BREAK_SCROLL_META,
   splitOrCreateParagraph,
   toSemanticDocument,
 } from "../src/index"
@@ -194,10 +196,28 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
     })
     expect(found).toBe(true)
     // Schema toDOM uses class apex-manual-page-break
-    const { editorSchema } = require("../src/schema") as typeof import("../src/schema")
     const node = editorSchema.nodes.page_break!.create()
     const dom = node.type.spec.toDOM?.(node)
     expect(JSON.stringify(dom)).toContain("apex-manual-page-break")
+  })
+
+  test("insertPageBreak sets post-pagination scroll meta", () => {
+    const state = createEditorStateFromDocument(createBlankDocument())
+    let meta: unknown
+    const applied = insertPageBreak()(state, (tr) => {
+      meta = tr.getMeta(PAGE_BREAK_SCROLL_META)
+    })
+    expect(applied).toBe(true)
+    expect(meta).toBe(true)
+  })
+
+  test("section sheets size from page count vars, not a single-page min-height", () => {
+    const node = editorSchema.nodes.section!.create()
+    const dom = node.type.spec.toDOM?.(node)
+    const html = JSON.stringify(dom)
+    expect(html).toContain("--apex-sheet-height:")
+    expect(html).toContain("var(--apex-section-pages, 1)")
+    expect(html).not.toMatch(/min-height:\s*[\d.]+pt/)
   })
 
   test("manual page break gets a full page-stack spacer placement", () => {
@@ -206,6 +226,7 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
       mergeManualPageBreakPlacements,
       pageBreaksFromTrace,
       spacerSpecsFromPlacements,
+      sectionPageCountsFromLayout,
     } = require("../src/index") as typeof import("../src/index")
 
     const state = createEditorStateFromDocument(createBlankDocument())
@@ -235,6 +256,14 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
     expect(specs.length).toBeGreaterThan(0)
     // Full stack: rest + margins + desk gap ≫ the old 72px chip.
     expect(specs[0]!.heightTwips).toBeGreaterThan(2000)
+
+    const counts = sectionPageCountsFromLayout(
+      result.state.doc,
+      layout.displayList,
+      layout.trace!
+    )
+    expect(counts).toHaveLength(1)
+    expect(counts[0]?.pageCount).toBe(2)
   })
 
   test("keymap includes Enter and Backspace bindings", () => {

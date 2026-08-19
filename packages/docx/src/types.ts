@@ -257,6 +257,7 @@ export type ParsedDocxSectionProperties = Readonly<{
   orientation: "portrait" | "landscape"
   headerDistance: number
   footerDistance: number
+  differentFirstPage: boolean
   /** Null when w:cols is absent (single-column default). */
   columns: ParsedDocxSectionColumns | null
 }>
@@ -294,7 +295,7 @@ export type ParsedDocxHeaderFooter = Readonly<{
   id: string
   source: SourceLocation
   part: string
-  paragraphs: readonly ParsedDocxParagraph[]
+  blocks: readonly ParsedDocxBlock[]
 }>
 
 export type ParsedDocxSection = Readonly<{
@@ -303,6 +304,8 @@ export type ParsedDocxSection = Readonly<{
   properties: ParsedDocxSectionProperties
   defaultHeaderId: string | null
   defaultFooterId: string | null
+  firstPageHeaderId: string | null
+  firstPageFooterId: string | null
   blocks: readonly ParsedDocxBlock[]
 }>
 

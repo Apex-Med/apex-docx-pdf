@@ -49,7 +49,7 @@ For a new template, prefer a real Word-authored or DOCX-library-generated file w
 
 ## Stop conditions
 
-- Stop and report the exact unsupported feature when the requested visual depends on floating/cropped/rotated/SVG images, nested or percentage-width tables, table styles/themes, complex shading, automatic autofit, continuous/odd/even sections, first/even headers, arbitrary fields, default/non-left/leader tabs, complex scripts/bidi, CFF, or variable-font axes.
+- Stop and report the exact unsupported feature when the requested visual depends on floating/cropped/rotated/SVG images, nested or percentage-width tables, table styles/themes, complex shading, automatic autofit, continuous/odd/even sections, even-page headers, arbitrary fields, default/non-left/leader tabs, complex scripts/bidi, CFF, or variable-font axes. First-page headers and footers are supported with `w:titlePg`.
 - Stop rather than weakening strict compilation, deleting meaningful source content, approximating ambiguous layout, or inventing a data contract.
 - Never use real sensitive data in fixtures, inspector output, screenshots, or delivered examples.
 

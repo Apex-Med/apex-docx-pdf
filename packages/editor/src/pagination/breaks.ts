@@ -8,7 +8,23 @@ function templateTagLayoutExtent(node: PMNode): number {
 }
 
 const TWIPS_PER_PX = 15
-const DEFAULT_PAGE_GAP_PX = 32
+export const DEFAULT_PAGE_GAP_PX = 32
+export const PAGE_GAP_TWIPS = DEFAULT_PAGE_GAP_PX * TWIPS_PER_PX
+
+/**
+ * Transaction meta: after pagination paints spacers, scroll the caret to the
+ * next sheet instead of relying on the insert-time `scrollIntoView()`.
+ */
+export const PAGE_BREAK_SCROLL_META = "apexPageBreakScroll"
+
+/** Border-box height of a section page stack: n sheets + (n-1) desk gaps. */
+export function sectionStackHeightTwips(
+  pageCount: number,
+  pageHeightTwips: number
+): number {
+  const pages = Math.max(1, Math.round(pageCount))
+  return pages * pageHeightTwips + Math.max(0, pages - 1) * PAGE_GAP_TWIPS
+}
 
 /**
  * A page-break spacer placement derived from engine layout authority.
@@ -82,6 +98,84 @@ export function pageGeometryFromDisplayList(
     marginLeftTwips: marginLeft,
     marginRightTwips: Math.max(0, marginRight),
     contentHeightTwips: page.contentBounds.height,
+  }
+}
+
+export type SectionPageCount = Readonly<{
+  sectionId: string
+  pageCount: number
+  pageHeightTwips: number
+}>
+
+/**
+ * 1-based start page for each top-level section. A `section-boundary`
+ * page-break starts the next section; the first section always starts at 1.
+ */
+export function sectionBoundaryStartPages(
+  trace: LayoutTrace
+): readonly number[] {
+  const boundaryPages = trace.events
+    .filter(
+      (event) =>
+        event.kind === "page-break" && event.reason === "section-boundary"
+    )
+    .map((event) => event.pageNumber)
+  return [1, ...boundaryPages]
+}
+
+/**
+ * Per-section sheet counts using the same section-boundary mapping as
+ * header/footer overlays. Each ProseMirror `section` is its own stack.
+ */
+export function sectionPageCountsFromLayout(
+  doc: PMNode,
+  displayList: PageDisplayList,
+  trace: LayoutTrace
+): readonly SectionPageCount[] {
+  const sectionStarts = sectionBoundaryStartPages(trace)
+  const totalPages = displayList.pages.length
+  const counts: SectionPageCount[] = []
+  doc.forEach((node) => {
+    if (node.type.name !== "section") return
+    const index = counts.length
+    const startPage = sectionStarts[index] ?? 1
+    const endPage = (sectionStarts[index + 1] ?? totalPages + 1) - 1
+    counts.push({
+      sectionId: String(node.attrs.nodeId ?? ""),
+      pageCount: Math.max(1, endPage - startPage + 1),
+      pageHeightTwips: Number(node.attrs.pageHeight ?? 16_838),
+    })
+  })
+  return counts
+}
+
+/**
+ * Fallback paint for stack page counts. Prefer PM node decorations so this
+ * stays a no-op once `--apex-section-pages` is already present. Writing the
+ * var onto a managed section node from `view.update()` loops MutationObserver.
+ */
+export function applySectionPageCountsToDom(
+  root: ParentNode,
+  sections: readonly SectionPageCount[]
+): void {
+  if (typeof document === "undefined") return
+  if (sections.length === 0) return
+  const nodes = Array.from(
+    root.querySelectorAll("section[data-section]")
+  ) as HTMLElement[]
+  for (let index = 0; index < nodes.length; index += 1) {
+    const element = nodes[index]
+    if (!element) continue
+    const id = element.getAttribute("data-node-id") ?? ""
+    const match =
+      (id.length > 0
+        ? sections.find((section) => section.sectionId === id)
+        : undefined) ?? sections[index]
+    const pageCount = String(Math.max(1, match?.pageCount ?? 1))
+    if (element.style.getPropertyValue("--apex-section-pages") === pageCount) {
+      continue
+    }
+    element.style.setProperty("--apex-section-pages", pageCount)
   }
 }
 

@@ -299,4 +299,49 @@ describe("pagination regressions", () => {
     expect(paragraphPosition).not.toBeNull()
     expect(found[0]?.from).toBeLessThan(paragraphPosition ?? 0)
   })
+
+  test("section page counts become PM-owned node decorations", () => {
+    const paragraph = schemaNode("paragraph").create(
+      { nodeId: "section-pages:p1" },
+      editorSchema.text("Hello")
+    )
+    const section = schemaNode("section").create(
+      { nodeId: "section-pages:s1" },
+      paragraph
+    )
+    const doc = schemaNode("doc").create(null, section)
+    const decorations = decorationsFromPlacements(doc, [], true, {
+      specs: [],
+      assets: [],
+      sectionPages: [
+        {
+          sectionId: "section-pages:s1",
+          pageCount: 3,
+          pageHeightTwips: 16_838,
+        },
+      ],
+    })
+
+    const found = decorations.find()
+    expect(found).toHaveLength(1)
+    expect(found[0]?.from).toBe(0)
+    expect(found[0]?.to).toBe(doc.content.size)
+    const style = (
+      found[0] as { type?: { attrs?: { style?: string } } }
+    ).type?.attrs?.style
+    expect(style).toBe("--apex-section-pages:3")
+  })
+
+  test("pagination view.update does not rewrite section styles", async () => {
+    const source = await Bun.file(
+      new URL("../src/pagination/plugin.ts", import.meta.url)
+    ).text()
+    const updateStart = source.indexOf("update(view, prevState)")
+    const updateEnd = source.indexOf("destroy()", updateStart)
+    expect(updateStart).toBeGreaterThan(0)
+    expect(updateEnd).toBeGreaterThan(updateStart)
+    expect(source.slice(updateStart, updateEnd)).not.toContain(
+      "applySectionPageCountsToDom"
+    )
+  })
 })

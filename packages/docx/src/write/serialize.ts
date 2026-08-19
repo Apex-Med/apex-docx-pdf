@@ -658,7 +658,9 @@ function sectionColumnsXml(
 function sectionPropertiesXml(
   section: SemanticSection,
   headerRId: string | null,
-  footerRId: string | null
+  footerRId: string | null,
+  firstPageHeaderRId: string | null,
+  firstPageFooterRId: string | null
 ): string {
   const p = section.properties
   const refs: string[] = []
@@ -666,6 +668,14 @@ function sectionPropertiesXml(
     refs.push(`<w:headerReference w:type="default" r:id="${headerRId}"/>`)
   if (footerRId)
     refs.push(`<w:footerReference w:type="default" r:id="${footerRId}"/>`)
+  if (firstPageHeaderRId)
+    refs.push(
+      `<w:headerReference w:type="first" r:id="${firstPageHeaderRId}"/>`
+    )
+  if (firstPageFooterRId)
+    refs.push(
+      `<w:footerReference w:type="first" r:id="${firstPageFooterRId}"/>`
+    )
   const cols =
     p.columns !== null &&
     p.columns !== undefined &&
@@ -684,6 +694,7 @@ function sectionPropertiesXml(
       p.orientation === "landscape" ? ` w:orient="landscape"` : ""
     }/>` +
     `<w:pgMar w:top="${p.margins.top}" w:right="${p.margins.right}" w:bottom="${p.margins.bottom}" w:left="${p.margins.left}" w:header="${p.headerDistance}" w:footer="${p.footerDistance}"/>` +
+    (p.differentFirstPage ? `<w:titlePg/>` : "") +
     cols +
     `</w:sectPr>`
   )
@@ -932,9 +943,9 @@ function collectFontFamilies(document: SemanticDocument): string[] {
   for (const section of document.sections)
     for (const block of section.blocks) visitBlock(block)
   for (const header of document.headers)
-    for (const block of header.blocks) visitParagraph(block)
+    for (const block of header.blocks) visitBlock(block)
   for (const footer of document.footers)
-    for (const block of footer.blocks) visitParagraph(block)
+    for (const block of footer.blocks) visitBlock(block)
   return [...families]
 }
 
@@ -943,9 +954,7 @@ function headerFooterXml(
   imageRels: ReadonlyMap<string, string>
 ): string {
   const tag = value.type === "header" ? "hdr" : "ftr"
-  const body = value.blocks
-    .map((block) => paragraphXml(block, imageRels))
-    .join("")
+  const body = value.blocks.map((block) => blockXml(block, imageRels)).join("")
   return (
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<w:${tag} xmlns:w="${W_NS}" xmlns:r="${R_NS}" xmlns:wp="${WP_NS}" xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}">` +
@@ -1180,6 +1189,12 @@ export function serializeDocx(document: SemanticDocument): Uint8Array {
         : null,
       section.defaultFooterId
         ? (footerRIds.get(section.defaultFooterId) ?? null)
+        : null,
+      section.firstPageHeaderId
+        ? (headerRIds.get(section.firstPageHeaderId) ?? null)
+        : null,
+      section.firstPageFooterId
+        ? (footerRIds.get(section.firstPageFooterId) ?? null)
         : null
     )
     section.blocks.forEach((block, blockIndex) => {

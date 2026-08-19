@@ -6,6 +6,7 @@ import {
   applyBulletList,
   applyDefinedParagraphStyle,
   applyCommandToSemantic,
+  applyNumberedList,
   backspaceCommand,
   BULLET_NUMBERING_ID,
   clearFormatting,
@@ -17,13 +18,22 @@ import {
   increaseIndent,
   INDENT_STEP_TWIPS,
   insertTable,
+  setFontFamily,
+  setFontSize,
+  setFontWeight,
+  setHighlightColor,
   setParagraphAttrs,
+  setParagraphSpacing,
   setTableAttrs,
+  setTextColor,
   toggleBold,
   toggleStrikethrough,
   twipsToUnit,
   unitToTwips,
+  updateDefinedParagraphStyle,
 } from "../src/index"
+import { getSelectionSnapshot } from "../src/plugins/selection-state"
+import { styleFromSelection } from "../src/ui/style-from-selection"
 import { buildMinimalDocx } from "../../testkit/src/docx"
 
 describe("dialogs and commands (phase 5 / 8)", () => {
@@ -292,7 +302,7 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     expect(textStyleOff?.attrs.strikethrough).toBe(false)
   })
 
-  test("applyBulletList sets numbering and merges definition into document", () => {
+  test("applyBulletList toggles numbering and list indentation", () => {
     const state = createEditorStateFromDocument(createBlankDocument())
     const result = applyCommandToSemantic(state, applyBulletList())
     expect(result.applied).toBe(true)
@@ -323,6 +333,63 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     expect(numberingLabel).toBe("•")
     expect(JSON.stringify(markerDom)).toContain("data-list-marker")
     expect(JSON.stringify(markerDom)).toContain("•")
+
+    const removed = applyCommandToSemantic(result.state, applyBulletList())
+    expect(removed.applied).toBe(true)
+    const plainParagraph = removed.document.sections[0]?.blocks[0]
+    expect(plainParagraph?.type).toBe("paragraph")
+    if (plainParagraph?.type !== "paragraph") return
+    expect(plainParagraph.properties.numbering).toBeNull()
+    expect(Number(plainParagraph.properties.indentStart)).toBe(0)
+    expect(Number(plainParagraph.properties.firstLineIndent)).toBe(0)
+  })
+
+  test("applyNumberedList toggles numbering off when clicked again", () => {
+    const state = createEditorStateFromDocument(createBlankDocument())
+    const numbered = applyCommandToSemantic(state, applyNumberedList())
+    expect(numbered.applied).toBe(true)
+
+    const removed = applyCommandToSemantic(numbered.state, applyNumberedList())
+    expect(removed.applied).toBe(true)
+    const paragraph = removed.document.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(paragraph.properties.numbering).toBeNull()
+    expect(Number(paragraph.properties.indentStart)).toBe(0)
+    expect(Number(paragraph.properties.firstLineIndent)).toBe(0)
+  })
+
+  test("Backspace at the start of a list paragraph exits the list", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["List item"] })
+    )
+    const listed = applyCommandToSemantic(state, applyBulletList())
+    let paraStart = 0
+    listed.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "paragraph") return true
+      paraStart = pos + 1
+      return false
+    })
+    const atStart = listed.state.apply(
+      listed.state.tr.setSelection(
+        TextSelection.create(listed.state.doc, paraStart)
+      )
+    )
+
+    const removed = applyCommandToSemantic(atStart, backspaceCommand)
+    expect(removed.applied).toBe(true)
+    const paragraph = removed.document.sections[0]?.blocks[0]
+    expect(paragraph?.type).toBe("paragraph")
+    if (paragraph?.type !== "paragraph") return
+    expect(paragraph.properties.numbering).toBeNull()
+    expect(Number(paragraph.properties.indentStart)).toBe(0)
+    expect(Number(paragraph.properties.firstLineIndent)).toBe(0)
+    expect(
+      paragraph.children
+        .filter((child) => child.type === "text")
+        .map((child) => (child.type === "text" ? child.text : ""))
+        .join("")
+    ).toBe("List item")
   })
 
   test("applyDefinedParagraphStyle applies named paragraph and text formatting", () => {
@@ -362,6 +429,252 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     expect(text.style.fontFamily).toBe("Inter")
     expect(text.style.fontWeight).toBe(700)
     expect(text.style.color).toBe("#2563eb")
+  })
+
+  test("applyDefinedParagraphStyle replaces typography across selected paragraphs", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["First", "Second"] })
+    )
+    const textRanges: { from: number; to: number }[] = []
+    state.doc.descendants((node, pos) => {
+      if (node.isText) textRanges.push({ from: pos, to: pos + node.nodeSize })
+    })
+    const firstText = textRanges[0]
+    const lastText = textRanges.at(-1)
+    expect(firstText).toBeDefined()
+    expect(lastText).toBeDefined()
+    if (!firstText || !lastText) return
+    const selected = state.apply(
+      state.tr.setSelection(
+        TextSelection.create(state.doc, firstText.from, lastText.to)
+      )
+    )
+    const definition: StyleDefinition = {
+      id: "Heading1",
+      name: "Heading 1",
+      type: "paragraph",
+      basedOn: "Normal",
+      next: "Normal",
+      paragraph: { spacingAfter: twips(120), keepWithNext: true },
+      text: { fontSize: twips(400), fontWeight: 700 },
+    }
+
+    const result = applyCommandToSemantic(
+      selected,
+      applyDefinedParagraphStyle(definition)
+    )
+
+    const paragraphs = (result.document.sections[0]?.blocks ?? []).filter(
+      (block) => block.type === "paragraph"
+    )
+    expect(paragraphs).toHaveLength(2)
+    for (const paragraph of paragraphs) {
+      if (paragraph.type !== "paragraph") continue
+      expect(paragraph.styleId).toBe("Heading1")
+      expect(paragraph.properties.keepWithNext).toBe(true)
+      const text = paragraph.children.find((child) => child.type === "text")
+      expect(text?.type).toBe("text")
+      if (text?.type !== "text") continue
+      expect(Number(text.style.fontSize)).toBe(400)
+      expect(text.style.fontWeight).toBe(700)
+    }
+  })
+
+  test("updateDefinedParagraphStyle refreshes every paragraph using the style", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["First", "Second", "Third"] })
+    )
+    const heading: StyleDefinition = {
+      id: "Heading1",
+      name: "Heading 1",
+      type: "paragraph",
+      basedOn: "Normal",
+      next: "Normal",
+      paragraph: { spacingAfter: twips(120) },
+      text: { fontSize: twips(400), fontWeight: 700 },
+    }
+    const paragraphStarts: number[] = []
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === "paragraph") paragraphStarts.push(pos + 1)
+    })
+    const first = paragraphStarts[0]
+    const third = paragraphStarts[2]
+    expect(first).toBeDefined()
+    expect(third).toBeDefined()
+    if (first === undefined || third === undefined) return
+    const firstSelected = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, first))
+    )
+    const firstStyled = applyCommandToSemantic(
+      firstSelected,
+      applyDefinedParagraphStyle(heading)
+    )
+    const thirdSelected = firstStyled.state.apply(
+      firstStyled.state.tr.setSelection(
+        TextSelection.create(firstStyled.state.doc, third)
+      )
+    )
+    const bothStyled = applyCommandToSemantic(
+      thirdSelected,
+      applyDefinedParagraphStyle(heading)
+    )
+    const updated: StyleDefinition = {
+      ...heading,
+      paragraph: {
+        spacingBefore: twips(160),
+        spacingAfter: twips(240),
+        lineSpacing: { rule: "auto", value240ths: 360 },
+      },
+      text: {
+        fontFamily: "Aptos",
+        fontSize: twips(320),
+        fontWeight: 500,
+        color: "#2563eb",
+        highlightColor: "#fef08a",
+      },
+    }
+
+    const result = applyCommandToSemantic(
+      bothStyled.state,
+      updateDefinedParagraphStyle(updated)
+    )
+    const paragraphs = (result.document.sections[0]?.blocks ?? []).filter(
+      (block) => block.type === "paragraph"
+    )
+    expect(paragraphs.map((paragraph) => paragraph.styleId)).toEqual([
+      "Heading1",
+      null,
+      "Heading1",
+    ])
+    for (const paragraph of [paragraphs[0], paragraphs[2]]) {
+      if (paragraph?.type !== "paragraph") continue
+      expect(Number(paragraph.properties.spacingBefore)).toBe(160)
+      expect(Number(paragraph.properties.spacingAfter)).toBe(240)
+      expect(paragraph.properties.lineSpacing).toEqual({
+        rule: "auto",
+        value240ths: 360,
+      })
+      const text = paragraph.children.find((child) => child.type === "text")
+      if (text?.type !== "text") continue
+      expect(text.style.fontFamily).toBe("Aptos")
+      expect(Number(text.style.fontSize)).toBe(320)
+      expect(text.style.fontWeight).toBe(500)
+      expect(text.style.color).toBe("#2563eb")
+      expect(text.style.highlightColor).toBe("#fef08a")
+    }
+  })
+
+  test("updating a style from selected text refreshes every matching paragraph", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["First heading", "Body", "Second heading"] })
+    )
+    const heading: StyleDefinition = {
+      id: "Heading1",
+      name: "Heading 1",
+      type: "paragraph",
+      basedOn: "Normal",
+      next: "Normal",
+      paragraph: { spacingBefore: twips(320), spacingAfter: twips(120) },
+      text: { fontSize: twips(400), fontWeight: 700 },
+    }
+    const paragraphStarts: number[] = []
+    const textRanges: { from: number; to: number }[] = []
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === "paragraph") paragraphStarts.push(pos + 1)
+      if (node.isText) textRanges.push({ from: pos, to: pos + node.nodeSize })
+    })
+    const first = paragraphStarts[0]
+    const third = paragraphStarts[2]
+    const firstText = textRanges[0]
+    expect(first).toBeDefined()
+    expect(third).toBeDefined()
+    expect(firstText).toBeDefined()
+    if (first === undefined || third === undefined || !firstText) return
+
+    const firstStyled = applyCommandToSemantic(
+      state.apply(
+        state.tr.setSelection(TextSelection.create(state.doc, first))
+      ),
+      applyDefinedParagraphStyle(heading)
+    )
+    const bothStyled = applyCommandToSemantic(
+      firstStyled.state.apply(
+        firstStyled.state.tr.setSelection(
+          TextSelection.create(firstStyled.state.doc, third)
+        )
+      ),
+      applyDefinedParagraphStyle(heading)
+    )
+    const firstSelected = bothStyled.state.apply(
+      bothStyled.state.tr.setSelection(
+        TextSelection.create(
+          bothStyled.state.doc,
+          firstText.from,
+          firstText.to
+        )
+      )
+    )
+    const restyled = applyCommandToSemantic(firstSelected, setFontFamily("Aptos"))
+    const sized = applyCommandToSemantic(restyled.state, setFontSize(320))
+    const weighted = applyCommandToSemantic(sized.state, setFontWeight(500))
+    const colored = applyCommandToSemantic(weighted.state, setTextColor("#2563eb"))
+    const highlighted = applyCommandToSemantic(
+      colored.state,
+      setHighlightColor("#fef08a")
+    )
+    const spaced = applyCommandToSemantic(
+      highlighted.state,
+      setParagraphSpacing({
+        spacingBefore: 160,
+        spacingAfter: 240,
+        lineSpacing: { rule: "auto", value240ths: 360 },
+      })
+    )
+    const snap = getSelectionSnapshot(spaced.state)
+    expect(snap).not.toBeNull()
+    if (!snap) return
+    const updated = styleFromSelection("Heading1", "Heading 1", snap)
+    expect(updated.text).toMatchObject({
+      fontFamily: "Aptos",
+      fontSize: 320,
+      fontWeight: 500,
+      color: "#2563eb",
+      highlightColor: "#fef08a",
+    })
+    expect(updated.paragraph).toMatchObject({
+      spacingBefore: 160,
+      spacingAfter: 240,
+      lineSpacing: { rule: "auto", value240ths: 360 },
+    })
+
+    const result = applyCommandToSemantic(
+      spaced.state,
+      updateDefinedParagraphStyle(updated)
+    )
+    const paragraphs = (result.document.sections[0]?.blocks ?? []).filter(
+      (block) => block.type === "paragraph"
+    )
+    expect(paragraphs.map((paragraph) => paragraph.styleId)).toEqual([
+      "Heading1",
+      null,
+      "Heading1",
+    ])
+    for (const paragraph of [paragraphs[0], paragraphs[2]]) {
+      if (paragraph?.type !== "paragraph") continue
+      expect(Number(paragraph.properties.spacingBefore)).toBe(160)
+      expect(Number(paragraph.properties.spacingAfter)).toBe(240)
+      expect(paragraph.properties.lineSpacing).toEqual({
+        rule: "auto",
+        value240ths: 360,
+      })
+      const text = paragraph.children.find((child) => child.type === "text")
+      if (text?.type !== "text") continue
+      expect(text.style.fontFamily).toBe("Aptos")
+      expect(Number(text.style.fontSize)).toBe(320)
+      expect(text.style.fontWeight).toBe(500)
+      expect(text.style.color).toBe("#2563eb")
+      expect(text.style.highlightColor).toBe("#fef08a")
+    }
   })
 
   test("setTableAttrs persists table justification through the semantic bridge", () => {

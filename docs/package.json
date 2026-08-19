@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "check": "bun run check.ts",
-    "dev": "bunx --bun mint@4.2.776 dev --port 3001"
+    "dev": "bunx --bun mint@4.2.808 dev --port 3001"
   }
 }

@@ -12,18 +12,55 @@ function axis(
 function family(
   name: string,
   category: string,
-  axes: readonly GoogleFontAxis[]
+  axes: readonly GoogleFontAxis[],
+  weights?: readonly number[]
 ): GoogleFontFamily {
-  return Object.freeze({ family: name, category, axes })
+  return Object.freeze({
+    family: name,
+    category,
+    axes,
+    ...(weights ? { weights: Object.freeze(weights) } : {}),
+  })
 }
 
 /** Offline snapshot of popular Google Fonts families with variation axes. */
 export const GOOGLE_FONT_CATALOG_FALLBACK: readonly GoogleFontFamily[] =
   Object.freeze([
-    family("Inter", "Sans Serif", [
-      axis("wght", 100, 900, 400),
-      axis("ital", 0, 1, 0),
-    ]),
+    family(
+      "Inter",
+      "Sans Serif",
+      [axis("wght", 100, 900, 400), axis("ital", 0, 1, 0)],
+      [100, 200, 300, 400, 500, 600, 700, 800, 900]
+    ),
+    family(
+      "Instrument Sans",
+      "Sans Serif",
+      [axis("wdth", 75, 100, 100), axis("wght", 400, 700, 400)],
+      [400, 500, 600, 700]
+    ),
+    family("Instrument Serif", "Serif", [], [400]),
+    family(
+      "Geist",
+      "Sans Serif",
+      [axis("wght", 100, 900, 400)],
+      [100, 200, 300, 400, 500, 600, 700, 800, 900]
+    ),
+    family(
+      "Geist Mono",
+      "Monospace",
+      [axis("wght", 100, 900, 400)],
+      [100, 200, 300, 400, 500, 600, 700, 800, 900]
+    ),
+    family(
+      "Bricolage Grotesque",
+      "Sans Serif",
+      [
+        axis("opsz", 12, 96, 14),
+        axis("wdth", 75, 100, 100),
+        axis("wght", 200, 800, 400),
+      ],
+      [200, 300, 400, 500, 600, 700, 800]
+    ),
     family("Roboto", "Sans Serif", [axis("wght", 100, 900, 400)]),
     family("Open Sans", "Sans Serif", [
       axis("wght", 300, 800, 400),

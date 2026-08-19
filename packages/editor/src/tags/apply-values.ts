@@ -95,7 +95,7 @@ function mapHeaderFooter(
 ): SemanticHeaderFooter {
   return {
     ...part,
-    blocks: part.blocks.map((block) => mapParagraph(block, mapInline)),
+    blocks: part.blocks.map((block) => mapBlock(block, mapInline)),
   }
 }
 

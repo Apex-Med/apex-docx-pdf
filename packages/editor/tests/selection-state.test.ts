@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { EditorState, TextSelection } from "prosemirror-state"
+import { createBlankDocument, twips, type StyleDefinition } from "@apexmed/core"
 
-import { createEditorStateFromDocument } from "../src"
-import { createBlankDocument } from "@apexmed/core"
+import {
+  applyCommandToSemantic,
+  applyDefinedParagraphStyle,
+  createEditorStateFromDocument,
+  createEditorStateFromDocx,
+} from "../src"
 import {
   createSelectionStatePlugin,
   getSelectionSnapshot,
@@ -11,6 +16,7 @@ import {
 import { editorSchema } from "../src/schema"
 import { fromSemanticDocument } from "../src/model/bridge"
 import { toggleBold } from "../src/commands"
+import { buildMinimalDocx } from "../../testkit/src/docx"
 
 describe("selection-state plugin", () => {
   test("exposes default formatting snapshot", () => {
@@ -52,5 +58,92 @@ describe("selection-state plugin", () => {
     )
     // blank doc may still be empty selection range; just ensure plugin runs
     expect(getSelectionSnapshot(state)).not.toBeNull()
+  })
+
+  test("samples selected typography even when the range starts before marks", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["Heading sample"] })
+    )
+    const definition: StyleDefinition = {
+      id: "Heading1",
+      name: "Heading 1",
+      type: "paragraph",
+      basedOn: "Normal",
+      next: "Normal",
+      paragraph: {
+        spacingBefore: twips(320),
+        spacingAfter: twips(120),
+        lineSpacing: { rule: "auto", value240ths: 276 },
+      },
+      text: {
+        fontFamily: "Inter",
+        fontSize: twips(400),
+        fontWeight: 700,
+        color: "#111827",
+        highlightColor: "#fef08a",
+      },
+    }
+    const styled = applyCommandToSemantic(
+      state,
+      applyDefinedParagraphStyle(definition)
+    )
+    let paraStart = 0
+    let textEnd = 0
+    styled.state.doc.descendants((node, pos) => {
+      if (node.type.name === "paragraph") paraStart = pos + 1
+      if (node.isText) textEnd = pos + node.nodeSize
+    })
+    const selected = styled.state.apply(
+      styled.state.tr.setSelection(
+        TextSelection.create(styled.state.doc, paraStart, textEnd)
+      )
+    )
+    const snap = getSelectionSnapshot(selected)
+    expect(snap?.empty).toBe(false)
+    expect(snap?.paragraph?.styleId).toBe("Heading1")
+    expect(snap?.paragraph?.spacingBefore).toBe(320)
+    expect(snap?.paragraph?.spacingAfter).toBe(120)
+    expect(snap?.textStyle.fontFamily).toBe("Inter")
+    expect(snap?.textStyle.fontSize).toBe(400)
+    expect(snap?.textStyle.fontWeight).toBe(700)
+    expect(snap?.textStyle.color).toBe("#111827")
+    expect(snap?.textStyle.highlightColor).toBe("#fef08a")
+    expect(snap?.bold).toBe(true)
+  })
+
+  test("empty caret at a paragraph start still reports the run typography", () => {
+    const state = createEditorStateFromDocx(
+      buildMinimalDocx({ paragraphs: ["Heading sample"] })
+    )
+    const definition: StyleDefinition = {
+      id: "Heading1",
+      name: "Heading 1",
+      type: "paragraph",
+      basedOn: "Normal",
+      next: "Normal",
+      paragraph: { spacingBefore: twips(320), spacingAfter: twips(120) },
+      text: { fontSize: twips(400), fontWeight: 700 },
+    }
+    const styled = applyCommandToSemantic(
+      state,
+      applyDefinedParagraphStyle(definition)
+    )
+    let paraStart = 0
+    styled.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "paragraph") return true
+      paraStart = pos + 1
+      return false
+    })
+    const atStart = styled.state.apply(
+      styled.state.tr.setSelection(
+        TextSelection.create(styled.state.doc, paraStart)
+      )
+    )
+    const snap = getSelectionSnapshot(atStart)
+    expect(snap?.empty).toBe(true)
+    expect(snap?.paragraph?.styleId).toBe("Heading1")
+    expect(snap?.textStyle.fontSize).toBe(400)
+    expect(snap?.textStyle.fontWeight).toBe(700)
+    expect(snap?.bold).toBe(true)
   })
 })

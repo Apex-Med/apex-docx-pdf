@@ -281,7 +281,6 @@ function SortableHandle({
       data-axis={axis}
       data-index={index}
       disabled={disabled}
-      tabIndex={visible ? 0 : -1}
       aria-hidden={visible ? undefined : true}
       aria-label={label}
       title={visible ? (disabled ? disabledReason : label) : undefined}
@@ -293,6 +292,7 @@ function SortableHandle({
       }}
       {...attributes}
       {...listeners}
+      tabIndex={visible ? 0 : -1}
       onClick={(event) => {
         if (disabled || isDragging || !visible) return
         event.preventDefault()

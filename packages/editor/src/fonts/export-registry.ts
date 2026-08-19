@@ -16,6 +16,8 @@ import {
   type ManagedFontRegistry,
 } from "@apexmed/fonts"
 
+import { catalogFontAssetUrls } from "./catalog-font-urls.generated"
+
 const EDITOR_INTER_FACES = [
   {
     family: "Inter",
@@ -91,13 +93,42 @@ async function readPublicFont(file: string): Promise<Uint8Array | undefined> {
   return undefined
 }
 
+async function readBundledCatalogUrl(url: string): Promise<Uint8Array | undefined> {
+  // Bun resolves `?url` imports to absolute filesystem paths; Vite emits fetchable URLs.
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    try {
+      const { readFileSync } = await import("node:fs")
+      return new Uint8Array(readFileSync(url))
+    } catch {
+      // Fall through to fetch for non-Node hosts.
+    }
+  }
+  if (typeof fetch !== "function") return undefined
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return undefined
+    return new Uint8Array(await response.arrayBuffer())
+  } catch {
+    return undefined
+  }
+}
+
+async function readCatalogAssetBytes(asset: string): Promise<Uint8Array | undefined> {
+  const fromPackage =
+    (await readResolvedBytes(`@apexmed/fonts/assets/${asset}`)) ??
+    (await readResolvedBytes(`../../../fonts/assets/${asset}`))
+  if (fromPackage) return fromPackage
+
+  const bundledUrl = catalogFontAssetUrls[asset as keyof typeof catalogFontAssetUrls]
+  if (!bundledUrl) return undefined
+  return readBundledCatalogUrl(bundledUrl)
+}
+
 async function loadCatalogFaces(): Promise<readonly FontFaceRegistration[]> {
   const faces: FontFaceRegistration[] = []
   for (const family of OFFLINE_FONT_CATALOG) {
     for (const face of family.faces) {
-      const bytes = await readResolvedBytes(
-        `@apexmed/fonts/assets/${face.asset}`
-      )
+      const bytes = await readCatalogAssetBytes(face.asset)
       if (!bytes) return []
       faces.push({
         family: family.family,
@@ -188,8 +219,8 @@ async function catalogOrBuiltinFaces(): Promise<readonly FontFaceRegistration[]>
 }
 
 /**
- * Fonts for editor PDF/print: document-embedded programs plus the Inter
- * 400/500/600/700 catalog so placeholder replacements keep their weights.
+ * Fonts for editor PDF/print: document-embedded programs plus the full
+ * offline six-family catalog (every published static weight).
  */
 export function fontRegistryForExport(
   document: SemanticDocument

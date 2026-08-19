@@ -1530,11 +1530,16 @@ describe("Phase 6 static inlines and header/footer templates", () => {
     expect(result.value.headers).toHaveLength(1)
     expect(
       result.value.headers[0]?.blocks.map((block) =>
-        block.children.map(inlineText).join("")
+        block.type === "paragraph"
+          ? block.children.map(inlineText).join("")
+          : ""
       )
     ).toEqual(["Patient ADA"])
+    const footerBlock = result.value.footers[0]?.blocks[0]
     expect(
-      result.value.footers[0]?.blocks[0]?.children.map((child) => child.type)
+      footerBlock?.type === "paragraph"
+        ? footerBlock.children.map((child) => child.type)
+        : []
     ).toEqual(["text", "pageField"])
     expect(result.value.sections.map((item) => item.defaultHeaderId)).toEqual([
       "header-1",

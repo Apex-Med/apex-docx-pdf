@@ -1,4 +1,4 @@
-const MINT_VERSION = "4.2.776"
+const MINT_VERSION = "4.2.808"
 
 const checks = [["validate"], ["broken-links", "--check-anchors"]] as const
 

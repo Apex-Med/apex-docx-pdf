@@ -23,7 +23,7 @@ Run `bun run fixtures:check` to validate any checked-in editor exports and their
 ## Version workflow
 
 1. Add one focused Changeset for every consumer-visible change. Use `patch` by default during `0.x`; use `minor` for a deliberate new public capability or breaking prerelease API change.
-2. Keep `.changeset/pre.json` in `pre` mode with the `next` tag. If prerelease mode is ever exited deliberately, run `bunx changeset pre enter next` before producing another prerelease version. Never run a normal Changesets version pass for this package set while prerelease policy is active. `bun run release:validate` checks this mode, the complete fixed group, lockstep versions, and the initial prerelease Changeset in ordinary CI as well as the publish workflow.
+2. Keep `.changeset/pre.json` in `pre` mode with the `next` tag. Versioned prerelease Changesets live in `.changeset/pre/`. If prerelease mode is ever exited deliberately, run `bunx changeset pre enter next` before producing another prerelease version. Never run a normal Changesets version pass for this package set while prerelease policy is active. `bun run release:validate` checks this mode, the complete fixed group, lockstep versions, and the initial prerelease Changeset in ordinary CI as well as the publish workflow.
 3. Merge the generated version PR only after CI and the package checklist pass.
 4. Review the packed file lists, exact internal dependency versions, licenses, package sizes, declarations, source maps, and changelogs.
 5. Verify npm scope ownership and confirm each package's GitHub Actions trusted publisher still names `craig-bredenkamp/apex-docx-pdf`, `publish-next.yml`, the protected `npm` environment, and publish-only permission.

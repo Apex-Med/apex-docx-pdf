@@ -2,11 +2,12 @@ import { describe, expect, test, beforeEach, mock } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { GOOGLE_FONT_CATALOG_FALLBACK } from "../src/fonts/google-catalog-fallback"
 import {
-  GOOGLE_FONT_CATALOG_FALLBACK,
-} from "../src/fonts/google-catalog-fallback"
-import {
+  availableFontWeights,
+  fontWeightLabel,
   loadGoogleFontCatalog,
+  nearestAvailableFontWeight,
   resetGoogleFontCatalogCacheForTests,
   searchGoogleFonts,
   familyHasWeightAxis,
@@ -37,36 +38,58 @@ describe("google font catalog fallback", () => {
     expect(axis?.max).toBe(900)
   })
 
+  test("fallback catalog includes every required editor family and its published weights", () => {
+    const expected = {
+      Inter: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      "Instrument Sans": [400, 500, 600, 700],
+      "Instrument Serif": [400],
+      Geist: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      "Geist Mono": [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      "Bricolage Grotesque": [200, 300, 400, 500, 600, 700, 800],
+    } as const
+
+    for (const [name, weights] of Object.entries(expected)) {
+      const entry = GOOGLE_FONT_CATALOG_FALLBACK.find(
+        (family) => family.family === name
+      )
+      expect(entry).toBeDefined()
+      expect(availableFontWeights(entry!)).toEqual(weights)
+    }
+  })
+
   test("searchGoogleFonts filters by query", async () => {
     const catalog = await loadGoogleFontCatalog()
     const results = searchGoogleFonts(catalog, "mono")
-    expect(results.some((entry) => entry.family === "JetBrains Mono")).toBe(true)
-    expect(results.every((entry) => entry.family.toLowerCase().includes("mono"))).toBe(
+    expect(results.some((entry) => entry.family === "JetBrains Mono")).toBe(
       true
     )
+    expect(
+      results.every((entry) => entry.family.toLowerCase().includes("mono"))
+    ).toBe(true)
   })
 
   test("loadGoogleFontCatalog uses mocked metadata without network", async () => {
-    const mockFetch = mock(async () =>
-      new Response(
-        JSON.stringify({
-          familyMetadataList: [
-            {
-              family: "Mock Sans",
-              category: "Sans Serif",
-              axes: [
-                {
-                  tag: "wght",
-                  min: 200,
-                  max: 800,
-                  default: 400,
-                },
-              ],
-            },
-          ],
-        }),
-        { status: 200 }
-      )
+    const mockFetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            familyMetadataList: [
+              {
+                family: "Mock Sans",
+                category: "Sans Serif",
+                axes: [
+                  {
+                    tag: "wght",
+                    min: 200,
+                    max: 800,
+                    default: 400,
+                  },
+                ],
+              },
+            ],
+          }),
+          { status: 200 }
+        )
     )
     const original = globalThis.fetch
     globalThis.fetch = mockFetch as unknown as typeof fetch
@@ -105,6 +128,19 @@ describe("font loader helpers", () => {
   test("snapToFontWeight picks nearest CSS weight", () => {
     expect(snapToFontWeight(430)).toBe(400)
     expect(snapToFontWeight(610)).toBe(600)
+  })
+
+  test("family-aware snapping never produces an unavailable weight", () => {
+    const instrumentSans = GOOGLE_FONT_CATALOG_FALLBACK.find(
+      (entry) => entry.family === "Instrument Sans"
+    )
+    const instrumentSerif = GOOGLE_FONT_CATALOG_FALLBACK.find(
+      (entry) => entry.family === "Instrument Serif"
+    )
+    expect(nearestAvailableFontWeight(instrumentSans!, 250)).toBe(400)
+    expect(nearestAvailableFontWeight(instrumentSans!, 560)).toBe(600)
+    expect(nearestAvailableFontWeight(instrumentSerif!, 900)).toBe(400)
+    expect(fontWeightLabel(600)).toBe("Semibold")
   })
 })
 

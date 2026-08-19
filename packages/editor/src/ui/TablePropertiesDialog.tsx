@@ -36,15 +36,23 @@ import type {
   SelectedTableCellBorders,
   SelectedTableCellGrid,
 } from "../commands"
+import { TAILWIND_PALETTES, type CustomPalette } from "../fonts"
 import {
   tableSizingConstraintMessage,
   withTableWidthMode,
 } from "../schema/table-sizing"
+import { ColorPicker } from "./ColorPicker"
 import {
   ScrubbableNumberDisclosure,
   ScrubbableNumberInput,
   ScrubbableNumberLabel,
 } from "./ScrubbableNumberInput"
+import {
+  DEFAULT_TABLE_OPTIONS_WIDTH,
+  MAX_TABLE_OPTIONS_WIDTH,
+  MIN_TABLE_OPTIONS_WIDTH,
+} from "./editor-preferences"
+import { ResizableSidebarHandle } from "./ResizableSidebarHandle"
 
 type BorderTarget = Exclude<SelectedCellBorderTarget, "all">
 
@@ -67,21 +75,23 @@ export type TablePropertiesChange =
   | Readonly<{ type: "columnWidths"; value: readonly number[] }>
   | Readonly<{ type: "rowHeight"; value: number | null }>
   | Readonly<{
-    type: "cellPadding"
-    value: TablePropertiesOptions["cellPadding"]
-  }>
+      type: "cellPadding"
+      value: TablePropertiesOptions["cellPadding"]
+    }>
   | Readonly<{ type: "cellShading"; value: string | null }>
   | Readonly<{
-    type: "cellBorder"
-    target: SelectedCellBorderTarget
-    value: CellBorderSpec | null
-  }>
+      type: "cellBorder"
+      target: SelectedCellBorderTarget
+      value: CellBorderSpec | null
+    }>
   | Readonly<{ type: "headerRowRepeat"; value: boolean }>
   | Readonly<{ type: "allowBreakAcrossPages"; value: boolean }>
   | Readonly<{ type: "tableSizing"; value: TableSizing }>
 
 export type TablePropertiesDialogProps = Readonly<{
   open: boolean
+  width: number
+  onWidthChange: (width: number) => void
   onOpenChange: (open: boolean) => void
   selectionGrid: SelectedTableCellGrid
   initialBorders?: SelectedTableCellBorders
@@ -90,6 +100,9 @@ export type TablePropertiesDialogProps = Readonly<{
   importedFixed?: boolean
   onSelectTable?: () => void
   onSelectColumn?: () => void
+  palettes?: Readonly<Record<string, readonly string[]>>
+  customPalettes?: readonly CustomPalette[]
+  onCustomPalettesChange?: (palettes: CustomPalette[]) => void
   onChange: (change: TablePropertiesChange) => void
 }>
 
@@ -243,12 +256,18 @@ function BorderToggle({
   spec,
   onToggle,
   onSpecChange,
+  palettes,
+  customPalettes,
+  onCustomPalettesChange,
 }: {
   target: BorderTarget
   active: boolean
   spec: CellBorderSpec
   onToggle: () => void
   onSpecChange: (spec: CellBorderSpec) => void
+  palettes: Readonly<Record<string, readonly string[]>>
+  customPalettes: readonly CustomPalette[]
+  onCustomPalettesChange?: (palettes: CustomPalette[]) => void
 }) {
   const [open, setOpen] = useState(false)
   const [widthText, setWidthText] = useState(String(spec.width))
@@ -335,14 +354,39 @@ function BorderToggle({
             <Label htmlFor={colorId} className="text-muted-foreground">
               Color
             </Label>
-            <Input
-              id={colorId}
-              type="color"
-              value={spec.color}
-              onChange={(event) =>
-                onSpecChange({ ...spec, color: event.target.value })
-              }
-            />
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Button
+                    id={colorId}
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start gap-2 px-2 font-mono text-xs uppercase"
+                    aria-label={`${targetLabel} border color`}
+                  />
+                }
+              >
+                <span
+                  className="size-4 shrink-0 rounded-sm border border-black/10 dark:border-white/15"
+                  style={{ background: spec.color }}
+                  aria-hidden="true"
+                />
+                {spec.color}
+              </PopoverTrigger>
+              <PopoverContent
+                side="left"
+                align="center"
+                className="w-[min(100vw-2rem,24rem)] p-3"
+              >
+                <ColorPicker
+                  value={spec.color}
+                  palettes={palettes}
+                  customPalettes={customPalettes}
+                  onCustomPalettesChange={onCustomPalettesChange}
+                  onPick={(color) => onSpecChange({ ...spec, color })}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="grid gap-1.5">
             <ScrubbableNumberLabel
@@ -381,6 +425,8 @@ function BorderToggle({
 
 export function TablePropertiesDialog({
   open,
+  width,
+  onWidthChange,
   onOpenChange,
   selectionGrid,
   initialBorders,
@@ -389,6 +435,9 @@ export function TablePropertiesDialog({
   importedFixed = false,
   onSelectTable,
   onSelectColumn,
+  palettes = TAILWIND_PALETTES,
+  customPalettes = [],
+  onCustomPalettesChange,
   onChange,
 }: TablePropertiesDialogProps) {
   const [tableSizing, setTableSizingState] = useState<TableSizing | null>(
@@ -518,7 +567,19 @@ export function TablePropertiesDialog({
   )
 
   return (
-    <aside className="apex-table-options" aria-label="Table options">
+    <aside
+      className="apex-table-options"
+      aria-label="Table options"
+      style={{ width }}
+    >
+      <ResizableSidebarHandle
+        label="Resize table options sidebar"
+        width={width}
+        minWidth={MIN_TABLE_OPTIONS_WIDTH}
+        maxWidth={MAX_TABLE_OPTIONS_WIDTH}
+        defaultWidth={DEFAULT_TABLE_OPTIONS_WIDTH}
+        onWidthChange={onWidthChange}
+      />
       <header className="apex-table-options__header">
         <div>
           <h2 className="apex-table-options__title">Table options</h2>
@@ -627,12 +688,12 @@ export function TablePropertiesDialog({
                     ]}
                     disabled={
                       tableSizing.mode !== "hug" &&
-                        selectedPolicy.mode === "fill" &&
-                        fillCount === 1
+                      selectedPolicy.mode === "fill" &&
+                      fillCount === 1
                         ? {
-                          fixed: "At least one column must remain Fill.",
-                          hug: "At least one column must remain Fill.",
-                        }
+                            fixed: "At least one column must remain Fill.",
+                            hug: "At least one column must remain Fill.",
+                          }
                         : undefined
                     }
                     onChange={(mode) => updateColumn({ mode })}
@@ -876,26 +937,58 @@ export function TablePropertiesDialog({
               Cell shading
             </Label>
             <div className="flex gap-2">
-              <Input
-                id={`${fieldId}-cell-shading`}
-                type="color"
-                value={cellShading || "#ffffff"}
-                className="w-14"
-                onChange={(event) => {
-                  setCellShading(event.target.value)
-                  onChange({ type: "cellShading", value: event.target.value })
-                }}
-              />
-              <Input
-                aria-label="Cell shading color"
-                value={cellShading}
-                onChange={(event) => {
-                  const value = event.target.value
-                  setCellShading(value)
-                  onChange({ type: "cellShading", value: value.trim() || null })
-                }}
-                placeholder="None"
-              />
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      id={`${fieldId}-cell-shading`}
+                      type="button"
+                      variant="outline"
+                      className="min-w-0 flex-1 justify-start gap-2 px-2 font-mono text-xs uppercase"
+                      aria-label="Cell shading color"
+                    />
+                  }
+                >
+                  <span
+                    className="size-4 shrink-0 rounded-sm border border-black/10 dark:border-white/15"
+                    style={{ background: cellShading || "#ffffff" }}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">
+                    {cellShading || "No shading"}
+                  </span>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="left"
+                  align="center"
+                  className="w-[min(100vw-2rem,24rem)] p-3"
+                >
+                  <ColorPicker
+                    value={cellShading || "#ffffff"}
+                    palettes={palettes}
+                    customPalettes={customPalettes}
+                    onCustomPalettesChange={onCustomPalettesChange}
+                    onPick={(color) => {
+                      setCellShading(color)
+                      onChange({ type: "cellShading", value: color })
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              {cellShading ? (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Clear cell shading"
+                  onClick={() => {
+                    setCellShading("")
+                    onChange({ type: "cellShading", value: null })
+                  }}
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                </Button>
+              ) : null}
             </div>
           </div>
         </OptionsSection>
@@ -965,6 +1058,9 @@ export function TablePropertiesDialog({
                   )
                 }
                 onSpecChange={(spec) => updateBorder(target, spec)}
+                palettes={palettes}
+                customPalettes={customPalettes}
+                onCustomPalettesChange={onCustomPalettesChange}
               />
             ))}
           </fieldset>

@@ -347,7 +347,7 @@ type InternalDisplayItem = DisplayListItem | PendingPageField
 
 type PreparedHeaderFooter = Readonly<{
   id: string
-  blocks: readonly PreparedParagraph[]
+  blocks: readonly PreparedBlock[]
   height: Twip
 }>
 
@@ -533,44 +533,90 @@ export function layoutDocument(
   const headers = indexHeaderFooters(document.headers, "header")
   const footers = indexHeaderFooters(document.footers, "footer")
   const headerFooterCache = new Map<string, PreparedHeaderFooter>()
+  const sectionPageCounts = new Map<string, number>()
   let current: PageState | undefined
 
   const prepareHeaderFooter = (
     id: string | null,
     kind: "header" | "footer",
-    width: Twip
+    width: Twip,
+    maximumHeight: Twip
   ): PreparedHeaderFooter | undefined => {
     if (id === null) return undefined
     const definitions = kind === "header" ? headers : footers
     const definition = definitions.get(id)
     if (!definition)
       throw new RangeError(`Section references missing ${kind} '${id}'`)
-    const cacheKey = `${kind}:${id}:${width}:${pageFieldDigits}`
+    const cacheKey = `${kind}:${id}:${width}:${maximumHeight}:${pageFieldDigits}`
     const cached = headerFooterCache.get(cacheKey)
     if (cached) return cached
-    for (const paragraph of definition.blocks) {
-      if (paragraph.properties.numbering !== null)
+    const blocks: readonly PreparedBlock[] = definition.blocks.map((block) => {
+      if (block.type === "table") {
+        return {
+          type: "table",
+          value: prepareTable(
+            withHeaderFooterTableLineSpacing(block),
+            width,
+            typography,
+            diagnostics,
+            numbering,
+            pageFieldDigits,
+            assets,
+            maximumHeight,
+            options.signal
+          ),
+        }
+      }
+      if (block.type === "horizontalRule") {
+        if (!Number.isSafeInteger(block.height) || block.height <= 0)
+          throw new RangeError(
+            "Header/footer horizontal-rule height must be a positive safe-integer twip value"
+          )
+        return {
+          type: "horizontalRule",
+          value: {
+            rule: block,
+            height: safeTwipSum(
+              [
+                block.properties.spacingBefore,
+                block.height,
+                block.properties.spacingAfter,
+              ],
+              "Header/footer horizontal-rule height exceeds the safe integer range"
+            ),
+          },
+        }
+      }
+      if (block.properties.numbering !== null)
         throw new RangeError(
           `${kind === "header" ? "Header" : "Footer"} paragraphs cannot use automatic numbering`
         )
-    }
-    const blocks = definition.blocks.map((paragraph) =>
-      prepareParagraph(
-        paragraph,
-        width,
-        typography,
-        diagnostics,
-        numbering,
-        pageFieldDigits,
-        assets,
-        options.signal
+      return {
+        type: "paragraph",
+        value: prepareParagraph(
+          block,
+          width,
+          typography,
+          diagnostics,
+          numbering,
+          pageFieldDigits,
+          assets,
+          options.signal
+        ),
+      }
+    })
+    const blockHeight = (block: PreparedBlock): Twip => {
+      if (block.type !== "table") return block.value.height
+      return safeTwipSum(
+        block.value.rows.map((row) => row.height),
+        `${kind === "header" ? "Header" : "Footer"} table height exceeds the safe integer range`
       )
-    )
+    }
     const prepared: PreparedHeaderFooter = Object.freeze({
       id,
       blocks: Object.freeze(blocks),
       height: safeTwipSum(
-        blocks.map((block) => block.height),
+        blocks.map(blockHeight),
         `${kind === "header" ? "Header" : "Footer"} height exceeds the safe integer range`
       ),
     })
@@ -607,15 +653,25 @@ export function layoutDocument(
     }
     const columnGeometry = resolveSectionColumnGeometry(section, contentBounds)
     const flowBounds = columnGeometry.columns[0] as Rect
+    const sectionPageIndex = sectionPageCounts.get(String(section.id)) ?? 0
+    sectionPageCounts.set(String(section.id), sectionPageIndex + 1)
+    const useFirstPageVariant =
+      sectionPageIndex === 0 && section.properties.differentFirstPage === true
     const header = prepareHeaderFooter(
-      section.defaultHeaderId,
+      useFirstPageVariant
+        ? (section.firstPageHeaderId ?? null)
+        : section.defaultHeaderId,
       "header",
-      contentBounds.width
+      contentBounds.width,
+      pageHeight
     )
     const footer = prepareHeaderFooter(
-      section.defaultFooterId,
+      useFirstPageVariant
+        ? (section.firstPageFooterId ?? null)
+        : section.defaultFooterId,
       "footer",
-      contentBounds.width
+      contentBounds.width,
+      pageHeight
     )
     const headerBottom = header
       ? safeTwipSum(
@@ -1295,6 +1351,7 @@ export function layoutDocument(
         emitHeaderFooter(
           decorated,
           page.header,
+          page,
           page.contentBounds,
           page.headerY,
           page.pageNumber,
@@ -1305,6 +1362,7 @@ export function layoutDocument(
         emitHeaderFooter(
           decorated,
           page.footer,
+          page,
           page.contentBounds,
           page.footerY,
           page.pageNumber,
@@ -1419,6 +1477,38 @@ function collectLinkBoxes(displayList: PageDisplayList): readonly LinkBox[] {
     }
   }
   return Object.freeze(links)
+}
+
+/** Matches `.apex-editor-surface .ProseMirror` CSS `line-height: 1.35`. */
+const EDITOR_DEFAULT_LINE_SPACING_240THS = 324
+
+function withEditorDefaultLineSpacing(
+  paragraph: ResolvedParagraph
+): ResolvedParagraph {
+  if (paragraph.properties.lineSpacing !== null) return paragraph
+  return {
+    ...paragraph,
+    properties: {
+      ...paragraph.properties,
+      lineSpacing: {
+        rule: "auto",
+        value240ths: EDITOR_DEFAULT_LINE_SPACING_240THS,
+      },
+    },
+  }
+}
+
+function withHeaderFooterTableLineSpacing(table: ResolvedTable): ResolvedTable {
+  return {
+    ...table,
+    rows: table.rows.map((row) => ({
+      ...row,
+      cells: row.cells.map((cell) => ({
+        ...cell,
+        blocks: cell.blocks.map(withEditorDefaultLineSpacing),
+      })),
+    })),
+  }
 }
 
 function prepareParagraph(
@@ -4001,12 +4091,9 @@ function shapeVariationForRun(
   }>,
   faceWeight: TextStyle["fontWeight"]
 ): ShapeTextInput["variation"] | undefined {
-  if (
-    requested.weight === faceWeight &&
-    (requested.weight === 400 || requested.weight === 700)
-  ) {
-    return undefined
-  }
+  // Exact static-face matches must keep their own outlines. Only apply OpenType
+  // variation when the registry had to fall back across weights/styles.
+  if (requested.weight === faceWeight) return undefined
   return {
     wght: requested.weight,
     ...(requested.style === "italic" ? { ital: 1 } : {}),
@@ -4329,13 +4416,83 @@ function emitListLabel(
 function emitHeaderFooter(
   items: InternalDisplayItem[],
   prepared: PreparedHeaderFooter,
+  page: InternalPage,
   contentBounds: Rect,
   startY: Twip,
   _pageNumber: number,
   _totalPages: number
 ): void {
   let y = startY
-  for (const paragraph of prepared.blocks) {
+  for (const block of prepared.blocks) {
+    if (block.type === "table") {
+      const tableHeight = safeTwipSum(
+        block.value.rows.map((row) => row.height),
+        "Header/footer table height exceeds the safe integer range"
+      )
+      const flowBounds: Rect = {
+        x: contentBounds.x,
+        y,
+        width: contentBounds.width,
+        height: tableHeight,
+      }
+      const state: PageState = {
+        page,
+        y,
+        items,
+        flowBounds,
+        columnIndex: 0,
+        columnGeometry: {
+          count: 1,
+          space: twips(0),
+          separator: false,
+          columns: [flowBounds],
+        },
+      }
+      const tableEvents: LayoutTraceEvent[] = []
+      for (const row of block.value.rows) {
+        emitTableRowFragment(
+          block.value,
+          row,
+          twips(0),
+          row.height,
+          state,
+          tableEvents
+        )
+        state.y = safeTwipSum(
+          [state.y, row.height],
+          "Header/footer table position exceeds the safe integer range"
+        )
+      }
+      y = state.y
+      continue
+    }
+    if (block.type === "horizontalRule") {
+      const { rule } = block.value
+      y = safeTwipSum(
+        [y, rule.properties.spacingBefore],
+        "Header/footer position exceeds the safe integer range"
+      )
+      const centerY = safeTwipSum(
+        [y, twips(Math.floor(rule.height / 2))],
+        "Header/footer position exceeds the safe integer range"
+      )
+      items.push({
+        type: "line",
+        sourceNodeId: rule.id,
+        x1: contentBounds.x,
+        y1: centerY,
+        x2: twips(contentBounds.x + contentBounds.width),
+        y2: centerY,
+        width: rule.height,
+        color: rule.color,
+      })
+      y = safeTwipSum(
+        [y, rule.height, rule.properties.spacingAfter],
+        "Header/footer position exceeds the safe integer range"
+      )
+      continue
+    }
+    const paragraph = block.value
     y = safeTwipSum(
       [y, paragraph.paragraph.properties.spacingBefore],
       "Header/footer position exceeds the safe integer range"

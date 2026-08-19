@@ -129,9 +129,12 @@ export function createBlankDocument(
           margins,
           headerDistance: twips(720),
           footerDistance: twips(720),
+          differentFirstPage: false,
         },
         defaultHeaderId: null,
         defaultFooterId: null,
+        firstPageHeaderId: null,
+        firstPageFooterId: null,
         blocks: [paragraph],
       },
     ],
@@ -142,7 +145,9 @@ export function createBlankDocument(
 function definitionMap(
   styles: DocumentStyles
 ): ReadonlyMap<StyleId, StyleDefinition> {
-  return new Map(styles.definitions.map((definition) => [definition.id, definition]))
+  return new Map(
+    styles.definitions.map((definition) => [definition.id, definition])
+  )
 }
 
 function styleChain(
@@ -258,10 +263,7 @@ function paragraphPropertiesEqual(
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function resolveText(
-  text: SemanticText,
-  styles: DocumentStyles
-): SemanticText {
+function resolveText(text: SemanticText, styles: DocumentStyles): SemanticText {
   const resolved = resolveTextStyle(styles, text.styleId, text.directStyle)
   if (textStylesEqual(text.style, resolved)) return text
   return { ...text, style: resolved }
@@ -348,7 +350,7 @@ function resolveHeaderFooter(
   value: SemanticHeaderFooter,
   styles: DocumentStyles
 ): SemanticHeaderFooter {
-  const blocks = value.blocks.map((block) => resolveParagraph(block, styles))
+  const blocks = value.blocks.map((block) => resolveBlock(block, styles))
   if (blocks.every((block, index) => block === value.blocks[index]))
     return value
   return { ...value, blocks }

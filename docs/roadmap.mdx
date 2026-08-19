@@ -28,7 +28,7 @@ Phases 1–8 form the current implemented renderer, local-only reference applica
 - Multiple deterministic `nextPage` sections with portrait/landscape page geometry and matching per-page PDF `MediaBox` values.
 - Inherited default headers/footers with exact edge-relative distances (720-twip defaults), static images, reusable template values/formatters/paragraph blocks, and global decimal `PAGE`/`NUMPAGES` fields.
 - Binary-safe workspace-PDF validation that follows classic xref offsets and stream lengths, validates upright text/image resources, and extracts searchable per-page text.
-- Explicitly excluded: non-canonical image tags, image fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, tagged-PDF accessibility metadata, continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields.
+- Explicitly excluded: non-canonical image tags, image fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, tagged-PDF accessibility metadata, continuous/odd/even breaks, even-page header variants, automatic header/footer numbering, and arbitrary fields.
 
 ## Phase 7 — Implemented; hardening ongoing
 

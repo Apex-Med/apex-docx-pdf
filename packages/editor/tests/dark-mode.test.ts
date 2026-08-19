@@ -9,6 +9,8 @@ import {
   writeDarkPagesPreference,
 } from "../src/ui/chrome-types"
 import {
+  DEFAULT_TABLE_OPTIONS_WIDTH,
+  DEFAULT_TAGS_SIDEBAR_WIDTH,
   EDITOR_PREFERENCES_STORAGE_KEY,
   normalizeEditorPreferences,
 } from "../src/ui/editor-preferences"
@@ -122,12 +124,16 @@ describe("dark mode adaptivity", () => {
         rulerVisible: false,
         darkPages: false,
         pageUnit: "cm",
+        tagsSidebarWidth: 360,
+        tableOptionsWidth: 400,
       })
     ).toEqual({
       zoom: 125,
       rulerVisible: false,
       darkPages: false,
       pageUnit: "cm",
+      tagsSidebarWidth: 360,
+      tableOptionsWidth: 400,
     })
     expect(
       normalizeEditorPreferences({
@@ -135,8 +141,12 @@ describe("dark mode adaptivity", () => {
         rulerVisible: "yes",
         darkPages: null,
         pageUnit: "px",
+        tagsSidebarWidth: 10_000,
+        tableOptionsWidth: 10,
       })
     ).toEqual({})
     expect(EDITOR_PREFERENCES_STORAGE_KEY).toBe("apex-editor-preferences")
+    expect(DEFAULT_TAGS_SIDEBAR_WIDTH).toBe(320)
+    expect(DEFAULT_TABLE_OPTIONS_WIDTH).toBe(340)
   })
 })

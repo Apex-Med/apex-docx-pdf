@@ -246,7 +246,9 @@ function inlineFromPm(
         {
           fontFamily: String(node.attrs.fontFamily ?? "Inter"),
           fontSize: twips(Number(node.attrs.fontSize ?? 220)),
-          fontWeight: Number(node.attrs.fontWeight ?? 400) as TextStyle["fontWeight"],
+          fontWeight: Number(
+            node.attrs.fontWeight ?? 400
+          ) as TextStyle["fontWeight"],
           fontStyle:
             (node.attrs.fontStyle as TextStyle["fontStyle"]) ?? "normal",
           underline: Boolean(node.attrs.underline),
@@ -570,7 +572,7 @@ function cellFromPm(
   if (blocks.length === 0) {
     blocks.push(
       paragraphFromPm(
-        schema.nodes.paragraph?.createAndFill()!,
+        schema.nodes.paragraph!.createAndFill()!,
         schema,
         ctx,
         ids,
@@ -806,7 +808,7 @@ function blockFromPm(
   }
   // Fallback
   return paragraphFromPm(
-    schema.nodes.paragraph?.createAndFill()!,
+    schema.nodes.paragraph!.createAndFill()!,
     schema,
     ctx,
     ids,
@@ -844,10 +846,13 @@ function sectionFromPm(
       },
       headerDistance: twips(Number(node.attrs.headerDistance ?? 720)),
       footerDistance: twips(Number(node.attrs.footerDistance ?? 720)),
+      differentFirstPage: node.attrs.differentFirstPage === true,
       columns: sectionColumnsFromAttrs(node.attrs),
     },
     defaultHeaderId: (node.attrs.defaultHeaderId as string | null) ?? null,
     defaultFooterId: (node.attrs.defaultFooterId as string | null) ?? null,
+    firstPageHeaderId: (node.attrs.firstPageHeaderId as string | null) ?? null,
+    firstPageFooterId: (node.attrs.firstPageFooterId as string | null) ?? null,
     blocks,
   }
 }
@@ -911,9 +916,12 @@ export function toSemanticDocument(
         },
         headerDistance: twips(720),
         footerDistance: twips(720),
+        differentFirstPage: false,
       },
       defaultHeaderId: null,
       defaultFooterId: null,
+      firstPageHeaderId: null,
+      firstPageFooterId: null,
       blocks,
     })
   }
@@ -948,34 +956,32 @@ function pmInlinesFromSemantic(
         continue
       }
       if (child.text.length === 0) continue
-      result.push(
-        ...pmNodesFromTemplateText(schema, child, bySlug)
-      )
+      result.push(...pmNodesFromTemplateText(schema, child, bySlug))
       continue
     }
     if (child.type === "break") {
       if (child.kind === "page") {
         result.push(
-          schema.nodes.page_break?.create({ nodeId: String(child.id) })
+          schema.nodes.page_break!.create({ nodeId: String(child.id) })
         )
       } else if (child.kind === "column") {
         result.push(
-          schema.nodes.column_break?.create({ nodeId: String(child.id) })
+          schema.nodes.column_break!.create({ nodeId: String(child.id) })
         )
       } else {
         result.push(
-          schema.nodes.line_break?.create({ nodeId: String(child.id) })
+          schema.nodes.line_break!.create({ nodeId: String(child.id) })
         )
       }
       continue
     }
     if (child.type === "tab") {
-      result.push(schema.nodes.tab?.create({ nodeId: String(child.id) }))
+      result.push(schema.nodes.tab!.create({ nodeId: String(child.id) }))
       continue
     }
     if (child.type === "pageField") {
       result.push(
-        schema.nodes.page_field?.create({
+        schema.nodes.page_field!.create({
           nodeId: String(child.id),
           field: child.field,
           displayText: child.displayText,
@@ -1001,7 +1007,7 @@ function pmInlinesFromSemantic(
         src = `data:${asset.mimeType};base64,${btoa(binary)}`
       }
       result.push(
-        schema.nodes.image?.create({
+        schema.nodes.image!.create({
           nodeId: String(child.id),
           assetId: child.assetId,
           src,
@@ -1091,8 +1097,13 @@ function pmParagraphFromSemantic(
   }>,
   tags: readonly TemplateTagDefinition[] = []
 ): PMNode {
-  const content = pmInlinesFromSemantic(schema, paragraph.children, assets, tags)
-  return schema.nodes.paragraph?.create(
+  const content = pmInlinesFromSemantic(
+    schema,
+    paragraph.children,
+    assets,
+    tags
+  )
+  return schema.nodes.paragraph!.create(
     {
       nodeId: String(paragraph.id),
       alignment: paragraph.properties.alignment,
@@ -1197,7 +1208,7 @@ function pmTableFromSemantic(
       const content = cell.blocks.map((block) =>
         pmParagraphFromSemantic(schema, block, assets, numbering, tags)
       )
-      return type?.create(
+      return type!.create(
         {
           nodeId: String(cell.id),
           colspan: cell.columnSpan,
@@ -1228,7 +1239,7 @@ function pmTableFromSemantic(
         content
       )
     })
-    return schema.nodes.table_row?.create(
+    return schema.nodes.table_row!.create(
       {
         nodeId: String(row.id),
         repeatAsHeader: row.repeatAsHeader,
@@ -1238,7 +1249,7 @@ function pmTableFromSemantic(
       cellNodes
     )
   })
-  return schema.nodes.table?.create(
+  return schema.nodes.table!.create(
     {
       nodeId: String(table.id),
       width: table.width,
@@ -1270,7 +1281,7 @@ function pmBlockFromSemantic(
     return pmParagraphFromSemantic(schema, block, assets, numbering, tags)
   if (block.type === "table")
     return pmTableFromSemantic(schema, block, assets, numbering, tags)
-  return schema.nodes.horizontal_rule?.create({
+  return schema.nodes.horizontal_rule!.create({
     nodeId: String(block.id),
     height: block.height,
     color: block.color,
@@ -1305,8 +1316,8 @@ export function fromSemanticDocument(
       pmBlockFromSemantic(schema, block, document.assets, numbering, tags)
     )
     const content =
-      blocks.length > 0 ? blocks : [schema.nodes.paragraph?.createAndFill()!]
-    return schema.nodes.section?.create(
+      blocks.length > 0 ? blocks : [schema.nodes.paragraph!.createAndFill()!]
+    return schema.nodes.section!.create(
       {
         nodeId: String(section.id),
         pageWidth: section.properties.pageWidth,
@@ -1318,18 +1329,21 @@ export function fromSemanticDocument(
         marginLeft: section.properties.margins.left,
         headerDistance: section.properties.headerDistance,
         footerDistance: section.properties.footerDistance,
+        differentFirstPage: section.properties.differentFirstPage === true,
         defaultHeaderId: section.defaultHeaderId,
         defaultFooterId: section.defaultFooterId,
+        firstPageHeaderId: section.firstPageHeaderId ?? null,
+        firstPageFooterId: section.firstPageFooterId ?? null,
         ...sectionAttrsFromColumns(section.properties.columns),
       },
       content
     )
   })
-  return schema.nodes.doc?.create(
+  return schema.nodes.doc!.create(
     null,
     sections.length > 0
       ? Fragment.from(sections)
-      : Fragment.from(schema.nodes.section?.createAndFill()!)
+      : Fragment.from(schema.nodes.section!.createAndFill()!)
   )
 }
 

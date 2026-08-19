@@ -14,6 +14,7 @@ import {
 } from "@apexmed/core"
 
 import type {
+  ParsedDocxBlock,
   ParsedDocxDocument,
   ParsedDocxParagraph,
   ParsedDocxRunProperties,
@@ -359,15 +360,14 @@ function normaliseTable(
 function normaliseHeaderFooter(
   value:
     | ParsedDocxDocument["headers"][number]
-    | ParsedDocxDocument["footers"][number]
+    | ParsedDocxDocument["footers"][number],
+  normaliseBlocks: (blocks: readonly ParsedDocxBlock[]) => SemanticBlock[]
 ): SemanticHeaderFooter {
   return {
     type: value.type === "docx-header" ? "header" : "footer",
     id: value.id,
     source: value.source,
-    blocks: value.paragraphs.map((paragraph, index) =>
-      normaliseParagraph(paragraph, `${value.id}:paragraph:${index + 1}`)
-    ),
+    blocks: normaliseBlocks(value.blocks),
   }
 }
 
@@ -441,8 +441,12 @@ export function normaliseDocx(
       style: asset.style,
       bytes: asset.bytes,
     })),
-    headers: document.headers.map(normaliseHeaderFooter),
-    footers: document.footers.map(normaliseHeaderFooter),
+    headers: document.headers.map((entry) =>
+      normaliseHeaderFooter(entry, normaliseBlocks)
+    ),
+    footers: document.footers.map((entry) =>
+      normaliseHeaderFooter(entry, normaliseBlocks)
+    ),
     numberingDefinitions: document.numberingDefinitions.map((definition) => ({
       id: definition.id,
       levels: definition.levels.map((level) => ({
@@ -474,6 +478,7 @@ export function normaliseDocx(
           },
           headerDistance: twips(section.properties.headerDistance),
           footerDistance: twips(section.properties.footerDistance),
+          differentFirstPage: section.properties.differentFirstPage,
           columns:
             section.properties.columns === null
               ? null
@@ -490,6 +495,8 @@ export function normaliseDocx(
         },
         defaultHeaderId: section.defaultHeaderId,
         defaultFooterId: section.defaultFooterId,
+        firstPageHeaderId: section.firstPageHeaderId,
+        firstPageFooterId: section.firstPageFooterId,
         blocks: normaliseBlocks(section.blocks),
       }
     }),
@@ -606,7 +613,7 @@ function applyRunWeightsFromMetadata(
     entry: SemanticHeaderFooter
   ): SemanticHeaderFooter => ({
     ...entry,
-    blocks: applyRunWeightsToParagraphs(entry.blocks, weights, counter),
+    blocks: applyRunWeightsToBlocks(entry.blocks, weights, counter),
   })
   // Match serialize order: sections, then headers, then footers.
   const sections: readonly SemanticSection[] = document.sections.map(

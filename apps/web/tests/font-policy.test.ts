@@ -11,13 +11,14 @@ import {
 } from "../src/lib/font-policy"
 
 describe("reference font policy", () => {
-  test("uses only the bundled five-family catalog and deterministic aliases", () => {
+  test("uses the bundled six-family catalog and deterministic aliases", () => {
     expect(BUNDLED_FONT_FAMILIES).toEqual([
       "Inter",
-      "Bricolage Grotesque",
       "Instrument Sans",
       "Instrument Serif",
+      "Geist",
       "Geist Mono",
+      "Bricolage Grotesque",
     ])
     expect(REFERENCE_FONT_POLICY).toMatchObject({
       allowOperatingSystemLookup: false,
@@ -52,23 +53,30 @@ describe("reference font policy", () => {
   })
 
   test("binds weight-bearing family aliases to one real static browser face", () => {
-    expect(cssWeights("Inter Medium")).toEqual([500])
-    expect(cssWeights("Inter SemiBold")).toEqual([600])
+    expect(cssWeights("Inter Medium")).toEqual([500, 500])
+    expect(cssWeights("Inter SemiBold")).toEqual([600, 600])
     expect(cssWeights("Bricolage Grotesque Medium")).toEqual([500])
     expect(cssWeights("Bricolage Grotesque SemiBold")).toEqual([600])
-    expect(cssWeights("Inter")).toEqual([400, 500, 600, 700, 400, 700])
+    expect([...new Set(cssWeights("Inter"))]).toEqual([
+      100, 200, 300, 400, 500, 600, 700, 800, 900,
+    ])
   })
 
   test("renders visible catalog specimens for every bundled normal weight", () => {
     const markup = renderToStaticMarkup(createElement(FontCatalogSpecimens))
 
+    expect(markup).toContain(">100<")
+    expect(markup).toContain(">200<")
+    expect(markup).toContain(">300<")
     expect(markup).toContain(">400<")
     expect(markup).toContain(">500<")
     expect(markup).toContain(">600<")
     expect(markup).toContain(">700<")
+    expect(markup).toContain(">800<")
+    expect(markup).toContain(">900<")
     expect(
       markup.match(/style="font-family:[^"]+font-weight:[^"]+"/gu)
-    ).toHaveLength(13)
+    ).toHaveLength(39)
   })
 })
 

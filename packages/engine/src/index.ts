@@ -455,11 +455,11 @@ function inspectSemanticDocument(
   if (document) {
     for (const header of document.headers) {
       add(features, "header", header.source)
-      for (const paragraph of header.blocks) addParagraph(paragraph)
+      for (const block of header.blocks) addBlock(block)
     }
     for (const footer of document.footers) {
       add(features, "footer", footer.source)
-      for (const paragraph of footer.blocks) addParagraph(paragraph)
+      for (const block of footer.blocks) addBlock(block)
     }
     for (const section of document.sections) {
       add(features, "section", section.source)

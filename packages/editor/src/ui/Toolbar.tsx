@@ -1,5 +1,7 @@
 import {
   AlignLeftIcon,
+  ArrowDownFromLineIcon,
+  ArrowUpFromLineIcon,
   BoldIcon,
   HighlighterIcon,
   Image01Icon,
@@ -15,6 +17,7 @@ import {
   PlusSignIcon,
   PrinterIcon,
   Redo02Icon,
+  SlidersVerticalIcon,
   TextAlignCenterIcon,
   TextAlignJustifyCenterIcon,
   TextAlignRightIcon,
@@ -32,13 +35,12 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
 import {
   Popover,
   PopoverContent,
@@ -67,14 +69,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from "react"
 
 import type { CustomPalette, FontIndex, GoogleFontCatalog } from "../fonts"
-import { GOOGLE_FONT_CATALOG_FALLBACK } from "../fonts"
+import { EDITOR_FONT_FAMILIES, GOOGLE_FONT_CATALOG_FALLBACK } from "../fonts"
 import type { EditorSelectionSnapshot } from "../plugins/selection-state"
 import type { EditorChromeActions, ParagraphAlignment } from "./chrome-types"
 import { FONT_SIZE_OPTIONS, ZOOM_PRESETS } from "./chrome-types"
+import { ColorPicker } from "./ColorPicker"
 import { FontPicker } from "./FontPicker"
 import { LINE_SPACING_PRESETS } from "./LineSpacingDialog"
 import { ScrubbableNumberInput } from "./ScrubbableNumberInput"
@@ -185,6 +189,95 @@ function pointsToTwips(points: number): number {
 
 function styleDisplayName(name: string): string {
   return name === "Normal" ? "Normal text" : name
+}
+
+function TypographyStyleItem({
+  onOpenActions,
+  style,
+}: Readonly<{
+  onOpenActions: (
+    style: Readonly<{ id: string; name: string }>,
+    event: MouseEvent<HTMLElement>
+  ) => void
+  style: Readonly<{ id: string; name: string }>
+}>): ReactNode {
+  const name = styleDisplayName(style.name)
+  return (
+    <SelectItem
+      value={style.id}
+      onPointerDown={(event) => {
+        if (event.button === 2) event.preventDefault()
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpenActions(style, event)
+      }}
+    >
+      <span className="max-w-40 truncate" title={name}>
+        {name}
+      </span>
+    </SelectItem>
+  )
+}
+
+function TypographyStyleActionMenu({
+  actions,
+  menu,
+  onClose,
+  selectionEmpty,
+}: Readonly<{
+  actions: EditorChromeActions
+  menu: Readonly<{ id: string; name: string; x: number; y: number }>
+  onClose: () => void
+  selectionEmpty: boolean
+}>): ReactNode {
+  const name = styleDisplayName(menu.name)
+  return (
+    <DropdownMenu
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DropdownMenuTrigger
+        aria-hidden
+        tabIndex={-1}
+        className="pointer-events-none fixed size-px opacity-0"
+        style={{ left: menu.x, top: menu.y }}
+      />
+      <DropdownMenuContent
+        align="start"
+        className="min-w-64 w-auto"
+        side="right"
+        sideOffset={0}
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel title={name} className="max-w-64 truncate">
+            {name}
+          </DropdownMenuLabel>
+          <DropdownMenuItem
+            disabled={selectionEmpty}
+            onClick={() => {
+              actions.onUpdateStyle(menu.id)
+              onClose()
+            }}
+          >
+            Update style to match selected text
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={selectionEmpty}
+            onClick={() => {
+              actions.onApplyStyle(menu.id)
+              onClose()
+            }}
+          >
+            Update selected text to match style
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 function lineSpacingValue240ths(lineSpacing: unknown): number | null {
@@ -386,11 +479,33 @@ export function Toolbar({
   )
   const [overflowItems, setOverflowItems] = useState<ToolbarItemId[]>([])
 
+  const [styleActionMenu, setStyleActionMenu] = useState<{
+    id: string
+    name: string
+    x: number
+    y: number
+  } | null>(null)
+
+  const openStyleActionMenu = useCallback(
+    (
+      style: Readonly<{ id: string; name: string }>,
+      event: MouseEvent<HTMLElement>
+    ) => {
+      setStyleActionMenu({
+        id: style.id,
+        name: style.name,
+        x: event.clientX,
+        y: event.clientY,
+      })
+    },
+    []
+  )
+
   const pickerCatalog = useMemo((): GoogleFontCatalog => {
     const base = fontCatalog ?? FALLBACK_FONT_CATALOG
     const extras = [
       snapshot.textStyle.fontFamily || "Inter",
-      "Inter",
+      ...EDITOR_FONT_FAMILIES,
       ...fonts.families.map((entry) => entry.family),
       ...(googleFonts ?? []),
     ]
@@ -404,10 +519,37 @@ export function Toolbar({
       ) {
         continue
       }
+      const local = fonts.families.find(
+        (entry) => entry.family.toLowerCase() === name.toLowerCase()
+      )
       families.unshift(
-        Object.freeze({ family: name, category: "Local", axes: [] })
+        Object.freeze({
+          family: name,
+          category: "Local",
+          axes: [],
+          ...(local
+            ? {
+                weights: Object.freeze(
+                  [...new Set(local.faces.map((face) => face.weight))].sort(
+                    (left, right) => left - right
+                  )
+                ),
+              }
+            : {}),
+        })
       )
     }
+    const featuredOrder = new Map(
+      EDITOR_FONT_FAMILIES.map((family, index) => [family.toLowerCase(), index])
+    )
+    families.sort((left, right) => {
+      const leftRank = featuredOrder.get(left.family.toLowerCase())
+      const rightRank = featuredOrder.get(right.family.toLowerCase())
+      if (leftRank === undefined && rightRank === undefined) return 0
+      if (leftRank === undefined) return 1
+      if (rightRank === undefined) return -1
+      return leftRank - rightRank
+    })
     return Object.freeze({
       version: base.version,
       source: base.source,
@@ -560,15 +702,25 @@ export function Toolbar({
                   size="sm"
                   className="apex-editor-toolbar__style h-9 w-[9.5rem] text-sm font-normal tracking-normal normal-case"
                   aria-label="Paragraph style"
+                  // Keep the editor selection. pointerdown preventDefault also
+                  // cancels Base UI Select's mousedown open handler.
+                  onMouseDown={(event) => {
+                    if (event.button === 0) event.preventDefault()
+                  }}
                 >
                   <SelectValue placeholder="Normal text" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  alignItemWithTrigger={false}
+                  className="w-auto min-w-48 max-h-80!"
+                >
                   <SelectGroup>
                     {styleNames.map((style) => (
-                      <SelectItem key={style.id} value={style.id}>
-                        {styleDisplayName(style.name)}
-                      </SelectItem>
+                      <TypographyStyleItem
+                        key={style.id}
+                        onOpenActions={openStyleActionMenu}
+                        style={style}
+                      />
                     ))}
                     <SelectItem value="__none__">Clear style</SelectItem>
                   </SelectGroup>
@@ -677,8 +829,9 @@ export function Toolbar({
                     style={{ background: snapshot.textStyle.color }}
                   />
                 </PopoverTrigger>
-                <PopoverContent className="w-[min(100vw-2rem,22rem)] p-3">
-                  <ColorPalette
+                <PopoverContent className="w-[min(100vw-2rem,24rem)] p-3">
+                  <ColorPicker
+                    value={snapshot.textStyle.color}
                     palettes={palettes}
                     customPalettes={customPalettes}
                     onCustomPalettesChange={onCustomPalettesChange}
@@ -716,8 +869,9 @@ export function Toolbar({
                     }}
                   />
                 </PopoverTrigger>
-                <PopoverContent className="w-[min(100vw-2rem,22rem)] p-3">
-                  <ColorPalette
+                <PopoverContent className="w-[min(100vw-2rem,24rem)] p-3">
+                  <ColorPicker
+                    value={snapshot.textStyle.highlightColor ?? "#ffff00"}
                     palettes={palettes}
                     customPalettes={customPalettes}
                     onCustomPalettesChange={onCustomPalettesChange}
@@ -782,7 +936,7 @@ export function Toolbar({
                   </TooltipTrigger>
                   <TooltipContent>Align</TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="start" className="min-w-40">
+                <DropdownMenuContent align="start" className="w-40 min-w-40">
                   <DropdownMenuRadioGroup
                     value={alignment}
                     onValueChange={(value) => {
@@ -798,15 +952,28 @@ export function Toolbar({
                   >
                     <DropdownMenuGroup>
                       <DropdownMenuRadioItem value="left">
+                        <HugeiconsIcon icon={AlignLeftIcon} strokeWidth={2} />
                         Left
                       </DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="center">
+                        <HugeiconsIcon
+                          icon={TextAlignCenterIcon}
+                          strokeWidth={2}
+                        />
                         Center
                       </DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="right">
+                        <HugeiconsIcon
+                          icon={TextAlignRightIcon}
+                          strokeWidth={2}
+                        />
                         Right
                       </DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="justify">
+                        <HugeiconsIcon
+                          icon={TextAlignJustifyCenterIcon}
+                          strokeWidth={2}
+                        />
                         Justify
                       </DropdownMenuRadioItem>
                     </DropdownMenuGroup>
@@ -846,7 +1013,7 @@ export function Toolbar({
                   </TooltipTrigger>
                   <TooltipContent>Line & paragraph spacing</TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="start" className="min-w-52">
+                <DropdownMenuContent align="start" className="w-64 min-w-64">
                   <DropdownMenuRadioGroup
                     value={lineSpacingPreset}
                     onValueChange={(value) => {
@@ -867,6 +1034,10 @@ export function Toolbar({
                         (entry) => entry.value240ths != null
                       ).map((entry) => (
                         <DropdownMenuRadioItem key={entry.id} value={entry.id}>
+                          <HugeiconsIcon
+                            icon={ParagraphSpacingIcon}
+                            strokeWidth={2}
+                          />
                           {entry.label}
                         </DropdownMenuRadioItem>
                       ))}
@@ -882,6 +1053,10 @@ export function Toolbar({
                         })
                       }
                     >
+                      <HugeiconsIcon
+                        icon={ArrowUpFromLineIcon}
+                        strokeWidth={2}
+                      />
                       {spacingBefore > 0
                         ? "Remove space before paragraph"
                         : "Add space before paragraph"}
@@ -894,6 +1069,10 @@ export function Toolbar({
                         })
                       }
                     >
+                      <HugeiconsIcon
+                        icon={ArrowDownFromLineIcon}
+                        strokeWidth={2}
+                      />
                       {spacingAfter > 0
                         ? "Remove space after paragraph"
                         : "Add space after paragraph"}
@@ -902,6 +1081,10 @@ export function Toolbar({
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuItem onClick={actions.onLineSpacing}>
+                      <HugeiconsIcon
+                        icon={SlidersVerticalIcon}
+                        strokeWidth={2}
+                      />
                       Custom spacing…
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
@@ -991,10 +1174,12 @@ export function Toolbar({
       lineSpacingPreset,
       onCustomPalettesChange,
       palettes,
+      openStyleActionMenu,
       pickerCatalog,
       snapshot.bold,
       snapshot.canRedo,
       snapshot.canUndo,
+      snapshot.empty,
       snapshot.italic,
       snapshot.textStyle.color,
       snapshot.textStyle.fontFamily,
@@ -1100,12 +1285,13 @@ export function Toolbar({
   })
 
   return (
-    <div
-      ref={containerRef}
-      className="apex-editor-toolbar relative flex h-12 min-h-12 items-center gap-1 overflow-hidden border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-2"
-      role="toolbar"
-      aria-label="Formatting toolbar"
-    >
+    <>
+      <div
+        ref={containerRef}
+        className="apex-editor-toolbar relative flex h-12 min-h-12 items-center gap-1 overflow-hidden border-b border-(--apex-chrome-border) bg-(--apex-chrome-bg) px-2"
+        role="toolbar"
+        aria-label="Formatting toolbar"
+      >
       <div
         ref={measureRef}
         className="pointer-events-none absolute top-0 left-0 -z-50 flex h-12 items-center gap-1 opacity-0"
@@ -1146,169 +1332,14 @@ export function Toolbar({
           </Popover>
         ) : null}
       </div>
-    </div>
-  )
-}
-
-function ColorSwatchGrid({
-  columns,
-  onPick,
-}: {
-  columns: ReadonlyArray<readonly [string, readonly string[]]>
-  onPick: (color: string) => void
-}): ReactNode {
-  const shadeCount = Math.max(1, ...columns.map(([, colors]) => colors.length))
-  return (
-    <div
-      className="grid w-fit gap-1"
-      style={{
-        // Columns = hue families; rows = light → dark shades
-        gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, auto)`,
-        gridTemplateRows: `repeat(${shadeCount}, auto)`,
-        gridAutoFlow: "column",
-      }}
-    >
-      {columns.flatMap(([name, colors]) =>
-        colors.map((color) => (
-          <button
-            key={`${name}-${color}`}
-            type="button"
-            title={`${name} ${color}`}
-            aria-label={`${name} ${color}`}
-            className="size-7 rounded-sm border border-border"
-            style={{ background: color }}
-            onClick={() => onPick(color)}
-          />
-        ))
-      )}
-    </div>
-  )
-}
-
-function ColorPalette({
-  palettes,
-  customPalettes,
-  onCustomPalettesChange,
-  onPick,
-}: {
-  palettes: Readonly<Record<string, readonly string[]>>
-  customPalettes: readonly CustomPalette[]
-  onCustomPalettesChange: (palettes: CustomPalette[]) => void
-  onPick: (color: string) => void
-}): ReactNode {
-  const groups = Object.entries(palettes)
-  const [paletteName, setPaletteName] = useState("My palette")
-  const [customColor, setCustomColor] = useState("#2563eb")
-
-  const addCustomColor = () => {
-    const name = paletteName.trim() || "My palette"
-    const existing = customPalettes.find(
-      (palette) => palette.name.toLowerCase() === name.toLowerCase()
-    )
-    if (existing) {
-      if (existing.colors.includes(customColor)) return
-      onCustomPalettesChange(
-        customPalettes.map((palette) =>
-          palette.id === existing.id
-            ? { ...palette, colors: [...palette.colors, customColor] }
-            : palette
-        )
-      )
-      return
-    }
-    onCustomPalettesChange([
-      ...customPalettes,
-      {
-        id: `palette-${Date.now().toString(36)}`,
-        name,
-        colors: [customColor],
-      },
-    ])
-  }
-
-  return (
-    <>
-      <div className="mb-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-        Colors
       </div>
-      <ColorSwatchGrid columns={groups} onPick={onPick} />
-      <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
-        <Label htmlFor="apex-toolbar-palette-name" className="sr-only">
-          Palette name
-        </Label>
-        <Input
-          id="apex-toolbar-palette-name"
-          value={paletteName}
-          onChange={(event) => setPaletteName(event.target.value)}
-          placeholder="Palette name"
-          className="h-8 text-xs"
+      {styleActionMenu ? (
+        <TypographyStyleActionMenu
+          actions={actions}
+          menu={styleActionMenu}
+          onClose={() => setStyleActionMenu(null)}
+          selectionEmpty={snapshot.empty}
         />
-        <Label htmlFor="apex-toolbar-custom-color" className="sr-only">
-          Custom color
-        </Label>
-        <Input
-          id="apex-toolbar-custom-color"
-          type="color"
-          value={customColor}
-          className="h-8 w-12 p-1"
-          onChange={(event) => {
-            setCustomColor(event.target.value)
-            onPick(event.target.value)
-          }}
-        />
-        <Button
-          type="button"
-          size="xs"
-          variant="secondary"
-          onClick={addCustomColor}
-        >
-          Add
-        </Button>
-      </div>
-      {customPalettes.length > 0 ? (
-        <div className="mt-3 flex flex-col gap-2">
-          <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Custom palettes
-          </div>
-          <div className="flex flex-col gap-2">
-            {customPalettes.map((palette) => (
-              <div key={palette.id} className="flex flex-col gap-1">
-                <div className="flex min-w-0 items-center justify-between gap-1">
-                  <span className="truncate text-[10px] text-muted-foreground">
-                    {palette.name}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-sm px-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                    aria-label={`Delete ${palette.name} palette`}
-                    onClick={() =>
-                      onCustomPalettesChange(
-                        customPalettes.filter(
-                          (entry) => entry.id !== palette.id
-                        )
-                      )
-                    }
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {palette.colors.map((color) => (
-                    <button
-                      key={`${palette.id}-${color}`}
-                      type="button"
-                      title={`${palette.name} ${color}`}
-                      aria-label={`${palette.name} ${color}`}
-                      className="size-7 rounded-sm border border-border"
-                      style={{ background: color }}
-                      onClick={() => onPick(color)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       ) : null}
     </>
   )

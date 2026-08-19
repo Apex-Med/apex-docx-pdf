@@ -391,6 +391,8 @@ export type SectionProperties = Readonly<{
   headerDistance: Twip
   /** Distance from the page edge to the footer reference line. */
   footerDistance: Twip
+  /** Use the section's first-page header/footer references on its first page. */
+  differentFirstPage?: boolean
   /**
    * Multi-column body layout. Null/undefined means one column spanning the
    * writable page width.
@@ -404,7 +406,7 @@ export type SemanticHeaderFooter = Readonly<{
   type: "header" | "footer"
   id: HeaderFooterId
   source: SourceLocation
-  blocks: readonly SemanticParagraph[]
+  blocks: readonly SemanticBlock[]
 }>
 
 export type SemanticSection = Readonly<{
@@ -414,6 +416,9 @@ export type SemanticSection = Readonly<{
   properties: SectionProperties
   defaultHeaderId: HeaderFooterId | null
   defaultFooterId: HeaderFooterId | null
+  /** Optional first-page variants, activated by properties.differentFirstPage. */
+  firstPageHeaderId?: HeaderFooterId | null
+  firstPageFooterId?: HeaderFooterId | null
   blocks: readonly SemanticBlock[]
 }>
 
@@ -456,9 +461,17 @@ export type ResolvedTable = Omit<SemanticTable, "rows"> & {
 export type ResolvedHorizontalRule = SemanticHorizontalRule
 export type ResolvedBlock =
   ResolvedParagraph | ResolvedTable | ResolvedHorizontalRule
+export type ResolvedHeaderFooter = Omit<SemanticHeaderFooter, "blocks"> & {
+  readonly blocks: readonly ResolvedBlock[]
+}
 export type ResolvedSection = Omit<SemanticSection, "blocks"> & {
   readonly blocks: readonly ResolvedBlock[]
 }
-export type ResolvedDocument = Omit<SemanticDocument, "sections"> & {
+export type ResolvedDocument = Omit<
+  SemanticDocument,
+  "headers" | "footers" | "sections"
+> & {
+  readonly headers: readonly ResolvedHeaderFooter[]
+  readonly footers: readonly ResolvedHeaderFooter[]
   readonly sections: readonly ResolvedSection[]
 }

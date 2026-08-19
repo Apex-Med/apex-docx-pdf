@@ -31,22 +31,35 @@ import {
   type TemplateTagValue,
   type TemplateTagValues,
 } from "../tags"
+import {
+  DEFAULT_TAGS_SIDEBAR_WIDTH,
+  MAX_TAGS_SIDEBAR_WIDTH,
+  MIN_TAGS_SIDEBAR_WIDTH,
+} from "./editor-preferences"
+import { ResizableSidebarHandle } from "./ResizableSidebarHandle"
 
 export type TagsSidebarProps = Readonly<{
   open: boolean
   tags: readonly TemplateTagDefinition[]
   values: TemplateTagValues
+  width: number
+  onWidthChange: (width: number) => void
   onToggle: () => void
   onCreate: () => void
   onEdit: (tag: TemplateTagDefinition) => void
   onDelete: (tag: TemplateTagDefinition) => void
-  onValueChange: (tag: TemplateTagDefinition, value: TemplateTagValue | null) => void
+  onValueChange: (
+    tag: TemplateTagDefinition,
+    value: TemplateTagValue | null
+  ) => void
 }>
 
 export function TagsSidebar({
   open,
   tags,
   values,
+  width,
+  onWidthChange,
   onToggle,
   onCreate,
   onEdit,
@@ -71,7 +84,19 @@ export function TagsSidebar({
   }
 
   return (
-    <aside className="apex-tags-sidebar" aria-label="Document tags">
+    <aside
+      className="apex-tags-sidebar"
+      aria-label="Document tags"
+      style={{ width }}
+    >
+      <ResizableSidebarHandle
+        label="Resize tags sidebar"
+        width={width}
+        minWidth={MIN_TAGS_SIDEBAR_WIDTH}
+        maxWidth={MAX_TAGS_SIDEBAR_WIDTH}
+        defaultWidth={DEFAULT_TAGS_SIDEBAR_WIDTH}
+        onWidthChange={onWidthChange}
+      />
       <header className="apex-tags-sidebar__header">
         <div>
           <h2 className="apex-tags-sidebar__title">Tags</h2>
@@ -111,9 +136,7 @@ export function TagsSidebar({
                 <li key={tag.id}>
                   <TagListItem
                     tag={tag}
-                    filled={
-                      resolveTemplateTagValue(tag, values) !== undefined
-                    }
+                    filled={resolveTemplateTagValue(tag, values) !== undefined}
                     onEdit={() => onEdit(tag)}
                     onDelete={() => onDelete(tag)}
                   />
@@ -185,7 +208,7 @@ function TagListItem({
         </span>
         <span className="min-w-0 flex-1 text-left">
           <span className="block truncate text-sm">{tag.label}</span>
-          <span className="text-muted-foreground block truncate font-mono text-[11px]">
+          <span className="block truncate font-mono text-[11px] text-muted-foreground">
             {encodeTemplatePlaceholder(tag)}
           </span>
         </span>
@@ -240,9 +263,9 @@ function TagValueField({
           readOnly
           value={live ? formatTemplateTagValue(tag, live) : ""}
         />
-        <p className="text-muted-foreground text-xs">
-          Shows the current time while you edit. Fixed when you print or
-          export PDF.
+        <p className="text-xs text-muted-foreground">
+          Shows the current time while you edit. Fixed when you print or export
+          PDF.
         </p>
       </div>
     )
@@ -264,7 +287,8 @@ function TagValueField({
               return
             }
             const next = Number(raw)
-            if (Number.isFinite(next)) onValueChange({ kind: "number", value: next })
+            if (Number.isFinite(next))
+              onValueChange({ kind: "number", value: next })
           }}
         />
       </div>
@@ -280,7 +304,10 @@ function TagValueField({
         <Input
           id={inputId}
           type={includeTime ? "datetime-local" : "date"}
-          value={isoToInput(value?.kind === "date" ? value.value : "", includeTime)}
+          value={isoToInput(
+            value?.kind === "date" ? value.value : "",
+            includeTime
+          )}
           onChange={(event) => {
             const raw = event.target.value
             if (!raw) {
@@ -294,7 +321,7 @@ function TagValueField({
           }}
         />
         {isTodayTag(tag) ? (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-xs text-muted-foreground">
             Captured while editing. Does not change when you print.
           </p>
         ) : null}
@@ -311,7 +338,9 @@ function TagValueField({
         value={value?.kind === "string" ? value.value : ""}
         onChange={(event) => {
           const raw = event.target.value
-          onValueChange(raw.length === 0 ? null : { kind: "string", value: raw })
+          onValueChange(
+            raw.length === 0 ? null : { kind: "string", value: raw }
+          )
         }}
       />
     </div>

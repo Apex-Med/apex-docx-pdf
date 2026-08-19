@@ -14,9 +14,15 @@ export {
   spacerSpecsFromPlacements,
   createBreakSpacerElement,
   detectOversizedNonSplittable,
+  sectionStackHeightTwips,
+  sectionPageCountsFromLayout,
+  applySectionPageCountsToDom,
+  PAGE_BREAK_SCROLL_META,
+  PAGE_GAP_TWIPS,
   type PageBreakPlacement,
   type SpacerSpec,
   type OversizedBlockDiagnostic,
+  type SectionPageCount,
 } from "./pagination/breaks"
 export {
   handleLayoutRequest,
@@ -61,6 +67,7 @@ export {
   createDecimalNumberingDefinition,
   applyParagraphStyle,
   applyDefinedParagraphStyle,
+  updateDefinedParagraphStyle,
   matchStyleToSelection,
   insertPageBreak,
   insertColumnBreak,
@@ -80,6 +87,7 @@ export {
   BULLET_NUMBERING_ID,
   DECIMAL_NUMBERING_ID,
   setSectionPageSetup,
+  setSectionHeaderFooter,
   setSectionColumns,
   setCellShading,
   setCellHorizontalAlignment,
@@ -133,6 +141,7 @@ export {
 export { decorationsFromPlacements } from "./pagination/plugin"
 export {
   BUILTIN_FONT_INDEX,
+  EDITOR_FONT_FAMILIES,
   GOOGLE_FONT_FAMILIES,
   TAILWIND_PALETTES,
   injectDomFontFaces,
@@ -145,6 +154,9 @@ export {
   loadGoogleFontCatalog,
   searchGoogleFonts,
   findGoogleFontFamily,
+  availableFontWeights,
+  nearestAvailableFontWeight,
+  fontWeightLabel,
   ensureFontLoaded,
   registerFontWithWorker,
   familyToSlug,
@@ -235,6 +247,25 @@ export {
   type EditorController,
 } from "./ui/Editor"
 export { MenuBar, type MenuBarProps } from "./ui/MenuBar"
+export {
+  applyHeaderFooterBlocks,
+  applyHeaderFooterEdit,
+  headerFooterDefinition,
+  headerFooterDefinitionId,
+  headerFooterEditorDocument,
+  headerFooterText,
+  setDifferentFirstPage,
+  HEADER_FOOTER_CONTENT_TR_META,
+  HEADER_FOOTER_EDIT_REQUEST_EVENT,
+  type HeaderFooterEdit,
+  type HeaderFooterEditRequestDetail,
+  type HeaderFooterKind,
+  type HeaderFooterVariant,
+} from "./header-footer"
+export {
+  HeaderFooterDialog,
+  type HeaderFooterDialogProps,
+} from "./ui/HeaderFooterDialog"
 export { Toolbar, type ToolbarProps } from "./ui/Toolbar"
 export {
   EDITOR_PREFERENCES_STORAGE_KEY,

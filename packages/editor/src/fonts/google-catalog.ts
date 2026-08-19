@@ -16,6 +16,8 @@ export type GoogleFontFamily = Readonly<{
   family: string
   category: string
   axes: readonly GoogleFontAxis[]
+  /** Named CSS weights published for this family. */
+  weights?: readonly number[]
 }>
 
 export type GoogleFontCatalog = Readonly<{
@@ -87,7 +89,22 @@ function parseFamily(raw: RawFamily): GoogleFontFamily | null {
   const axes = (raw.axes ?? [])
     .map(parseAxis)
     .filter((axis): axis is GoogleFontAxis => axis !== null)
-  return Object.freeze({ family, category, axes })
+  const weights = Object.keys(raw.fonts ?? {})
+    .map((key) => Number.parseInt(key, 10))
+    .filter(
+      (weight, index, list) =>
+        Number.isInteger(weight) &&
+        weight >= 100 &&
+        weight <= 900 &&
+        list.indexOf(weight) === index
+    )
+    .sort((left, right) => left - right)
+  return Object.freeze({
+    family,
+    category,
+    axes,
+    ...(weights.length === 0 ? {} : { weights: Object.freeze(weights) }),
+  })
 }
 
 function catalogFromRaw(
@@ -119,7 +136,9 @@ async function readCache(): Promise<GoogleFontCatalog | null> {
     const cache = await caches.open(GOOGLE_FONTS_CACHE_NAME)
     const response = await cache.match(GOOGLE_FONTS_METADATA_URL)
     if (!response?.ok) return null
-    const raw = JSON.parse(stripXssiPrefix(await response.text())) as RawMetadata
+    const raw = JSON.parse(
+      stripXssiPrefix(await response.text())
+    ) as RawMetadata
     const catalog = catalogFromRaw(raw, "network")
     return catalog.families.length > 0 ? catalog : null
   } catch {
@@ -187,9 +206,7 @@ export function findGoogleFontFamily(
   family: string
 ): GoogleFontFamily | undefined {
   const target = family.trim().toLowerCase()
-  return catalog.families.find(
-    (entry) => entry.family.toLowerCase() === target
-  )
+  return catalog.families.find((entry) => entry.family.toLowerCase() === target)
 }
 
 /** Whether a family supports a weight (`wght`) variation axis. */
@@ -202,6 +219,72 @@ export function weightAxisRange(
   family: GoogleFontFamily
 ): GoogleFontAxis | undefined {
   return family.axes.find((axis) => axis.tag === "wght")
+}
+
+const CSS_FONT_WEIGHTS = Object.freeze([
+  100, 200, 300, 400, 500, 600, 700, 800, 900,
+])
+
+/** Return the discrete, user-selectable weights that a family actually ships. */
+export function availableFontWeights(
+  family: GoogleFontFamily
+): readonly number[] {
+  const published = (family.weights ?? []).filter((weight) =>
+    CSS_FONT_WEIGHTS.includes(weight)
+  )
+  if (published.length > 0) {
+    return Object.freeze(
+      [...new Set(published)].sort((left, right) => left - right)
+    )
+  }
+  const axis = weightAxisRange(family)
+  if (axis) {
+    return Object.freeze(
+      CSS_FONT_WEIGHTS.filter(
+        (weight) => weight >= axis.min && weight <= axis.max
+      )
+    )
+  }
+  return Object.freeze([400])
+}
+
+/** Snap an arbitrary value to the closest weight published by a family. */
+export function nearestAvailableFontWeight(
+  family: GoogleFontFamily,
+  requestedWeight: number
+): number {
+  const weights = availableFontWeights(family)
+  return weights.reduce((nearest, candidate) => {
+    const candidateDistance = Math.abs(candidate - requestedWeight)
+    const nearestDistance = Math.abs(nearest - requestedWeight)
+    return candidateDistance < nearestDistance ? candidate : nearest
+  }, weights[0] ?? 400)
+}
+
+/** Human-readable OpenType/CSS name for a discrete font weight. */
+export function fontWeightLabel(weight: number): string {
+  switch (weight) {
+    case 100:
+      return "Thin"
+    case 200:
+      return "Extra light"
+    case 300:
+      return "Light"
+    case 400:
+      return "Regular"
+    case 500:
+      return "Medium"
+    case 600:
+      return "Semibold"
+    case 700:
+      return "Bold"
+    case 800:
+      return "Extra bold"
+    case 900:
+      return "Black"
+    default:
+      return String(weight)
+  }
 }
 
 /** Reset in-memory catalog cache (tests). */

@@ -186,6 +186,7 @@
 }
 
 .apex-editor-surface {
+  position: relative;
   min-width: 0;
   min-height: 0;
   background: var(--apex-desk);
@@ -257,9 +258,9 @@
 }
 
 .apex-editor-toolbar__font-size-input {
-  width: 2.75rem;
-  min-width: 2.75rem;
-  max-width: 2.75rem;
+  width: 3.5rem;
+  min-width: 3.5rem;
+  max-width: 3.5rem;
 }
 
 .apex-editor-toolbar__more {
@@ -533,10 +534,182 @@
   position: relative;
   box-sizing: border-box;
   overflow: visible;
+  min-height: calc(
+    var(--apex-sheet-height) * var(--apex-section-pages, 1) +
+      var(--apex-page-gap, 32px) * (var(--apex-section-pages, 1) - 1)
+  );
 }
 
 .apex-editor-surface .ProseMirror > section[data-section] > * {
   break-inside: auto;
+}
+
+/* Layout-engine header/footer paint sits above editable body DOM without
+ * participating in selection, hit testing, or document flow. */
+.apex-editor-surface .ProseMirror .apex-header-footer-overlay {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+.apex-editor-surface .ProseMirror .apex-header-footer-overlay > svg {
+  display: block;
+  max-width: none;
+  overflow: visible;
+}
+
+.apex-editor-surface .ProseMirror .apex-header-footer-overlay__hit {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: text;
+  background: transparent;
+}
+
+.apex-editor-surface .ProseMirror .apex-header-footer-overlay__hit:hover {
+  background: color-mix(in oklab, var(--apex-accent) 4%, transparent);
+}
+
+.apex-editor-surface
+  .ProseMirror
+  .apex-header-footer-overlay__hit:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--apex-accent) 58%, transparent);
+  outline-offset: -3px;
+}
+
+.apex-editor-root[data-apex-header-footer-editing]
+  .apex-editor-surface
+  > .ProseMirror
+  > section[data-section]
+  > :not(.apex-header-footer-overlay) {
+  opacity: 0.36;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 120ms ease-out;
+}
+
+.apex-editor-root[data-apex-header-footer-editing]
+  .apex-editor-surface
+  > .ProseMirror
+  .apex-header-footer-overlay {
+  opacity: 0;
+}
+
+.apex-header-footer-editor {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  color: var(--apex-page-fg);
+}
+
+.apex-header-footer-editor__body-exit {
+  position: absolute;
+  z-index: 2;
+  pointer-events: auto;
+  cursor: text;
+}
+
+.apex-header-footer-editor__divider {
+  position: absolute;
+  border-top: 1px dashed
+    color-mix(in oklab, var(--apex-accent) 58%, var(--apex-page-fg));
+  pointer-events: none;
+}
+
+.apex-header-footer-editor__controls {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid
+    color-mix(in oklab, var(--apex-accent) 32%, var(--apex-chrome-border));
+  border-radius: 8px;
+  background: color-mix(
+    in oklab,
+    var(--apex-chrome-bg) 94%,
+    var(--apex-accent)
+  );
+  color: var(--apex-chrome-fg);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.apex-header-footer-editor--header .apex-header-footer-editor__controls {
+  bottom: 7px;
+}
+
+.apex-header-footer-editor--footer .apex-header-footer-editor__controls {
+  top: 7px;
+}
+
+.apex-header-footer-editor__label {
+  color: var(--apex-accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.apex-header-footer-editor__first-page {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  color: var(--apex-chrome-muted);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.apex-header-footer-editor__content {
+  position: absolute;
+  z-index: 1;
+  min-height: 24px;
+  pointer-events: auto;
+}
+
+.apex-header-footer-editor__content .ProseMirror {
+  min-height: 24px;
+  outline: none;
+  caret-color: var(--apex-page-fg);
+}
+
+.apex-header-footer-editor__content .ProseMirror > section[data-section] {
+  width: 100% !important;
+  min-height: 0 !important;
+  padding: 0 var(--apex-header-footer-margin-right, 0) 0
+    var(--apex-header-footer-margin-left, 0) !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.apex-header-footer-editor__content .ProseMirror p {
+  min-height: 1.35em;
+}
+
+.dark
+  .apex-editor-root[data-apex-dark-pages]
+  .apex-header-footer-overlay
+  :is(
+    [data-color="#000000" i],
+    [data-color="#000" i],
+    [data-color="black" i],
+    [data-color="rgb(0, 0, 0)" i],
+    [data-color="rgb(0,0,0)" i]
+  ) {
+  fill: var(--apex-page-fg);
 }
 
 .apex-editor-surface .ProseMirror p {
@@ -1063,12 +1236,13 @@
 
 /* ── Table options sidebar (Google Docs-style, in-layout) ── */
 .apex-table-options {
+  position: relative;
   display: flex;
   flex-direction: column;
-  flex: 0 0 300px;
-  width: 300px;
+  flex: 0 0 auto;
+  width: 340px;
   min-width: 260px;
-  max-width: 300px;
+  max-width: 520px;
   min-height: 0;
   background: var(--apex-chrome-bg);
   color: var(--apex-chrome-fg);
@@ -1545,18 +1719,27 @@
   -webkit-user-select: none;
 }
 
-.apex-editor-surface .ProseMirror .apex-template-tag--empty .apex-template-tag__chip {
+.apex-editor-surface
+  .ProseMirror
+  .apex-template-tag--empty
+  .apex-template-tag__chip {
   background: color-mix(in oklab, var(--apex-accent) 18%, transparent);
   color: inherit;
 }
 
-.apex-editor-surface .ProseMirror .apex-template-tag--filled .apex-template-tag__chip {
+.apex-editor-surface
+  .ProseMirror
+  .apex-template-tag--filled
+  .apex-template-tag__chip {
   background: color-mix(in oklab, var(--apex-accent) 7%, transparent);
   color: inherit;
   opacity: 0.82;
 }
 
-.apex-editor-surface .ProseMirror .apex-template-tag.is-selected .apex-template-tag__chip,
+.apex-editor-surface
+  .ProseMirror
+  .apex-template-tag.is-selected
+  .apex-template-tag__chip,
 .apex-editor-surface
   .ProseMirror
   .apex-template-tag.ProseMirror-selectednode
@@ -1580,7 +1763,10 @@
   border-radius: 0.2em;
   background: color-mix(in oklab, var(--apex-accent, #2563eb) 18%, #fff);
   color: #202124;
-  font: 11pt Inter, system-ui, sans-serif;
+  font:
+    11pt Inter,
+    system-ui,
+    sans-serif;
   line-height: 1.35;
   white-space: nowrap;
 }
@@ -1603,16 +1789,55 @@ body:has(.apex-editor-root[data-apex-tag-dragging]) > .apex-pm-dropcursor {
 }
 
 .apex-tags-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
-  flex: 0 0 280px;
-  width: 280px;
+  flex: 0 0 auto;
+  width: 320px;
   min-width: 240px;
-  max-width: 280px;
+  max-width: 480px;
   min-height: 0;
   background: var(--apex-chrome-bg);
   color: var(--apex-chrome-fg);
   border-left: 1px solid var(--apex-chrome-border);
+}
+
+.apex-sidebar-resize-handle {
+  position: absolute;
+  inset-block: 0;
+  left: -12px;
+  z-index: 12;
+  width: 24px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.apex-sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 2px;
+  background: transparent;
+  transform: translateX(-50%);
+  transition: background-color 120ms ease;
+}
+
+.apex-sidebar-resize-handle:hover::after,
+.apex-sidebar-resize-handle:active::after,
+.apex-sidebar-resize-handle:focus-visible::after {
+  background: color-mix(in oklab, var(--apex-accent) 72%, transparent);
+}
+
+.apex-sidebar-resize-handle:focus-visible {
+  outline: 2px solid var(--apex-accent);
+  outline-offset: -4px;
 }
 
 .apex-tags-sidebar--collapsed {

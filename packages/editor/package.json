@@ -39,7 +39,9 @@
     "build": "tsup --config ../../tsup.config.ts && bun ../../scripts/prepare-package.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "fonts:index": "bun scripts/build-fonts-index.ts"
+    "fonts:index": "bun scripts/build-fonts-index.ts",
+    "fonts:catalog-urls": "bun scripts/build-catalog-font-urls.ts",
+    "styles:sync": "bun scripts/sync-editor-css.ts"
   },
   "peerDependencies": {
     "react": "^19.2.6",

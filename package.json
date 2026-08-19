@@ -35,30 +35,33 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
-    "@axe-core/playwright": "4.12.1",
-    "@biomejs/biome": "2.5.7",
-    "@changesets/changelog-github": "0.7.0",
-    "@changesets/cli": "2.31.1",
+    "@axe-core/playwright": "4.13.0",
+    "@biomejs/biome": "2.5.9",
+    "@changesets/changelog-github": "1.0.0",
+    "@changesets/cli": "3.0.0",
     "@types/bun": "^1.3.14",
     "convex-test": "^0.0.55",
     "fast-check": "4.9.0",
-    "playwright": "1.61.1",
-    "prettier": "^3.8.3",
-    "prettier-plugin-tailwindcss": "^0.8.0",
+    "playwright": "1.62.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "publint": "0.3.23",
     "tsup": "8.5.1",
-    "turbo": "^2.9.18",
+    "turbo": "^2.10.10",
     "typescript": "^6",
-    "vite": "8.2.0"
+    "vite": "8.2.1"
   },
   "packageManager": "bun@1.3.14",
+  "overrides": {
+    "@codemirror/view": "6.43.9"
+  },
   "workspaces": [
     "apps/*",
     "docs",
     "packages/*"
   ],
   "dependencies": {
-    "convex": "1.43.0",
-    "convex-helpers": "0.1.122"
+    "convex": "1.44.0",
+    "convex-helpers": "0.1.123"
   }
 }

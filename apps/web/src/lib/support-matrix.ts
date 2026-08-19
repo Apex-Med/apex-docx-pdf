@@ -52,7 +52,7 @@ export const supportMatrix: readonly SupportRow[] = [
     area: "Registered fonts and embedded text",
     status: "limited",
     behavior:
-      "The library accepts explicit TrueType bytes for LTR Latin shaping and deterministically rewrites the used glyphs into mapped fontkit subsets. The playground self-hosts five application-owned, hash-pinned OFL TrueType families, maps familiar system names deterministically, and never executes uploaded embedded fonts. Output is searchable upright Type0/CIDFontType2 text.",
+      "The library accepts explicit TrueType bytes for LTR Latin shaping and deterministically rewrites the used glyphs into mapped fontkit subsets. The playground self-hosts six application-owned, hash-pinned OFL TrueType families with every published static weight, maps familiar system names deterministically, and never executes uploaded embedded fonts. Output is searchable upright Type0/CIDFontType2 text.",
   },
   {
     area: "Template values and formatters",

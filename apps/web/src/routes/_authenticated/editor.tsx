@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/editor")({
       {
         name: "description",
         content:
-          "Engine-authoritative paginated DOCX editor with Print Preview and PDF export.",
+          "Engine-authoritative paginated DOCX editor with Print Preview and DOCX/PDF download.",
       },
     ],
   }),

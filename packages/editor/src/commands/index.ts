@@ -11,6 +11,7 @@ import type {
 } from "@apexmed/core"
 
 import { initialNumberingLabel } from "../model/list-label"
+import { PAGE_BREAK_SCROLL_META } from "../pagination/breaks"
 import {
   defaultTableSizing,
   importedFixedTableSizing,
@@ -81,6 +82,8 @@ export {
   type EnclosingTable,
   type TableReorderAxis,
 } from "./table-reorder"
+
+export { PAGE_BREAK_SCROLL_META }
 
 /** Transaction meta key for newly registered image assets (Editor merges into document.assets). */
 export const IMAGE_ASSET_META = "apexImageAsset"
@@ -308,7 +311,10 @@ function pickTemplateTagStyle(
     next.strikethrough = attrs.strikethrough
   }
   if (typeof attrs.color === "string") next.color = attrs.color
-  if (attrs.highlightColor === null || typeof attrs.highlightColor === "string") {
+  if (
+    attrs.highlightColor === null ||
+    typeof attrs.highlightColor === "string"
+  ) {
     next.highlightColor = attrs.highlightColor
   }
   if (typeof attrs.verticalAlignment === "string") {
@@ -578,6 +584,36 @@ export function backspaceDecreaseIndent(): Command {
   }
 }
 
+/**
+ * Backspace at the start of a list paragraph exits the list before applying
+ * ordinary paragraph outdent/join behavior.
+ */
+function backspaceExitList(): Command {
+  return (state, dispatch) => {
+    if (!caretAtParagraphStart(state)) return false
+    const { $from } = state.selection
+    const depth = findNodeDepth($from, "paragraph")
+    const paragraph = $from.node(depth)
+    if (paragraph.type.name !== "paragraph" || !paragraph.attrs.numbering) {
+      return false
+    }
+    if (dispatch) {
+      dispatch(
+        state.tr
+          .setNodeMarkup($from.before(depth), undefined, {
+            ...paragraph.attrs,
+            numbering: null,
+            numberingLabel: null,
+            indentStart: 0,
+            firstLineIndent: 0,
+          })
+          .scrollIntoView()
+      )
+    }
+    return true
+  }
+}
+
 export function toggleStrikethrough(): Command {
   return (state, dispatch) => {
     const markType = state.schema.marks.textStyle
@@ -692,32 +728,42 @@ function applyListNumbering(
   return (state, dispatch) => {
     const { $from } = state.selection
     const depth = findNodeDepth($from, "paragraph")
-    if ($from.node(depth).type.name !== "paragraph") return false
+    const paragraph = $from.node(depth)
+    if (paragraph.type.name !== "paragraph") return false
     const pos = $from.before(depth)
+    const numbering = paragraph.attrs.numbering as {
+      definitionId?: unknown
+    } | null
+    const togglingOff = numbering?.definitionId === definition.id
     if (dispatch) {
-      const tr = state.tr
-        .setNodeMarkup(pos, undefined, {
-          ...$from.node(depth).attrs,
-          numbering: { definitionId: definition.id, level: 0 },
-          numberingLabel: initialNumberingLabel(definition, 0),
-          indentStart,
-          firstLineIndent,
-        })
-        .setMeta(NUMBERING_DEFINITION_META, definition)
+      let tr = state.tr.setNodeMarkup(pos, undefined, {
+        ...paragraph.attrs,
+        numbering: togglingOff
+          ? null
+          : { definitionId: definition.id, level: 0 },
+        numberingLabel: togglingOff
+          ? null
+          : initialNumberingLabel(definition, 0),
+        indentStart: togglingOff ? 0 : indentStart,
+        firstLineIndent: togglingOff ? 0 : firstLineIndent,
+      })
+      if (!togglingOff) {
+        tr = tr.setMeta(NUMBERING_DEFINITION_META, definition)
+      }
       dispatch(tr.scrollIntoView())
     }
     return true
   }
 }
 
-/** Apply a simple bullet list to the enclosing paragraph. */
+/** Toggle a simple bullet list on the enclosing paragraph. */
 export function applyBulletList(
   definition: NumberingDefinition = createBulletNumberingDefinition()
 ): Command {
   return applyListNumbering(definition)
 }
 
-/** Apply a simple decimal numbered list to the enclosing paragraph. */
+/** Toggle a simple decimal numbered list on the enclosing paragraph. */
 export function applyNumberedList(
   definition: NumberingDefinition = createDecimalNumberingDefinition()
 ): Command {
@@ -726,25 +772,27 @@ export function applyNumberedList(
 
 export function applyParagraphStyle(styleId: string | null): Command {
   return (state, dispatch) => {
-    const { $from } = state.selection
-    let depth = $from.depth
-    while (depth > 0 && $from.node(depth).type.name !== "paragraph") depth -= 1
-    if ($from.node(depth).type.name !== "paragraph") return false
-    const pos = $from.before(depth)
+    const positions = selectedParagraphPositions(state)
+    if (positions.length === 0) return false
     if (dispatch) {
-      dispatch(
-        state.tr.setNodeMarkup(pos, undefined, {
-          ...$from.node(depth).attrs,
+      let tr = state.tr
+      for (const pos of positions) {
+        const mapped = tr.mapping.map(pos)
+        const paragraph = tr.doc.nodeAt(mapped)
+        if (paragraph?.type.name !== "paragraph") continue
+        tr = tr.setNodeMarkup(mapped, undefined, {
+          ...paragraph.attrs,
           styleId,
         })
-      )
+      }
+      dispatch(tr.scrollIntoView())
     }
     return true
   }
 }
 
 /**
- * Apply a concrete paragraph style definition to the active paragraph.
+ * Apply a concrete paragraph style definition to every selected paragraph.
  *
  * ProseMirror stores resolved formatting so the editor remains WYSIWYG even
  * when a DOCX style chain is incomplete. The semantic bridge still preserves
@@ -755,49 +803,86 @@ export function applyDefinedParagraphStyle(
 ): Command {
   return (state, dispatch) => {
     if (definition.type !== "paragraph") return false
-    const { $from } = state.selection
-    const depth = findNodeDepth($from, "paragraph")
-    if ($from.node(depth).type.name !== "paragraph") return false
-    const paragraph = $from.node(depth)
-    const paragraphPos = $from.before(depth)
-    const paragraphStart = $from.start(depth)
-    const paragraphEnd = $from.end(depth)
+    const positions = selectedParagraphPositions(state)
+    return applyDefinedParagraphStyleAtPositions(definition, positions)(
+      state,
+      dispatch
+    )
+  }
+}
+
+/** Refresh every paragraph that already references a named style. */
+export function updateDefinedParagraphStyle(
+  definition: StyleDefinition
+): Command {
+  return (state, dispatch) => {
+    if (definition.type !== "paragraph") return false
+    const positions: number[] = []
+    state.doc.descendants((node, pos) => {
+      if (
+        node.type.name === "paragraph" &&
+        node.attrs.styleId === definition.id
+      ) {
+        positions.push(pos)
+        return false
+      }
+      return true
+    })
+    return applyDefinedParagraphStyleAtPositions(definition, positions)(
+      state,
+      dispatch
+    )
+  }
+}
+
+function applyDefinedParagraphStyleAtPositions(
+  definition: StyleDefinition,
+  positions: readonly number[]
+): Command {
+  return (state, dispatch) => {
+    if (positions.length === 0) return false
     const markType = state.schema.marks.textStyle
 
     if (dispatch) {
-      let tr = state.tr.setNodeMarkup(paragraphPos, undefined, {
-        ...paragraph.attrs,
-        ...(definition.paragraph ?? {}),
-        styleId: definition.id,
-      })
-      if (markType && definition.text) {
-        state.doc.nodesBetween(paragraphStart, paragraphEnd, (node, pos) => {
-          if (!node.isText) return
-          const existing = markType.isInSet(node.marks)
-          const start = Math.max(pos, paragraphStart)
-          const end = Math.min(pos + node.nodeSize, paragraphEnd)
-          tr = tr.addMark(
-            start,
-            end,
-            markType.create({
-              ...(existing?.attrs ?? {}),
-              ...definition.text,
-              styleId: definition.id,
-            })
-          )
+      let tr = state.tr
+      for (const pos of positions) {
+        const mapped = tr.mapping.map(pos)
+        const paragraph = tr.doc.nodeAt(mapped)
+        if (paragraph?.type.name !== "paragraph") continue
+        tr = tr.setNodeMarkup(mapped, undefined, {
+          ...paragraph.attrs,
+          ...(definition.paragraph ?? {}),
+          styleId: definition.id,
         })
-        if (state.selection.empty) {
-          const existing = markType.isInSet(
-            state.storedMarks ?? state.selection.$from.marks()
-          )
-          tr = tr.addStoredMark(
-            markType.create({
-              ...(existing?.attrs ?? {}),
-              ...definition.text,
-              styleId: definition.id,
-            })
-          )
+        if (markType && definition.text) {
+          const paragraphStart = mapped + 1
+          const paragraphEnd = mapped + paragraph.nodeSize - 1
+          tr.doc.nodesBetween(paragraphStart, paragraphEnd, (node, textPos) => {
+            if (!node.isText) return
+            const existing = markType.isInSet(node.marks)
+            tr = tr.addMark(
+              Math.max(textPos, paragraphStart),
+              Math.min(textPos + node.nodeSize, paragraphEnd),
+              markType.create({
+                ...(existing?.attrs ?? {}),
+                ...definition.text,
+                styleId: definition.id,
+              })
+            )
+          })
         }
+      }
+      if (markType && definition.text && state.selection.empty) {
+        const existing = markType.isInSet(
+          state.storedMarks ?? state.selection.$from.marks()
+        )
+        tr = tr.addStoredMark(
+          markType.create({
+            ...(existing?.attrs ?? {}),
+            ...definition.text,
+            styleId: definition.id,
+          })
+        )
       }
       dispatch(tr.scrollIntoView())
     }
@@ -849,7 +934,12 @@ export function insertPageBreak(): Command {
     const type = state.schema.nodes.page_break
     if (!type) return false
     if (dispatch) {
-      dispatch(state.tr.replaceSelectionWith(type.create()).scrollIntoView())
+      dispatch(
+        state.tr
+          .replaceSelectionWith(type.create())
+          .setMeta(PAGE_BREAK_SCROLL_META, true)
+          .scrollIntoView()
+      )
     }
     return true
   }
@@ -1284,7 +1374,8 @@ function tablePosNearSelection(
 export function insertTable(
   rows = 2,
   cols = 2,
-  columnWidthTwips = 2880
+  columnWidthTwips = 2880,
+  ensureTrailingParagraph = true
 ): Command {
   return (state, dispatch) => {
     const schema = state.schema
@@ -1339,7 +1430,10 @@ export function insertTable(
         const inserted = tr.doc.nodeAt(tablePos)
         if (inserted?.type === tableType) {
           const after = tablePos + inserted.nodeSize
-          if (!tr.doc.resolve(after).nodeAfter?.isTextblock) {
+          if (
+            ensureTrailingParagraph &&
+            !tr.doc.resolve(after).nodeAfter?.isTextblock
+          ) {
             tr.insert(after, emptyParagraph())
           }
           tr.setSelection(TextSelection.near(tr.doc.resolve(tablePos + 1), 1))
@@ -1377,6 +1471,32 @@ export function setSectionPageSetup(options: {
   marginBottom?: number
   marginLeft?: number
   orientation?: "portrait" | "landscape"
+}): Command {
+  return (state, dispatch) => {
+    const { $from } = state.selection
+    let depth = $from.depth
+    while (depth > 0 && $from.node(depth).type.name !== "section") depth -= 1
+    if ($from.node(depth).type.name !== "section") return false
+    const pos = $from.before(depth)
+    if (dispatch) {
+      dispatch(
+        state.tr.setNodeMarkup(pos, undefined, {
+          ...$from.node(depth).attrs,
+          ...options,
+        })
+      )
+    }
+    return true
+  }
+}
+
+/** Set header/footer references and first-page behavior on the active section. */
+export function setSectionHeaderFooter(options: {
+  differentFirstPage?: boolean
+  defaultHeaderId?: string | null
+  defaultFooterId?: string | null
+  firstPageHeaderId?: string | null
+  firstPageFooterId?: string | null
 }): Command {
   return (state, dispatch) => {
     const { $from } = state.selection
@@ -2418,6 +2538,7 @@ export const splitOrCreateParagraph: Command = chainCommands(
 export const backspaceCommand: Command = chainCommands(
   deleteSelection,
   deleteAdjacentTemplateTag(-1),
+  backspaceExitList(),
   backspaceDecreaseIndent(),
   joinBackward,
   selectNodeBackward

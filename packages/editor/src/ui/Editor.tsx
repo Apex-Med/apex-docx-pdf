@@ -77,6 +77,7 @@ import {
   toggleItalic,
   toggleStrikethrough,
   toggleUnderline,
+  updateDefinedParagraphStyle,
   setVerticalAlignment,
 } from "../commands"
 import { insertImageFile } from "../plugins/image-paste-drop"
@@ -95,6 +96,15 @@ import {
   type GoogleFontCatalog,
 } from "../fonts"
 import { fromSemanticDocument, toSemanticDocument } from "../model/bridge"
+import {
+  applyHeaderFooterBlocks,
+  HEADER_FOOTER_CONTENT_TR_META,
+  HEADER_FOOTER_EDIT_REQUEST_EVENT,
+  setDifferentFirstPage,
+  type HeaderFooterEditRequestDetail,
+  type HeaderFooterKind,
+  type HeaderFooterVariant,
+} from "../header-footer"
 import { createImageNodeView } from "../node-views/image"
 import { createTemplateTagNodeView } from "../node-views/template-tag"
 import {
@@ -120,9 +130,12 @@ import type { EditorChromeActions } from "./chrome-types"
 import { ColumnsDialog } from "./ColumnsDialog"
 import { useEditorPreferences } from "./editor-preferences"
 import { FindReplaceDialog } from "./FindReplaceDialog"
+import { HeaderFooterEditor } from "./HeaderFooterEditor"
 import { LinkDialog } from "./LinkDialog"
 import { LineSpacingDialog } from "./LineSpacingDialog"
 import { PageSetupDialog, type PageSetupUnit } from "./PageSetupDialog"
+import { paragraphStyleOptions } from "./paragraph-style-options"
+import { styleFromSelection, styleIdFromName } from "./style-from-selection"
 import { printPdfBytes } from "./print-pdf"
 import { PrintPreview } from "./PrintPreview"
 import { TablePropertiesDialog } from "./TablePropertiesDialog"
@@ -143,6 +156,25 @@ function ensureEditorStyles(): void {
   if (style.textContent !== EDITOR_CSS) {
     style.textContent = EDITOR_CSS
   }
+}
+
+type HeaderFooterEditingState = Readonly<{
+  kind: HeaderFooterKind
+  sectionId: string
+  variant: HeaderFooterVariant
+  differentFirstPage: boolean
+  initialDocument: SemanticDocument
+}>
+
+function selectedSectionId(state: EditorState): string | null {
+  const { $from } = state.selection
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth)
+    if (node.type.name === "section") {
+      return node.attrs.nodeId ? String(node.attrs.nodeId) : null
+    }
+  }
+  return null
 }
 
 const EMPTY_SNAPSHOT: EditorSelectionSnapshot = {
@@ -172,6 +204,7 @@ const EMPTY_SNAPSHOT: EditorSelectionSnapshot = {
     marginRight: 1440,
     marginBottom: 1440,
     marginLeft: 1440,
+    differentFirstPage: false,
     columnCount: 1,
     columnEqualWidth: true,
     columnSpace: 720,
@@ -190,58 +223,6 @@ const FALLBACK_FONT_CATALOG: GoogleFontCatalog = Object.freeze({
   families: GOOGLE_FONT_CATALOG_FALLBACK,
   source: "fallback",
 })
-
-function styleIdFromName(name: string): string {
-  const slug = name
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/gu, "-")
-    .replace(/^-|-$/gu, "")
-  return slug ? `Apex-${slug}` : `Apex-Style-${Date.now().toString(36)}`
-}
-
-function styleFromSelection(
-  id: string,
-  name: string,
-  snapshot: EditorSelectionSnapshot
-): StyleDefinition {
-  const paragraph = snapshot.paragraph
-  const text = snapshot.textStyle
-  return {
-    id,
-    name,
-    type: "paragraph",
-    basedOn: null,
-    next: id,
-    paragraph: paragraph
-      ? {
-        alignment: paragraph.alignment,
-        spacingBefore: twips(paragraph.spacingBefore),
-        spacingAfter: twips(paragraph.spacingAfter),
-        lineSpacing: paragraph.lineSpacing as never,
-        indentStart: twips(paragraph.indentStart),
-        indentEnd: twips(paragraph.indentEnd),
-        firstLineIndent: twips(paragraph.firstLineIndent),
-        numbering: paragraph.numbering,
-        tabStops: paragraph.tabStops.map((stop) => ({
-          position: twips(stop.position),
-          alignment: stop.alignment,
-        })),
-      }
-      : null,
-    text: {
-      fontFamily: text.fontFamily,
-      fontSize: twips(text.fontSize),
-      // Runtime OpenType variation values may sit between static CSS weights.
-      fontWeight: text.fontWeight as never,
-      fontStyle: text.fontStyle,
-      underline: text.underline,
-      strikethrough: text.strikethrough,
-      color: text.color,
-      highlightColor: text.highlightColor,
-      verticalAlignment: text.verticalAlignment,
-    },
-  }
-}
 
 function builtInStyle(
   styleId: string,
@@ -430,6 +411,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const rootRef = useRef<HTMLDivElement | null>(null)
     const hostRef = useRef<HTMLDivElement | null>(null)
     const viewRef = useRef<EditorView | null>(null)
+    const activeHeaderFooterViewRef = useRef<EditorView | null>(null)
     const documentRef = useRef<SemanticDocument>(
       initialDocument ?? createBlankDocument()
     )
@@ -459,6 +441,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const [linkOpen, setLinkOpen] = useState(false)
     const [findReplaceOpen, setFindReplaceOpen] = useState(false)
     const [lineSpacingOpen, setLineSpacingOpen] = useState(false)
+    const [headerFooterEditing, setHeaderFooterEditing] =
+      useState<HeaderFooterEditingState | null>(null)
+    const headerFooterEditingRef = useRef(headerFooterEditing)
+    headerFooterEditingRef.current = headerFooterEditing
+    const mainDocumentEditable = !readOnly && headerFooterEditing === null
     const [tablePropsOpen, setTablePropsOpen] = useState(false)
     const tablePropsOpenRef = useRef(tablePropsOpen)
     tablePropsOpenRef.current = tablePropsOpen
@@ -481,6 +468,18 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const [insertTagOpen, setInsertTagOpen] = useState(false)
     const tagsSidebarOpen = useEditorPreferences(
       (state) => state.tagsSidebarOpen
+    )
+    const tagsSidebarWidth = useEditorPreferences(
+      (state) => state.tagsSidebarWidth
+    )
+    const setTagsSidebarWidth = useEditorPreferences(
+      (state) => state.setTagsSidebarWidth
+    )
+    const tableOptionsWidth = useEditorPreferences(
+      (state) => state.tableOptionsWidth
+    )
+    const setTableOptionsWidth = useEditorPreferences(
+      (state) => state.setTableOptionsWidth
     )
     const toggleTagsSidebarOpen = useEditorPreferences(
       (state) => state.toggleTagsSidebarOpen
@@ -610,9 +609,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     useEffect(() => {
       viewRef.current?.setProps({
-        editable: () => !readOnlyRef.current,
+        editable: () => mainDocumentEditable,
       })
-    }, [])
+      viewRef.current?.dom.setAttribute(
+        "aria-disabled",
+        mainDocumentEditable ? "false" : "true"
+      )
+      activeHeaderFooterViewRef.current?.setProps({
+        editable: () => !readOnly,
+      })
+    }, [mainDocumentEditable, readOnly])
 
     useEffect(() => {
       if (!hostRef.current) return
@@ -640,7 +646,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       const view = new EditorView(hostRef.current, {
         state,
         nodeViews: editorNodeViews(),
-        editable: () => !readOnlyRef.current,
+        editable: () =>
+          !readOnlyRef.current && headerFooterEditingRef.current === null,
         attributes: {
           class: "apex-prosemirror",
           spellcheck: "true",
@@ -657,7 +664,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             }
           }
           const snap = getSelectionSnapshot(next)
-          if (snap) setSelectionSnapshot(snap)
+          if (snap && !activeHeaderFooterViewRef.current) {
+            setSelectionSnapshot(snap)
+          }
           if (
             tr.docChanged ||
             imageAssetFromTransaction(tr) ||
@@ -671,11 +680,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             const numbering = numberingDefinitionFromTransaction(tr)
             const numberingDefinitions = numbering
               ? [
-                ...current.numberingDefinitions.filter(
-                  (definition) => definition.id !== numbering.id
-                ),
-                numbering,
-              ]
+                  ...current.numberingDefinitions.filter(
+                    (definition) => definition.id !== numbering.id
+                  ),
+                  numbering,
+                ]
               : current.numberingDefinitions
             const semantic = toSemanticDocument(next.doc, {
               assets,
@@ -715,7 +724,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     }, [forceInProcessLayout, portalContainer, updateDocument])
 
     const run = useCallback((command: Command) => {
-      const view = viewRef.current
+      const view = activeHeaderFooterViewRef.current ?? viewRef.current
       if (!view || readOnlyRef.current) return
       command(view.state, view.dispatch.bind(view))
       const snap = getSelectionSnapshot(view.state)
@@ -724,7 +733,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     }, [])
 
     const runLive = useCallback((command: Command) => {
-      const view = viewRef.current
+      const view = activeHeaderFooterViewRef.current ?? viewRef.current
       if (!view || readOnlyRef.current) return
       command(view.state, view.dispatch.bind(view))
       const snap = getSelectionSnapshot(view.state)
@@ -732,7 +741,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     }, [])
 
     const runLiveAll = useCallback((commands: readonly Command[]) => {
-      const view = viewRef.current
+      const view = activeHeaderFooterViewRef.current ?? viewRef.current
       if (!view || readOnlyRef.current) return
       for (const command of commands) {
         command(view.state, view.dispatch.bind(view))
@@ -743,6 +752,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const loadDocument = useCallback(
       (next: SemanticDocument) => {
+        setHeaderFooterEditing(null)
         const hydrated = hydrateTemplateTagCatalog(next)
         const tagMeta = readTemplateTagMetadata(hydrated.editorMetadata)
         useTemplateTagStore.getState().reset(tagMeta.tags, tagMeta.values)
@@ -862,8 +872,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         const bytes = await serializeEmbedPdf(
           applyTemplateTagValues(documentRef.current)
         )
-        const ownerDocument =
-          rootRef.current?.ownerDocument ?? window.document
+        const ownerDocument = rootRef.current?.ownerDocument ?? window.document
         await printPdfBytes(bytes, { ownerDocument })
         setStatus("Print dialog opened")
       } catch (error) {
@@ -876,30 +885,30 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const onNew = useCallback(() => {
       const metadata = documentRef.current.editorMetadata as
         | {
-          defaultPageSetup?: {
-            pageWidth: number
-            pageHeight: number
-            marginTop: number
-            marginRight: number
-            marginBottom: number
-            marginLeft: number
+            defaultPageSetup?: {
+              pageWidth: number
+              pageHeight: number
+              marginTop: number
+              marginRight: number
+              marginBottom: number
+              marginLeft: number
+            }
+            pageUnit?: PageSetupUnit
           }
-          pageUnit?: PageSetupUnit
-        }
         | undefined
       const defaults = metadata?.defaultPageSetup
       const blank = createBlankDocument(
         defaults
           ? {
-            pageWidth: defaults.pageWidth,
-            pageHeight: defaults.pageHeight,
-            margins: {
-              top: defaults.marginTop,
-              right: defaults.marginRight,
-              bottom: defaults.marginBottom,
-              left: defaults.marginLeft,
-            },
-          }
+              pageWidth: defaults.pageWidth,
+              pageHeight: defaults.pageHeight,
+              margins: {
+                top: defaults.marginTop,
+                right: defaults.marginRight,
+                bottom: defaults.marginBottom,
+                left: defaults.marginLeft,
+              },
+            }
           : undefined
       )
       const seeded = mergeDefaultTemplateTags([], {})
@@ -922,7 +931,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const runClipboard = useCallback(
       async (command: "cut" | "copy" | "paste") => {
-        const view = viewRef.current
+        const view = activeHeaderFooterViewRef.current ?? viewRef.current
         if (!view) return
         view.focus()
         const ownerDocument = view.dom.ownerDocument
@@ -944,7 +953,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     )
 
     const onInsertImage = useCallback(async (file: File) => {
-      const view = viewRef.current
+      const view = activeHeaderFooterViewRef.current ?? viewRef.current
       if (!view) return
       const ok = await insertImageFile(view, file)
       setStatus(
@@ -954,16 +963,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const styleNames = useMemo(() => {
       const defs = document.styles?.definitions ?? []
-      const paragraphStyles = defs
-        .filter((d) => d.type === "paragraph")
-        .map((d) => ({ id: d.id, name: d.name }))
-      if (paragraphStyles.length > 0) return paragraphStyles
-      return [
-        { id: "Normal", name: "Normal" },
-        { id: "Heading1", name: "Heading 1" },
-        { id: "Heading2", name: "Heading 2" },
-        { id: "Title", name: "Title" },
-      ]
+      return paragraphStyleOptions(defs)
     }, [document.styles])
 
     const applyStyleById = useCallback(
@@ -996,9 +996,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const saveStyleFromSelection = useCallback(
       (name: string, requestedId?: string) => {
+        const view = activeHeaderFooterViewRef.current ?? viewRef.current
+        const snapshot =
+          (view ? getSelectionSnapshot(view.state) : null) ?? selectionSnapshot
+        if (requestedId && snapshot.empty) {
+          setStatus("Select text before updating a style")
+          return
+        }
         const current = documentRef.current
         const id = requestedId ?? styleIdFromName(name)
-        const definition = styleFromSelection(id, name, selectionSnapshot)
+        const definition = styleFromSelection(id, name, snapshot)
         const currentStyles = current.styles ?? createEmptyDocumentStyles()
         const styles = {
           ...currentStyles,
@@ -1008,7 +1015,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           ],
         }
         updateDocument(resolveStyles({ ...current, styles }))
-        run(applyDefinedParagraphStyle(definition))
+        if (requestedId) run(updateDefinedParagraphStyle(definition))
+        else run(applyDefinedParagraphStyle(definition))
         setStatus(
           requestedId
             ? `Updated style ${name}`
@@ -1016,6 +1024,163 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         )
       },
       [run, selectionSnapshot, updateDocument]
+    )
+
+    const beginHeaderFooterEditing = useCallback(
+      (
+        kind: HeaderFooterKind,
+        requested?: Readonly<{
+          sectionId: string
+          variant: HeaderFooterVariant
+        }>
+      ) => {
+        if (readOnlyRef.current) return
+        const current = documentRef.current
+        const view = viewRef.current
+        const sectionId =
+          requested?.sectionId ??
+          (view ? selectedSectionId(view.state) : null) ??
+          String(current.sections[0]?.id ?? "")
+        const section = current.sections.find(
+          (entry) => String(entry.id) === sectionId
+        )
+        if (!section) return
+        view?.setProps({ editable: () => false })
+        const differentFirstPage =
+          section.properties.differentFirstPage === true
+        setHeaderFooterEditing({
+          kind,
+          sectionId,
+          variant:
+            requested?.variant ?? (differentFirstPage ? "first" : "default"),
+          differentFirstPage,
+          initialDocument: current,
+        })
+      },
+      []
+    )
+
+    useEffect(() => {
+      const surface = hostRef.current
+      if (!surface) return
+      const handleEditRequest = (event: Event) => {
+        const detail = (event as CustomEvent<HeaderFooterEditRequestDetail>)
+          .detail
+        if (!detail) return
+        beginHeaderFooterEditing(detail.kind, {
+          sectionId: detail.sectionId,
+          variant: detail.variant,
+        })
+      }
+      surface.addEventListener(
+        HEADER_FOOTER_EDIT_REQUEST_EVENT,
+        handleEditRequest
+      )
+      return () =>
+        surface.removeEventListener(
+          HEADER_FOOTER_EDIT_REQUEST_EVENT,
+          handleEditRequest
+        )
+    }, [beginHeaderFooterEditing])
+
+    const syncMainHeaderFooter = useCallback(
+      (next: SemanticDocument, sectionId: string) => {
+        const section = next.sections.find(
+          (entry) => String(entry.id) === sectionId
+        )
+        const view = viewRef.current
+        if (!section || !view) return
+        let position: number | null = null
+        let attrs: Readonly<Record<string, unknown>> | null = null
+        view.state.doc.descendants((node, pos) => {
+          if (
+            node.type.name === "section" &&
+            String(node.attrs.nodeId ?? "") === sectionId
+          ) {
+            position = pos
+            attrs = node.attrs
+            return false
+          }
+          return true
+        })
+        if (position === null || !attrs) return
+        const targetAttrs = attrs as Readonly<Record<string, unknown>>
+        const headerFooterAttrs = {
+          differentFirstPage: section.properties.differentFirstPage === true,
+          defaultHeaderId: section.defaultHeaderId,
+          defaultFooterId: section.defaultFooterId,
+          firstPageHeaderId: section.firstPageHeaderId ?? null,
+          firstPageFooterId: section.firstPageFooterId ?? null,
+        }
+        const refsChanged = Object.entries(headerFooterAttrs).some(
+          ([key, value]) => targetAttrs[key] !== value
+        )
+        const transaction = refsChanged
+          ? view.state.tr.setNodeMarkup(position, undefined, {
+              ...targetAttrs,
+              ...headerFooterAttrs,
+            })
+          : view.state.tr.setMeta(HEADER_FOOTER_CONTENT_TR_META, true)
+        view.dispatch(transaction)
+      },
+      []
+    )
+
+    const persistHeaderFooterBlocks = useCallback(
+      (blocks: readonly import("@apexmed/core").SemanticBlock[]) => {
+        if (!headerFooterEditing) return
+        const next = applyHeaderFooterBlocks(
+          documentRef.current,
+          headerFooterEditing.sectionId,
+          headerFooterEditing.kind,
+          headerFooterEditing.variant,
+          blocks
+        )
+        updateDocument(next)
+        syncMainHeaderFooter(next, headerFooterEditing.sectionId)
+      },
+      [headerFooterEditing, syncMainHeaderFooter, updateDocument]
+    )
+
+    const handleHeaderFooterViewChange = useCallback(
+      (view: EditorView | null) => {
+        activeHeaderFooterViewRef.current = view
+        const state = (view ?? viewRef.current)?.state
+        if (!state) return
+        const snapshot = getSelectionSnapshot(state)
+        if (snapshot) setSelectionSnapshot(snapshot)
+      },
+      []
+    )
+
+    const closeHeaderFooterEditing = useCallback(() => {
+      setHeaderFooterEditing(null)
+      queueMicrotask(() => {
+        const view = viewRef.current
+        view?.setProps({ editable: () => !readOnlyRef.current })
+        if (!readOnlyRef.current) view?.focus()
+      })
+    }, [])
+
+    const changeDifferentFirstPage = useCallback(
+      (enabled: boolean) => {
+        const editing = headerFooterEditingRef.current
+        if (!editing) return
+        const next = setDifferentFirstPage(
+          documentRef.current,
+          editing.sectionId,
+          enabled
+        )
+        updateDocument(next)
+        syncMainHeaderFooter(next, editing.sectionId)
+        setHeaderFooterEditing({
+          ...editing,
+          variant: enabled ? "first" : "default",
+          differentFirstPage: enabled,
+          initialDocument: next,
+        })
+      },
+      [syncMainHeaderFooter, updateDocument]
     )
 
     const chromeActions = useMemo<EditorChromeActions>(
@@ -1045,6 +1210,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         },
         onZoomChange: (percent) => setZoom(percent),
         onInsertImage: (file) => void onInsertImage(file),
+        onInsertHeader: () => beginHeaderFooterEditing("header"),
+        onInsertFooter: () => beginHeaderFooterEditing("footer"),
         onInsertTable: (rows = 2, columns = 2) => {
           const section = selectionSnapshot.section
           const writableWidth = section
@@ -1054,7 +1221,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             insertTable(
               rows,
               columns,
-              Math.max(720, Math.floor(writableWidth / columns))
+              Math.max(720, Math.floor(writableWidth / columns)),
+              headerFooterEditingRef.current === null
             )
           )
         },
@@ -1085,10 +1253,15 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onApplyStyle: applyStyleById,
         onMatchStyle: () => run(matchStyleToSelection()),
         onCreateStyle: () => setStyleDialogOpen(true),
-        onUpdateStyle: () => {
+        onUpdateStyle: (requestedStyleId) => {
+          const view = activeHeaderFooterViewRef.current ?? viewRef.current
+          const snapshot =
+            (view ? getSelectionSnapshot(view.state) : null) ??
+            selectionSnapshot
           const styleId =
-            selectionSnapshot.paragraph?.styleId ??
-            selectionSnapshot.textStyle.styleId
+            requestedStyleId ??
+            snapshot.paragraph?.styleId ??
+            snapshot.textStyle.styleId
           if (!styleId) {
             setStatus("Apply a named style before updating it")
             return
@@ -1096,7 +1269,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           const current = (
             documentRef.current.styles ?? createEmptyDocumentStyles()
           ).definitions.find((entry) => entry.id === styleId)
-          saveStyleFromSelection(current?.name ?? styleId, styleId)
+          const builtIn = builtInStyle(styleId, documentRef.current)
+          saveStyleFromSelection(
+            current?.name ?? builtIn?.name ?? styleId,
+            styleId
+          )
         },
         onPaintFormat: () => run(matchStyleToSelection()),
         onBulletList: () => run(applyBulletList()),
@@ -1116,15 +1293,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             .flatMap((block) =>
               block.type === "paragraph"
                 ? block.children
-                  .filter((child) => child.type === "text")
-                  .map((child) => (child.type === "text" ? child.text : ""))
+                    .filter((child) => child.type === "text")
+                    .map((child) => (child.type === "text" ? child.text : ""))
                 : []
             )
             .join(" ")
           const words = text.trim().split(/\s+/).filter(Boolean).length
           setStatus(`Word count: ${words} words`)
         },
-        onTableInsert: () => run(insertTable(2, 2)),
+        onTableInsert: () =>
+          run(insertTable(2, 2, 2880, headerFooterEditingRef.current === null)),
         onTableAddRowBefore: () => run(tableCommands.addRowBefore),
         onTableAddRowAfter: () => run(tableCommands.addRowAfter),
         onTableAddColumnBefore: () => run(tableCommands.addColumnBefore),
@@ -1150,6 +1328,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onExportPdf,
         onPrint,
         onInsertImage,
+        beginHeaderFooterEditing,
         onNew,
         onOpenDocx,
         onSaveDocx,
@@ -1218,6 +1397,12 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             : "apex-editor-root flex h-full min-h-[480px] flex-col bg-background text-foreground"
         }
         {...(darkPages ? { "data-apex-dark-pages": "true" } : {})}
+        {...(headerFooterEditing
+          ? {
+              "data-apex-header-footer-editing": "true",
+              "data-apex-header-footer-kind": headerFooterEditing.kind,
+            }
+          : {})}
       >
         <EditorChrome
           actions={chromeActions}
@@ -1267,6 +1452,25 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                   zoom={zoom}
                   readOnly={readOnly}
                 />
+                {headerFooterEditing && hostRef.current && viewRef.current ? (
+                  <HeaderFooterEditor
+                    key={`${headerFooterEditing.sectionId}:${headerFooterEditing.kind}:${headerFooterEditing.variant}`}
+                    surface={hostRef.current}
+                    mainView={viewRef.current}
+                    initialDocument={headerFooterEditing.initialDocument}
+                    sectionId={headerFooterEditing.sectionId}
+                    kind={headerFooterEditing.kind}
+                    variant={headerFooterEditing.variant}
+                    zoom={zoom}
+                    differentFirstPage={headerFooterEditing.differentFirstPage}
+                    readOnly={readOnly}
+                    onViewChange={handleHeaderFooterViewChange}
+                    onSelectionChange={setSelectionSnapshot}
+                    onBlocksChange={persistHeaderFooterBlocks}
+                    onDifferentFirstPageChange={changeDifferentFirstPage}
+                    onClose={closeHeaderFooterEditing}
+                  />
+                ) : null}
               </div>
               {previewOn && layoutResult ? (
                 <PrintPreview displayList={layoutResult.displayList} />
@@ -1276,6 +1480,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
               open={tagsSidebarOpen}
               tags={templateTags}
               values={templateTagValues}
+              width={tagsSidebarWidth}
+              onWidthChange={setTagsSidebarWidth}
               onToggle={toggleTagsSidebarOpen}
               onCreate={() => {
                 setEditingTag(null)
@@ -1309,6 +1515,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
               <TablePropertiesDialog
                 key={`${tableOptionsSelection.positions.join(":")}:${tableOptionsSelection.sizing?.selectedColumns.join(",") ?? ""}`}
                 open
+                width={tableOptionsWidth}
+                onWidthChange={setTableOptionsWidth}
                 onOpenChange={setTablePropsOpen}
                 selectionGrid={tableOptionsSelection.grid}
                 initialBorders={tableOptionsSelection.borders}
@@ -1320,7 +1528,20 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                 }
                 onSelectTable={() => runLive(selectEnclosingTable())}
                 onSelectColumn={() => runLive(selectCurrentTableColumn())}
+                palettes={TAILWIND_PALETTES}
+                customPalettes={customPalettes}
+                onCustomPalettesChange={(palettes) => {
+                  setCustomPalettes(palettes)
+                  updateDocument({
+                    ...documentRef.current,
+                    editorMetadata: {
+                      ...(documentRef.current.editorMetadata ?? {}),
+                      customPalettes: palettes,
+                    },
+                  })
+                }}
                 initial={{
+                  cellShading: selectionSnapshot.table.cellFill,
                   ...(tableOptionsSelection.sizing
                     ? { tableSizing: tableOptionsSelection.sizing.sizing }
                     : {}),
@@ -1493,16 +1714,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             spacingAfter: selectionSnapshot.paragraph?.spacingAfter,
             value240ths:
               selectionSnapshot.paragraph?.lineSpacing &&
-                typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
-                "value240ths" in
+              typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
+              "value240ths" in
                 (selectionSnapshot.paragraph.lineSpacing as object)
                 ? Number(
-                  (
-                    selectionSnapshot.paragraph.lineSpacing as {
-                      value240ths: number
-                    }
-                  ).value240ths
-                )
+                    (
+                      selectionSnapshot.paragraph.lineSpacing as {
+                        value240ths: number
+                      }
+                    ).value240ths
+                  )
                 : null,
           }}
           onApply={(options) => {
@@ -1692,9 +1913,9 @@ function mountEditorHeadless(
         const asset = imageAssetFromTransaction(tr)
         const assets = asset
           ? [
-            ...documentRef.current.assets.filter((a) => a.id !== asset.id),
-            asset,
-          ]
+              ...documentRef.current.assets.filter((a) => a.id !== asset.id),
+              asset,
+            ]
           : documentRef.current.assets
         const semantic = toSemanticDocument(next.doc, {
           assets,

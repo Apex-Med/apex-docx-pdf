@@ -13,8 +13,17 @@ import {
   pageBreaksFromTrace,
   pageGeometryFromDisplayList,
   spacerSpecsFromPlacements,
+  PAGE_GAP_TWIPS,
+  sectionPageCountsFromLayout,
+  sectionStackHeightTwips,
+  mergeManualPageBreakPlacements,
 } from "../src/pagination/breaks"
 import { fromSemanticDocument } from "../src/model/bridge"
+import {
+  applyCommandToSemantic,
+  createEditorStateFromDocument,
+  insertPageBreak,
+} from "../src/index"
 
 const style: TextStyle = {
   fontFamily: "Helvetica",
@@ -176,9 +185,6 @@ describe("Google Docs-style page sheets", () => {
     const layout = layoutDocument(document, { includeTrace: true })
     const pm = fromSemanticDocument(document)
     const automatic = pageBreaksFromTrace(layout.trace!, layout.displayList)
-    const { mergeManualPageBreakPlacements } = require(
-      "../src/pagination/breaks"
-    ) as typeof import("../src/pagination/breaks")
     const placements = mergeManualPageBreakPlacements(
       pm,
       automatic,
@@ -237,5 +243,41 @@ describe("Google Docs-style page sheets", () => {
       expect(spec.technique).toBe("float-block")
       expect(spec.pageNumber).toBeGreaterThan(1)
     }
+  })
+
+  test("stack height is n sheets plus n-1 desk gaps", () => {
+    expect(PAGE_GAP_TWIPS).toBe(32 * 15)
+    expect(sectionStackHeightTwips(1, 15_840)).toBe(15_840)
+    expect(sectionStackHeightTwips(2, 15_840)).toBe(2 * 15_840 + PAGE_GAP_TWIPS)
+    expect(sectionStackHeightTwips(3, 16_838)).toBe(3 * 16_838 + 2 * PAGE_GAP_TWIPS)
+  })
+
+  test("blank manual page break still fills a two-page section stack", () => {
+    const state = createEditorStateFromDocument(createBlankDocument())
+    const result = applyCommandToSemantic(state, insertPageBreak())
+    const layout = layoutDocument(result.document, { includeTrace: true })
+    expect(layout.displayList.pages.length).toBe(2)
+    expect(layout.trace).toBeTruthy()
+
+    const merged = mergeManualPageBreakPlacements(
+      result.state.doc,
+      pageBreaksFromTrace(layout.trace!, layout.displayList),
+      layout.displayList,
+      layout.trace
+    )
+    expect(merged.length).toBeGreaterThan(0)
+    expect(merged[0]?.explicitPosition).toBeGreaterThan(0)
+    expect(merged[0]?.restTwips).toBeGreaterThan(100)
+
+    const counts = sectionPageCountsFromLayout(
+      result.state.doc,
+      layout.displayList,
+      layout.trace!
+    )
+    expect(counts).toHaveLength(1)
+    expect(counts[0]?.pageCount).toBe(2)
+    expect(sectionStackHeightTwips(counts[0]!.pageCount, counts[0]!.pageHeightTwips)).toBe(
+      2 * counts[0]!.pageHeightTwips + PAGE_GAP_TWIPS
+    )
   })
 })

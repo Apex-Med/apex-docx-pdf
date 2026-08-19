@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto"
 import { resolve } from "node:path"
 import { describe, expect, test } from "bun:test"
-import { twips, type FontFaceRegistration } from "@apexmed/core"
+import {
+  twips,
+  type FontFaceRegistration,
+  type FontWeight,
+} from "@apexmed/core"
 
 import {
   createFontRegistry,
@@ -12,14 +16,24 @@ import {
 } from "../src"
 
 describe("offline font catalog", () => {
-  test("pins five families to intact TrueType assets", async () => {
+  test("pins six families and every published weight to intact TrueType assets", async () => {
     expect(OFFLINE_FONT_FAMILIES).toEqual([
       "Inter",
-      "Bricolage Grotesque",
       "Instrument Sans",
       "Instrument Serif",
+      "Geist",
       "Geist Mono",
+      "Bricolage Grotesque",
     ])
+
+    const expectedNormalWeights: Readonly<Record<string, FontWeight[]>> = {
+      Inter: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      "Instrument Sans": [400, 500, 600, 700],
+      "Instrument Serif": [400],
+      Geist: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      "Geist Mono": [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      "Bricolage Grotesque": [200, 300, 400, 500, 600, 700, 800],
+    }
 
     for (const family of OFFLINE_FONT_CATALOG) {
       expect(family.license).toBe("OFL-1.1")
@@ -31,6 +45,11 @@ describe("offline font catalog", () => {
           face.sha256
         )
       }
+      expect(
+        family.faces
+          .filter((face) => face.style === "normal")
+          .map((face) => face.weight)
+      ).toEqual(expectedNormalWeights[family.family]!)
     }
   })
 
@@ -125,7 +144,7 @@ describe("offline font catalog", () => {
     })
     expect(registry.face(bricolageSemiBold.faceId)).toMatchObject({
       weight: 600,
-      postscriptName: "BricolageGrotesque-SemiBold",
+      postscriptName: "BricolageGrotesque-14ptSemiBold",
     })
     const bricolageMedium = registry.matchFace({
       family: "Bricolage Grotesque Medium",
@@ -134,7 +153,7 @@ describe("offline font catalog", () => {
     })
     expect(registry.face(bricolageMedium.faceId)).toMatchObject({
       weight: 500,
-      postscriptName: "BricolageGrotesque-Medium",
+      postscriptName: "BricolageGrotesque-14ptMedium",
     })
   })
 })

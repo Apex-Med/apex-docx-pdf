@@ -66,6 +66,9 @@ export function MenuBar({
             <MenubarSub>
               <MenubarSubTrigger>Download</MenubarSubTrigger>
               <MenubarSubContent>
+                <MenubarItem onClick={actions.onSaveDocx}>
+                  Microsoft Word (.docx)
+                </MenubarItem>
                 <MenubarItem onClick={actions.onExportPdf}>
                   PDF Document (.pdf)
                 </MenubarItem>
@@ -189,6 +192,8 @@ export function MenuBar({
             >
               Image…
             </MenubarItem>
+            <MenubarItem onClick={actions.onInsertHeader}>Header</MenubarItem>
+            <MenubarItem onClick={actions.onInsertFooter}>Footer</MenubarItem>
             <MenubarSub>
               <MenubarSubTrigger>Table</MenubarSubTrigger>
               <MenubarSubContent className="p-2">
@@ -275,7 +280,7 @@ export function MenuBar({
                 <MenubarItem onClick={actions.onCreateStyle}>
                   Create style from selection…
                 </MenubarItem>
-                <MenubarItem onClick={actions.onUpdateStyle}>
+                <MenubarItem onClick={() => actions.onUpdateStyle()}>
                   Update current style to match
                 </MenubarItem>
               </MenubarSubContent>
@@ -353,7 +358,10 @@ export function MenuBar({
                   Insert column right
                 </MenubarItem>
                 <MenubarSeparator />
-                <MenubarItem disabled={!inTable} onClick={actions.onTableDeleteRow}>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableDeleteRow}
+                >
                   Delete row
                 </MenubarItem>
                 <MenubarItem
@@ -369,7 +377,10 @@ export function MenuBar({
                 >
                   Merge cells
                 </MenubarItem>
-                <MenubarItem disabled={!inTable} onClick={actions.onTableSplitCell}>
+                <MenubarItem
+                  disabled={!inTable}
+                  onClick={actions.onTableSplitCell}
+                >
                   Split cell
                 </MenubarItem>
                 <MenubarSeparator />
@@ -479,10 +490,11 @@ function TableGridPicker({
               key={`${rows}-${columns}`}
               render={<button type="button" />}
               aria-label={`${rows} rows by ${columns} columns`}
-              className={`size-5 min-h-5 rounded-sm border p-0 ${active
-                ? "border-primary bg-primary/20"
-                : "border-border bg-background"
-                } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring`}
+              className={`size-5 min-h-5 rounded-sm border p-0 ${
+                active
+                  ? "border-primary bg-primary/20"
+                  : "border-border bg-background"
+              } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring`}
               onPointerEnter={() => setHovered({ rows, columns })}
               onFocus={() => setHovered({ rows, columns })}
               onClick={() => onInsert(rows, columns)}

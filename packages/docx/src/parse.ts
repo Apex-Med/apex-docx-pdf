@@ -67,6 +67,7 @@ const DEFAULT_SECTION: ParsedDocxSectionProperties = Object.freeze({
   orientation: "portrait",
   headerDistance: 720,
   footerDistance: 720,
+  differentFirstPage: false,
   columns: null,
 })
 
@@ -4287,7 +4288,7 @@ function parseRun(
         const fallbackRun = parseRun(
           {
             name: "w:r",
-            children: fallbacks[0]?.element.children,
+            children: fallbacks[0]?.element.children ?? [],
             attributes: Object.freeze({}),
           },
           part,
@@ -6210,7 +6211,7 @@ function parseSectionColumns(
     widths.push(width)
   }
 
-  const equalWidth = equalWidthAttr ?? (widths.length === 0)
+  const equalWidth = equalWidthAttr ?? widths.length === 0
   const count =
     declaredNum !== undefined && declaredNum > 0
       ? declaredNum
@@ -6347,6 +6348,8 @@ function parseSectionProperties(
       attr(margins, "footer"),
       DEFAULT_SECTION.footerDistance
     ),
+    differentFirstPage:
+      booleanProperty(child(element, "titlePg")?.element) ?? false,
     columns,
   }
 }
@@ -6354,38 +6357,41 @@ function parseSectionProperties(
 function sectionReference(
   element: OrderedElement,
   kind: "header" | "footer",
+  referenceType: "default" | "first",
   ownerPart: string,
   context: MediaContext,
   xmlPath: string,
   diagnostics: ReturnType<typeof diagnostic>[]
 ): string | null | undefined {
   const references = children(element, `${kind}Reference`)
-  const defaults = references.filter(
+  const matches = references.filter(
     ({ element: reference }) =>
-      (attr(reference, "type") ?? "default") === "default"
+      (attr(reference, "type") ?? "default") === referenceType
   )
   const unsupported = references.filter(
     ({ element: reference }) =>
-      (attr(reference, "type") ?? "default") !== "default"
+      !["default", "first"].includes(attr(reference, "type") ?? "default")
   )
-  for (const _reference of unsupported) {
-    reportFormattingProblem(
-      diagnostics,
-      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
-      `Only default ${kind} references are supported.`,
-      source(ownerPart, xmlPath)
-    )
+  if (referenceType === "default") {
+    for (const _reference of unsupported) {
+      reportFormattingProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+        `Only default and first-page ${kind} references are supported.`,
+        source(ownerPart, xmlPath)
+      )
+    }
   }
-  if (defaults.length > 1) {
+  if (matches.length > 1) {
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      `A section has duplicate default ${kind} references.`,
+      `A section has duplicate ${referenceType} ${kind} references.`,
       source(ownerPart, xmlPath)
     )
     return null
   }
-  const reference = defaults[0]?.element
+  const reference = matches[0]?.element
   if (reference === undefined) return undefined
   const relationshipId = attr(reference, "id")
   const relationship =
@@ -6404,7 +6410,7 @@ function sectionReference(
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      `Default ${kind} reference does not resolve through an internal owner-relative ${kind} relationship.`,
+      `${referenceType === "first" ? "First-page" : "Default"} ${kind} reference does not resolve through an internal owner-relative ${kind} relationship.`,
       source(ownerPart, xmlPath)
     )
     return null
@@ -6414,7 +6420,7 @@ function sectionReference(
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      `Default ${kind} relationship targets a missing or unsafe package part.`,
+      `${referenceType === "first" ? "First-page" : "Default"} ${kind} relationship targets a missing or unsafe package part.`,
       source(ownerPart, xmlPath)
     )
     return null
@@ -6455,7 +6461,7 @@ function parseHeaderFooterPart(
     )
     return undefined
   }
-  const paragraphs: ParsedDocxParagraph[] = []
+  const blocks: ParsedDocxHeaderFooter["blocks"][number][] = []
   const counts = new Map<string, number>()
   for (const current of childElements(root)) {
     const name = localName(current.name)
@@ -6463,7 +6469,7 @@ function parseHeaderFooterPart(
     counts.set(name, count)
     const path = `/${root.name}[1]/${current.name}[${count}]`
     if (name === "p") {
-      paragraphs.push(
+      blocks.push(
         parseParagraph(
           current.element,
           part,
@@ -6477,6 +6483,19 @@ function parseHeaderFooterPart(
           false
         )
       )
+    } else if (name === "tbl") {
+      const table = parseTable(
+        current.element,
+        part,
+        path,
+        options,
+        diagnostics,
+        sheet,
+        numberingDefinitions,
+        hasNumberingPart,
+        context
+      )
+      if (table !== undefined) blocks.push(table)
     } else {
       reportUnsupported(
         diagnostics,
@@ -6492,7 +6511,7 @@ function parseHeaderFooterPart(
     id,
     source: source(part, `/${root.name}[1]`),
     part,
-    paragraphs,
+    blocks,
   }
 }
 
@@ -6630,6 +6649,8 @@ export function parseValidatedDocx(
   let sectionBlocks: ParsedDocxDocument["blocks"][number][] = []
   let inheritedHeaderId: string | null = null
   let inheritedFooterId: string | null = null
+  let inheritedFirstPageHeaderId: string | null = null
+  let inheritedFirstPageFooterId: string | null = null
   let sectionProperties = DEFAULT_SECTION
   const bodyPath = `/${root.name}[1]/${body.name}[1]`
   const counts = new Map<string, number>()
@@ -6691,6 +6712,7 @@ export function parseValidatedDocx(
         const headerReference = sectionReference(
           paragraphSectionProperties,
           "header",
+          "default",
           officeDocumentPart.value,
           media,
           `${currentPath}/w:pPr[1]/w:sectPr[1]`,
@@ -6699,6 +6721,25 @@ export function parseValidatedDocx(
         const footerReference = sectionReference(
           paragraphSectionProperties,
           "footer",
+          "default",
+          officeDocumentPart.value,
+          media,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        const firstPageHeaderReference = sectionReference(
+          paragraphSectionProperties,
+          "header",
+          "first",
+          officeDocumentPart.value,
+          media,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        const firstPageFooterReference = sectionReference(
+          paragraphSectionProperties,
+          "footer",
+          "first",
           officeDocumentPart.value,
           media,
           `${currentPath}/w:pPr[1]/w:sectPr[1]`,
@@ -6706,6 +6747,10 @@ export function parseValidatedDocx(
         )
         if (headerReference !== undefined) inheritedHeaderId = headerReference
         if (footerReference !== undefined) inheritedFooterId = footerReference
+        if (firstPageHeaderReference !== undefined)
+          inheritedFirstPageHeaderId = firstPageHeaderReference
+        if (firstPageFooterReference !== undefined)
+          inheritedFirstPageFooterId = firstPageFooterReference
         sectionProperties = parseSectionProperties(
           paragraphSectionProperties,
           officeDocumentPart.value,
@@ -6722,6 +6767,8 @@ export function parseValidatedDocx(
           properties: sectionProperties,
           defaultHeaderId: inheritedHeaderId,
           defaultFooterId: inheritedFooterId,
+          firstPageHeaderId: inheritedFirstPageHeaderId,
+          firstPageFooterId: inheritedFirstPageFooterId,
           blocks: sectionBlocks,
         })
         sectionBlocks = []
@@ -6747,6 +6794,7 @@ export function parseValidatedDocx(
       const headerReference = sectionReference(
         current.element,
         "header",
+        "default",
         officeDocumentPart.value,
         media,
         currentPath,
@@ -6755,6 +6803,25 @@ export function parseValidatedDocx(
       const footerReference = sectionReference(
         current.element,
         "footer",
+        "default",
+        officeDocumentPart.value,
+        media,
+        currentPath,
+        diagnostics
+      )
+      const firstPageHeaderReference = sectionReference(
+        current.element,
+        "header",
+        "first",
+        officeDocumentPart.value,
+        media,
+        currentPath,
+        diagnostics
+      )
+      const firstPageFooterReference = sectionReference(
+        current.element,
+        "footer",
+        "first",
         officeDocumentPart.value,
         media,
         currentPath,
@@ -6762,6 +6829,10 @@ export function parseValidatedDocx(
       )
       if (headerReference !== undefined) inheritedHeaderId = headerReference
       if (footerReference !== undefined) inheritedFooterId = footerReference
+      if (firstPageHeaderReference !== undefined)
+        inheritedFirstPageHeaderId = firstPageHeaderReference
+      if (firstPageFooterReference !== undefined)
+        inheritedFirstPageFooterId = firstPageFooterReference
       sectionProperties = parseSectionProperties(
         current.element,
         officeDocumentPart.value,
@@ -6775,6 +6846,8 @@ export function parseValidatedDocx(
         properties: sectionProperties,
         defaultHeaderId: inheritedHeaderId,
         defaultFooterId: inheritedFooterId,
+        firstPageHeaderId: inheritedFirstPageHeaderId,
+        firstPageFooterId: inheritedFirstPageFooterId,
         blocks: sectionBlocks,
       })
       sectionBlocks = []
@@ -6799,20 +6872,26 @@ export function parseValidatedDocx(
       properties: sectionProperties,
       defaultHeaderId: inheritedHeaderId,
       defaultFooterId: inheritedFooterId,
+      firstPageHeaderId: inheritedFirstPageHeaderId,
+      firstPageFooterId: inheritedFirstPageFooterId,
       blocks: sectionBlocks,
     })
   }
   const referencedHeaderIds = [
     ...new Set(
       sections.flatMap((section) =>
-        section.defaultHeaderId === null ? [] : [section.defaultHeaderId]
+        [section.defaultHeaderId, section.firstPageHeaderId].filter(
+          (id): id is string => id !== null
+        )
       )
     ),
   ]
   const referencedFooterIds = [
     ...new Set(
       sections.flatMap((section) =>
-        section.defaultFooterId === null ? [] : [section.defaultFooterId]
+        [section.defaultFooterId, section.firstPageFooterId].filter(
+          (id): id is string => id !== null
+        )
       )
     ),
   ]

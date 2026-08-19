@@ -2,7 +2,6 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
 import {
   Popover,
   PopoverContent,
@@ -20,9 +19,10 @@ import {
 } from "react"
 
 import {
-  familyHasWeightAxis,
+  availableFontWeights,
+  fontWeightLabel,
+  nearestAvailableFontWeight,
   searchGoogleFonts,
-  weightAxisRange,
   type GoogleFontCatalog,
   type GoogleFontFamily,
 } from "../fonts/google-catalog"
@@ -71,10 +71,16 @@ function pushRecent(family: string): void {
   writeRecents([family, ...recents].slice(0, MAX_RECENTS))
 }
 
+function clampWeightIndex(index: number, weightCount: number): number {
+  if (weightCount <= 0) return 0
+  return Math.max(0, Math.min(weightCount - 1, Math.round(index)))
+}
+
 export function FontPicker(props: FontPickerProps): ReactNode {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [recents, setRecents] = useState<string[]>(readRecents)
+  const [dragWeightIndex, setDragWeightIndex] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const selectedMeta = useMemo(
@@ -85,12 +91,24 @@ export function FontPicker(props: FontPickerProps): ReactNode {
     [props.catalog.families, props.value]
   )
 
-  const weightAxis = selectedMeta ? weightAxisRange(selectedMeta) : undefined
-  const currentWeight =
-    props.weight ??
-    weightAxis?.defaultValue ??
-    selectedMeta?.axes.find((axis) => axis.tag === "wght")?.defaultValue ??
-    400
+  const weights = useMemo(
+    () => (selectedMeta ? availableFontWeights(selectedMeta) : [400]),
+    [selectedMeta]
+  )
+  const requestedWeight = props.weight ?? 400
+  const currentWeight = selectedMeta
+    ? nearestAvailableFontWeight(selectedMeta, requestedWeight)
+    : 400
+  const committedWeightIndex = Math.max(0, weights.indexOf(currentWeight))
+  const currentWeightIndex =
+    dragWeightIndex === null
+      ? committedWeightIndex
+      : clampWeightIndex(dragWeightIndex, weights.length)
+  const displayWeight = weights[currentWeightIndex] ?? currentWeight
+
+  useEffect(() => {
+    setDragWeightIndex(null)
+  }, [props.value, weights])
 
   const filtered = useMemo(
     () => searchGoogleFonts(props.catalog, query),
@@ -122,10 +140,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
     return items
   }, [filtered, query, recentFamilies])
 
-  const getScrollElement = useCallback(
-    () => scrollRef.current,
-    []
-  )
+  const getScrollElement = useCallback(() => scrollRef.current, [])
 
   const { virtualItems, totalSize } = useVirtualList({
     count: listItems.length,
@@ -136,48 +151,90 @@ export function FontPicker(props: FontPickerProps): ReactNode {
   })
 
   const selectFamily = useCallback(
-    (family: GoogleFontFamily, weight: number) => {
+    (family: GoogleFontFamily) => {
+      const nextWeight = nearestAvailableFontWeight(family, requestedWeight)
       pushRecent(family.family)
       setRecents(readRecents())
-      props.onChange(family.family, weight)
+      props.onChange(family.family, nextWeight)
       setOpen(false)
     },
-    [props]
+    [props, requestedWeight]
+  )
+
+  const applyWeightIndex = useCallback(
+    (rawIndex: number, commit: boolean) => {
+      const nextIndex = clampWeightIndex(rawIndex, weights.length)
+      const nextWeight = weights[nextIndex]
+      if (nextWeight === undefined) return
+      setDragWeightIndex(commit ? null : nextIndex)
+      if (nextWeight !== currentWeight) {
+        props.onChange(props.value, nextWeight)
+      }
+    },
+    [currentWeight, props, weights]
   )
 
   useEffect(() => {
     if (!open) setQuery("")
   }, [open])
 
-  const weightControl =
-    selectedMeta && familyHasWeightAxis(selectedMeta) && weightAxis ? (
-      <div className="flex items-center gap-3 px-1">
-        <Label className="text-xs text-muted-foreground shrink-0">Weight</Label>
-        <Slider
-          min={weightAxis.min}
-          max={weightAxis.max}
-          step={1}
-          value={[currentWeight]}
-          onValueChange={(values) => {
-            const list = Array.isArray(values) ? values : [values]
-            const next = list[0]
-            if (next === undefined) return
-            props.onChange(props.value, next)
-          }}
-          className="flex-1"
-        />
-        <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">
-          {currentWeight}
+  const weightControl = selectedMeta ? (
+    <div className="flex flex-col gap-2 px-1 py-0.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-xs font-medium text-muted-foreground">Weight</span>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {fontWeightLabel(displayWeight)}
+          </span>{" "}
+          {displayWeight}
         </span>
       </div>
-    ) : null
+      {weights.length > 1 ? (
+        <Slider
+          size="lg"
+          min={0}
+          max={weights.length - 1}
+          step={1}
+          value={[currentWeightIndex]}
+          onValueChange={(values) => {
+            const list = Array.isArray(values) ? values : [values]
+            const nextIndex = list[0]
+            if (nextIndex === undefined) return
+            applyWeightIndex(nextIndex, false)
+          }}
+          onValueCommitted={(values) => {
+            const list = Array.isArray(values) ? values : [values]
+            const nextIndex = list[0]
+            if (nextIndex === undefined) {
+              setDragWeightIndex(null)
+              return
+            }
+            applyWeightIndex(nextIndex, true)
+          }}
+          getAriaLabel={() => `Font weight for ${props.value}`}
+          getAriaValueText={(_formattedValue, value) => {
+            const weight =
+              weights[clampWeightIndex(value, weights.length)] ??
+              displayWeight
+            return `${fontWeightLabel(weight)}, ${weight}`
+          }}
+          className="w-full"
+        />
+      ) : (
+        <div className="rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Only {fontWeightLabel(displayWeight).toLowerCase()} ({displayWeight})
+          is published for this family.
+        </div>
+      )}
+    </div>
+  ) : null
 
   return (
     <div
       className={
         props.compact
           ? "apex-editor-toolbar__font-wrap flex shrink-0 items-center overflow-hidden"
-          : "flex min-w-0 flex-col gap-2"
+          : "flex min-w-0 flex-col gap-3"
       }
     >
       <Popover open={open} onOpenChange={setOpen}>
@@ -203,7 +260,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
             {props.value || "Font"}
           </span>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-0" align="start">
+        <PopoverContent className="w-96 p-0" align="start">
           <div className="border-b border-border p-2">
             <Input
               value={query}
@@ -237,11 +294,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
                       height: item.size,
                     }}
                     onClick={() => {
-                      const axis = weightAxisRange(family)
-                      selectFamily(
-                        family,
-                        axis?.defaultValue ?? currentWeight
-                      )
+                      selectFamily(family)
                     }}
                   >
                     <span
@@ -261,7 +314,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
             </div>
           </div>
           {props.compact && weightControl ? (
-            <div className="border-t border-border p-2">{weightControl}</div>
+            <div className="border-t border-border p-3">{weightControl}</div>
           ) : null}
         </PopoverContent>
       </Popover>

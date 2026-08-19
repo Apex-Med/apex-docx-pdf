@@ -1,3 +1,4 @@
+import type { Mark } from "prosemirror-model"
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state"
 import type { CellSelection } from "prosemirror-tables"
 import { redoDepth, undoDepth } from "prosemirror-history"
@@ -37,6 +38,7 @@ export type SelectionSectionState = Readonly<{
   marginRight: number
   marginBottom: number
   marginLeft: number
+  differentFirstPage: boolean
   columnCount: number
   columnEqualWidth: boolean
   columnSpace: number
@@ -84,17 +86,16 @@ const DEFAULT_TEXT: SelectionTextStyle = Object.freeze({
   href: null,
 })
 
-function readTextStyle(state: EditorState): SelectionTextStyle {
-  const markType = state.schema.marks.textStyle
-  const linkType = state.schema.marks.link
-  const marks = state.storedMarks ?? state.selection.$from.marks()
+function textStyleFromMarks(
+  marks: readonly Mark[],
+  markType: EditorState["schema"]["marks"][string] | undefined,
+  linkType: EditorState["schema"]["marks"][string] | undefined
+): SelectionTextStyle {
   const existing = markType ? markType.isInSet(marks) : null
   const link = linkType ? linkType.isInSet(marks) : null
+  const href = link ? String(link.attrs.href ?? "") : null
   if (!existing) {
-    return {
-      ...DEFAULT_TEXT,
-      href: link ? String(link.attrs.href ?? "") : null,
-    }
+    return { ...DEFAULT_TEXT, href }
   }
   return {
     fontFamily: String(existing.attrs.fontFamily ?? "Inter"),
@@ -112,8 +113,63 @@ function readTextStyle(state: EditorState): SelectionTextStyle {
         .verticalAlignment as SelectionTextStyle["verticalAlignment"]) ??
       "baseline",
     styleId: existing.attrs.styleId ? String(existing.attrs.styleId) : null,
-    href: link ? String(link.attrs.href ?? "") : null,
+    href,
   }
+}
+
+function enclosingParagraphRange(
+  state: EditorState
+): { from: number; to: number } | null {
+  const $from = state.selection.$from
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if ($from.node(depth).type.name === "paragraph") {
+      return { from: $from.start(depth), to: $from.end(depth) }
+    }
+  }
+  return null
+}
+
+function firstTextMarksInRange(
+  state: EditorState,
+  from: number,
+  to: number
+): readonly Mark[] | null {
+  const markType = state.schema.marks.textStyle
+  let fallback: readonly Mark[] | null = null
+  let styled: readonly Mark[] | null = null
+  state.doc.nodesBetween(from, to, (node) => {
+    if (styled || !node.isText) return true
+    if (node.marks.length === 0) return true
+    if (!fallback) fallback = node.marks
+    if (!markType || markType.isInSet(node.marks)) {
+      styled = node.marks
+      return false
+    }
+    return true
+  })
+  return styled ?? fallback
+}
+
+function readTextStyle(state: EditorState): SelectionTextStyle {
+  const markType = state.schema.marks.textStyle
+  const linkType = state.schema.marks.link
+  if (state.storedMarks) {
+    return textStyleFromMarks(state.storedMarks, markType, linkType)
+  }
+
+  const fromMarks = state.selection.$from.marks()
+  if (markType?.isInSet(fromMarks)) {
+    return textStyleFromMarks(fromMarks, markType, linkType)
+  }
+
+  const { from, to, empty } = state.selection
+  const range = empty ? enclosingParagraphRange(state) : { from, to }
+  if (range && range.to > range.from) {
+    const scanned = firstTextMarksInRange(state, range.from, range.to)
+    if (scanned) return textStyleFromMarks(scanned, markType, linkType)
+  }
+
+  return textStyleFromMarks(fromMarks, markType, linkType)
 }
 
 function readParagraph(state: EditorState): SelectionParagraphState | null {
@@ -157,6 +213,7 @@ function readSection(state: EditorState): SelectionSectionState | null {
         marginRight: Number(node.attrs.marginRight ?? 1440),
         marginBottom: Number(node.attrs.marginBottom ?? 1440),
         marginLeft: Number(node.attrs.marginLeft ?? 1440),
+        differentFirstPage: node.attrs.differentFirstPage === true,
         columnCount: Number(node.attrs.columnCount ?? 1),
         columnEqualWidth: node.attrs.columnEqualWidth !== false,
         columnSpace: Number(node.attrs.columnSpace ?? 720),

@@ -2659,6 +2659,64 @@ describe("Phase 6 images, sections, headers, footers, and page fields", () => {
     )
   })
 
+  test("uses first-page header/footer variants only on the first page of a section", () => {
+    const firstHeader = paragraph(
+      [{ text: "First header" }],
+      {},
+      "first-header"
+    )
+    const defaultHeader = paragraph(
+      [{ text: "Default header" }],
+      {},
+      "default-header"
+    )
+    const bodyBase = paragraph([], {}, "two-page-body")
+    const body: ResolvedParagraph = {
+      ...bodyBase,
+      children: [
+        required(paragraph([{ text: "One" }]).children[0], "Missing text"),
+        { type: "break", id: "page-break" as never, source, kind: "page" },
+        required(paragraph([{ text: "Two" }]).children[0], "Missing text"),
+      ],
+    }
+    const base = documentWith([body], {
+      headerDistance: twips(20),
+      margins: {
+        top: twips(320),
+        right: twips(100),
+        bottom: twips(100),
+        left: twips(100),
+      },
+      differentFirstPage: true,
+    })
+    const section = required(base.sections[0], "Missing section")
+    const result = layoutDocument({
+      ...base,
+      headers: [
+        { type: "header", id: "default", source, blocks: [defaultHeader] },
+        { type: "header", id: "first", source, blocks: [firstHeader] },
+      ],
+      sections: [
+        {
+          ...section,
+          defaultHeaderId: "default",
+          firstPageHeaderId: "first",
+        },
+      ],
+    })
+
+    expect(result.displayList.pages).toHaveLength(2)
+    const pageText = result.displayList.pages.map((page) =>
+      page.items
+        .filter((item) => item.type === "glyph-run")
+        .map((item) => (item.type === "glyph-run" ? item.text : ""))
+    )
+    expect(pageText[0]).toContain("First header")
+    expect(pageText[0]).not.toContain("Default header")
+    expect(pageText[1]).toContain("Default header")
+    expect(pageText[1]).not.toContain("First header")
+  })
+
   test("reserves exactly digitCount(maxPages) times the widest measured digit", () => {
     const digitMetrics: Phase1FontMetrics = {
       measureText(text) {
@@ -2863,6 +2921,104 @@ describe("Phase 6 images, sections, headers, footers, and page fields", () => {
           item.sourceNodeId === "default-footer-text-0"
       )
     ).toMatchObject({ baselineY: 3_232 })
+  })
+
+  test("uses the editor 1.35 line box for header table cells with unset line spacing", () => {
+    const insertedPadding = {
+      top: twips(0),
+      right: twips(108),
+      bottom: twips(0),
+      left: twips(108),
+    }
+    const insertedTable = (
+      rows: readonly (readonly string[])[]
+    ): ResolvedTable => {
+      const base = table(rows, { cellPadding: insertedPadding })
+      return {
+        ...base,
+        width: twips(1_600),
+        columnWidths: [twips(800), twips(800)],
+        rows: base.rows.map((row) => ({
+          ...row,
+          cells: row.cells.map((cell) => ({ ...cell, width: twips(800) })),
+        })),
+      }
+    }
+    const headerTable = insertedTable([["Page 2", "Page 3"]])
+    const page = {
+      pageWidth: twips(4_000),
+      pageHeight: twips(4_000),
+      headerDistance: twips(20),
+      footerDistance: twips(20),
+      margins: {
+        top: twips(800),
+        right: twips(100),
+        bottom: twips(800),
+        left: twips(100),
+      },
+    }
+    const bodyResult = layoutDocument(
+      documentWith([insertedTable([["Page 2", "Page 3"]])], page),
+      { metrics: fixedMetrics }
+    )
+    const base = documentWith([paragraph([{ text: "body" }], {}, "body")], page)
+    const section = required(base.sections[0], "Missing section")
+    const after = paragraph([{ text: "after" }], {}, "after-header")
+    const headerResult = layoutDocument(
+      {
+        ...base,
+        headers: [
+          { type: "header", id: "h", source, blocks: [headerTable, after] },
+        ],
+        sections: [{ ...section, defaultHeaderId: "h" }],
+      },
+      { metrics: fixedMetrics }
+    )
+    const headerGlyph = headerResult.displayList.pages[0]?.items.find(
+      (item) => item.type === "glyph-run" && item.text === "Page 2"
+    )
+    const afterGlyph = headerResult.displayList.pages[0]?.items.find(
+      (item) =>
+        item.type === "glyph-run" && item.sourceNodeId === "after-header-text-0"
+    )
+    const bodyGlyph = bodyResult.displayList.pages[0]?.items.find(
+      (item) => item.type === "glyph-run" && item.text === "Page 2"
+    )
+    expect(headerGlyph).toMatchObject({ x: twips(208), baselineY: twips(254) })
+    expect(afterGlyph).toMatchObject({ baselineY: twips(536) })
+    expect(bodyGlyph).toMatchObject({ baselineY: twips(992) })
+    const authored = {
+      ...headerTable,
+      rows: headerTable.rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => ({
+          ...cell,
+          blocks: cell.blocks.map((block) => ({
+            ...block,
+            properties: {
+              ...block.properties,
+              lineSpacing: { rule: "auto" as const, value240ths: 240 },
+            },
+          })),
+        })),
+      })),
+    }
+    const authoredResult = layoutDocument(
+      {
+        ...base,
+        headers: [
+          { type: "header", id: "h", source, blocks: [authored, after] },
+        ],
+        sections: [{ ...section, defaultHeaderId: "h" }],
+      },
+      { metrics: fixedMetrics }
+    )
+    expect(
+      authoredResult.displayList.pages[0]?.items.find(
+        (item) =>
+          item.type === "glyph-run" && item.sourceNodeId === "after-header-text-0"
+      )
+    ).toMatchObject({ baselineY: twips(452) })
   })
 
   test("shapes reusable embedded header text and decimal field glyphs only once", () => {

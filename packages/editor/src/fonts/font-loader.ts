@@ -10,6 +10,7 @@ import {
   findGoogleFontFamily,
   familyHasWeightAxis,
   loadGoogleFontCatalog,
+  nearestAvailableFontWeight,
   type GoogleFontCatalog,
   type GoogleFontFamily,
   weightAxisRange,
@@ -45,15 +46,7 @@ export type RegisterFontCallback = (
 ) => void | Promise<void>
 
 const STATIC_WEIGHTS: readonly FontWeight[] = Object.freeze([
-  100,
-  200,
-  300,
-  400,
-  500,
-  600,
-  700,
-  800,
-  900,
+  100, 200, 300, 400, 500, 600, 700, 800, 900,
 ])
 
 const loadedDomFamilies = new Set<string>()
@@ -84,14 +77,11 @@ function clampWeight(
   weight: number,
   family: GoogleFontFamily | undefined
 ): number {
-  const axis = family ? weightAxisRange(family) : undefined
-  if (!axis) return snapToFontWeight(weight)
-  return Math.max(axis.min, Math.min(axis.max, weight))
+  if (!family) return snapToFontWeight(weight)
+  return nearestAvailableFontWeight(family, weight)
 }
 
-function buildGoogleCss2FamilyParam(
-  family: GoogleFontFamily
-): string {
+function buildGoogleCss2FamilyParam(family: GoogleFontFamily): string {
   const encoded = encodeURIComponent(family.family).replace(/%20/g, "+")
   const wght = weightAxisRange(family)
   const ital = family.axes.find((axis) => axis.tag === "ital")
@@ -130,7 +120,9 @@ function builtinFace(
       item.faces.some((face) => face.weight === weight && face.style === style)
   )
   if (!entry) return undefined
-  return entry.faces.find((face) => face.weight === weight && face.style === style)
+  return entry.faces.find(
+    (face) => face.weight === weight && face.style === style
+  )
 }
 
 function variableFontBinaryUrl(slug: string): string {
@@ -227,13 +219,13 @@ export async function ensureFontLoaded(
 ): Promise<EnsureFontLoadedResult> {
   const italic = options.italic === true
   const style: FontStyle = italic ? "italic" : "normal"
-  const catalog =
-    options.catalog ?? (await loadGoogleFontCatalog())
+  const catalog = options.catalog ?? (await loadGoogleFontCatalog())
   const meta = findGoogleFontFamily(catalog, familyName)
-  const requestedWeight = options.weight ?? meta?.axes.find((a) => a.tag === "wght")?.defaultValue ?? 400
-  const weight = snapToFontWeight(
-    clampWeight(requestedWeight, meta)
-  )
+  const requestedWeight =
+    options.weight ??
+    meta?.axes.find((a) => a.tag === "wght")?.defaultValue ??
+    400
+  const weight = snapToFontWeight(clampWeight(requestedWeight, meta))
 
   const builtin = builtinFace(familyName, weight, style)
   if (builtin) {
@@ -276,12 +268,7 @@ export async function ensureFontLoaded(
     bytes = loaded
     variable = isVariable
   } else {
-    const loaded = await loadGoogleFontBinary(
-      familyName,
-      meta,
-      weight,
-      style
-    )
+    const loaded = await loadGoogleFontBinary(familyName, meta, weight, style)
     bytes = loaded.bytes
     variable = loaded.variable
     loadedBinaryKeys.add(binaryKey)

@@ -1053,6 +1053,44 @@ function resolveParagraphSequence(
   return output
 }
 
+function resolveBlocks(
+  source: readonly SemanticBlock[],
+  data: Readonly<Record<string, unknown>>,
+  fieldKinds: ReadonlyMap<string, TemplateFieldKind>,
+  options: TemplateResolveOptions,
+  limits: ResourceLimits,
+  state: ExpansionState
+): SemanticBlock[] {
+  const blocks: SemanticBlock[] = []
+  let paragraphs: SemanticParagraph[] = []
+  const flushParagraphs = (): void => {
+    if (paragraphs.length === 0) return
+    blocks.push(
+      ...resolveParagraphSequence(
+        paragraphs,
+        data,
+        fieldKinds,
+        options,
+        limits,
+        state
+      )
+    )
+    paragraphs = []
+  }
+  for (const block of source) {
+    if (block.type === "paragraph") paragraphs.push(block)
+    else if (block.type === "table") {
+      flushParagraphs()
+      blocks.push(resolveTable(block, data, fieldKinds, options, limits, state))
+    } else {
+      flushParagraphs()
+      blocks.push(block)
+    }
+  }
+  flushParagraphs()
+  return blocks
+}
+
 function resolveHeaderFooter(
   definition: SemanticHeaderFooter,
   data: Readonly<Record<string, unknown>>,
@@ -1065,7 +1103,7 @@ function resolveHeaderFooter(
     return { ...definition, blocks: [] }
   return {
     ...definition,
-    blocks: resolveParagraphSequence(
+    blocks: resolveBlocks(
       definition.blocks,
       data,
       fieldKinds,
@@ -1124,36 +1162,17 @@ export function resolveTemplateWithUsage(
     resolveHeaderFooter(footer, data, fieldKinds, options, limits, state)
   )
   const sections = compiled.source.sections.map((section) => {
-    const blocks: SemanticBlock[] = []
-    let paragraphs: SemanticParagraph[] = []
-    const flushParagraphs = (): void => {
-      if (paragraphs.length === 0) return
-      blocks.push(
-        ...resolveParagraphSequence(
-          paragraphs,
-          data,
-          fieldKinds,
-          options,
-          limits,
-          state
-        )
-      )
-      paragraphs = []
+    return {
+      ...section,
+      blocks: resolveBlocks(
+        section.blocks,
+        data,
+        fieldKinds,
+        options,
+        limits,
+        state
+      ),
     }
-    for (const block of section.blocks) {
-      if (block.type === "paragraph") paragraphs.push(block)
-      else if (block.type === "table") {
-        flushParagraphs()
-        blocks.push(
-          resolveTable(block, data, fieldKinds, options, limits, state)
-        )
-      } else {
-        flushParagraphs()
-        blocks.push(block)
-      }
-    }
-    flushParagraphs()
-    return { ...section, blocks }
   })
   if (hasErrors(state.diagnostics))
     return { ok: false, diagnostics: state.diagnostics }

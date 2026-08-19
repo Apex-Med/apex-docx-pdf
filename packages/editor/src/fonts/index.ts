@@ -1,5 +1,6 @@
 export {
   BUILTIN_FONT_INDEX,
+  EDITOR_FONT_FAMILIES,
   GOOGLE_FONT_FAMILIES,
   TAILWIND_PALETTES,
   injectDomFontFaces,
@@ -17,6 +18,9 @@ export {
   searchGoogleFonts,
   findGoogleFontFamily,
   familyHasWeightAxis,
+  availableFontWeights,
+  fontWeightLabel,
+  nearestAvailableFontWeight,
   weightAxisRange,
   resetGoogleFontCatalogCacheForTests,
   GOOGLE_FONTS_METADATA_URL,

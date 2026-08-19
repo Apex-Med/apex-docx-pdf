@@ -37,6 +37,7 @@
   },
   "scripts": {
     "build": "tsup --config ../../tsup.config.ts && bun ../../scripts/prepare-package.ts",
+    "catalog:generate": "bun scripts/build-catalog-faces.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
