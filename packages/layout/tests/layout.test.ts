@@ -2098,13 +2098,13 @@ describe("table layout", () => {
   })
 
   test("moves a row instead of leaving a padding-only leftover fragment", () => {
-    const padded = table([["lead"], ["row"]])
+    const padded = table([["abc"], ["row"]])
     const first = tableRow(padded)
     const second = tableRow(padded, 1)
-    // Default table padding is 20. Natural one-line row height is 280.
-    // A 488-twip page leaves 288 writable twips, so the second row has only
-    // 8 twips left after the first row — enough for part of the top padding,
-    // but not the first atomic line.
+    // Default table padding is 20. A 3-glyph cell fits one 240-twip line, so
+    // natural row height is 280. A 488-twip page leaves 288 writable twips, so
+    // the second row has only 8 twips left after the first row — enough for
+    // part of the top padding, but not the first atomic line.
     const result = layoutDocument(
       documentWith(
         [

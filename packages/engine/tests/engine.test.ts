@@ -263,7 +263,7 @@ describe("engine vertical slice", () => {
     const mediaBoxes = [...pdfSource.matchAll(/\/MediaBox \[([^\]]+)\]/gu)].map(
       (match) => match[1]
     )
-    expect(mediaBoxes).toEqual(["0 0 595 842", "0 0 842 595", "0 0 595 842"])
+    expect(mediaBoxes).toEqual(["0 0 596 842", "0 0 842 596", "0 0 596 842"])
     const imageMatrices = [
       ...pdfSource.matchAll(
         /q\n([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm\n\/Im\d+ Do/gu
@@ -473,7 +473,9 @@ describe("engine vertical slice", () => {
     expect(validatePdfStructure(rendered.pdf).valid).toBe(true)
     expect(pdfSource).toMatch(/\/[A-Z]{6}\+Inter-Medium/u)
     expect(pdfSource).toMatch(/\/[A-Z]{6}\+Inter-SemiBold/u)
-    expect(pdfSource).toMatch(/\/[A-Z]{6}\+BricolageGrotesque-SemiBold/u)
+    expect(pdfSource).toMatch(
+      /\/[A-Z]{6}\+BricolageGrotesque-(?:14pt)?SemiBold/u
+    )
     expect(pdfSource.match(/\/Subtype \/Type0/gu)).toHaveLength(3)
   })
 

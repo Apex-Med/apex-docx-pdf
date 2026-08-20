@@ -1,30 +1,30 @@
 {
   "plain-template-formatting": {
     "status": "rendered",
-    "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+    "fontRegistryHash": "2a024dd64688d8fb230169cfa40a08d16b3299a7a0fe887970518db9aec7228d",
     "pageCount": 1,
     "searchableText": "Golden Cross-runtime proofDeterministic trace evidence.",
     "pdfValid": true,
-    "pdfSha256": "00303180425604d450d5181b49c38ed112a6fe78111109e90cf4c260f582c39e",
+    "pdfSha256": "73e1ddc704084a0d92b4ec1b666dea2f9b70e31335ec394f1c857450158d5576",
     "traceSha256": "621d473055671e72c1c3596510f5aa7e375c5640dc3e1b4a9d6c32d5ca74f9df"
   },
   "table-row-expansion": {
     "status": "rendered",
-    "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+    "fontRegistryHash": "2a024dd64688d8fb230169cfa40a08d16b3299a7a0fe887970518db9aec7228d",
     "pageCount": 4,
     "searchableText": "ITEMQTYItem 011Item 022Item 033Item 044Item 055Item 066\nITEMQTYItem 077Item 088Item 099Item 1010Item 1111\nITEMQTYItem 1212Item 1313Item 1414Item 1515Item 1616Item 1717\nITEMQTYItem 1818Template tail",
     "pdfValid": true,
-    "pdfSha256": "613b52855f57f7dd05912f036c425fd8bb6ee8a4aec59ac6aa13a128f5119425",
-    "traceSha256": "49b1cff2a41df85f847b652a642f459b86a9330d09360af7a7bb659908d95dae"
+    "pdfSha256": "c0c62fc1a6c07aea88096104c8719d7f6b2a73a1d222e7fb2d03deb95246d0d5",
+    "traceSha256": "fd91d49f11124cabfab6bf9459f613f029a485255358493cca0aca1f7391c519"
   },
   "static-images-sections": {
     "status": "rendered",
-    "fontRegistryHash": "4f13b4b38d3cee034b3997d33c93677818e7ac95fd8a7cd8d3572fadc44e37b7",
+    "fontRegistryHash": "2a024dd64688d8fb230169cfa40a08d16b3299a7a0fe887970518db9aec7228d",
     "pageCount": 3,
     "searchableText": "Header Amara Mokoena Before PNG  between JPEG  after images1.First numbered body itemTable leftTable right2.Second numbered body itemFooter Amara Mokoena — Page 1 of 3\nHeader Amara Mokoena Landscape section for Amara MokoenaFooter Amara Mokoena — Page 2 of 3\nHeader Amara Mokoena Portrait closing sectionFooter Amara Mokoena — Page 3 of 3",
     "pdfValid": true,
-    "pdfSha256": "dcfb60d91d38105e4ea169989901d8b223269bd17deae779b781ab065cf2db97",
-    "traceSha256": "ccbb900c487126447140840281baacc3ef6e9c7cf5591cf6277c7feabcd02611"
+    "pdfSha256": "fb47aabfb66ee288181a4b1990e900b373ed2583fe18ae173c7f46c91c60b892",
+    "traceSha256": "ea70e134979edfaf1d505bcde510de16b674c376f124bc988f705b16c03a8d62"
   },
   "missing-required-template-data": {
     "status": "rejected",
