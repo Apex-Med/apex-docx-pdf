@@ -8,6 +8,17 @@ import {
   type StyleDefinition,
 } from "@apexmed/core"
 import { normaliseDocxBytes, serializeDocx } from "@apexmed/docx"
+import {
+  answersToTagValues,
+  createEmptyForm,
+  formFromMetadata,
+  readFormAnswers,
+  tagsFromForm,
+  writeFormMetadata,
+  type FormAnswers,
+  type FormTemplate,
+} from "@apexmed/forms"
+import { FormBuilder } from "@apexmed/forms/ui"
 import { layoutDocument } from "@apexmed/layout"
 import { selectAll } from "prosemirror-commands"
 import { redo, undo } from "prosemirror-history"
@@ -130,6 +141,7 @@ import type { EditorChromeActions } from "./chrome-types"
 import { ColumnsDialog } from "./ColumnsDialog"
 import { useEditorPreferences } from "./editor-preferences"
 import { FindReplaceDialog } from "./FindReplaceDialog"
+import { FormPreview } from "./FormPreview"
 import { HeaderFooterEditor } from "./HeaderFooterEditor"
 import { LinkDialog } from "./LinkDialog"
 import { LineSpacingDialog } from "./LineSpacingDialog"
@@ -378,6 +390,27 @@ function editorNodeViews() {
   }
 }
 
+function definitionsFromForm(form: FormTemplate): TemplateTagDefinition[] {
+  return tagsFromForm(form).map((tag) => ({
+    id: tag.id,
+    label: tag.label,
+    slug: tag.slug,
+    kind: tag.kind,
+    source: "form" as const,
+    ...(tag.date ? { date: tag.date } : {}),
+  }))
+}
+
+function mergeCatalogWithForm(
+  tags: readonly TemplateTagDefinition[],
+  form: FormTemplate
+): TemplateTagDefinition[] {
+  return [
+    ...tags.filter((tag) => tag.source !== "form"),
+    ...definitionsFromForm(form),
+  ]
+}
+
 type TableOptionsSelection = Readonly<{
   positions: readonly number[]
   grid: ReturnType<typeof selectedTableCellGrid>
@@ -484,6 +517,20 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const toggleTagsSidebarOpen = useEditorPreferences(
       (state) => state.toggleTagsSidebarOpen
     )
+    const workspaceTab = useEditorPreferences((state) => state.workspaceTab)
+    const setWorkspaceTab = useEditorPreferences(
+      (state) => state.setWorkspaceTab
+    )
+    const [formTemplate, setFormTemplate] = useState<FormTemplate>(() =>
+      formFromMetadata(document.editorMetadata)
+    )
+    const [formAnswers, setFormAnswers] = useState<FormAnswers>(() =>
+      readFormAnswers(document.editorMetadata)
+    )
+    const formTemplateRef = useRef(formTemplate)
+    formTemplateRef.current = formTemplate
+    const formAnswersRef = useRef(formAnswers)
+    formAnswersRef.current = formAnswers
     const templateTags = useTemplateTagStore((state) => state.tags)
     const templateTagValues = useTemplateTagStore((state) => state.values)
     const pageUnit = useEditorPreferences((state) => state.pageUnit)
@@ -531,13 +578,32 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       const { tags, values } = useTemplateTagStore.getState()
       updateDocument({
         ...documentRef.current,
-        editorMetadata: writeTemplateTagMetadata(
-          documentRef.current.editorMetadata,
-          tags,
-          values
+        editorMetadata: writeFormMetadata(
+          writeTemplateTagMetadata(
+            documentRef.current.editorMetadata,
+            tags,
+            values
+          ),
+          formTemplateRef.current,
+          formAnswersRef.current
         ),
       })
     }, [updateDocument])
+
+    const persistForm = useCallback(
+      (nextForm: FormTemplate, nextAnswers: FormAnswers) => {
+        setFormTemplate(nextForm)
+        setFormAnswers(nextAnswers)
+        formTemplateRef.current = nextForm
+        formAnswersRef.current = nextAnswers
+        const store = useTemplateTagStore.getState()
+        const tags = mergeCatalogWithForm(store.tags, nextForm)
+        const mapped = answersToTagValues(nextForm, nextAnswers)
+        store.reset(tags, { ...store.values, ...mapped })
+        persistTemplateTags()
+      },
+      [persistTemplateTags]
+    )
 
     const notifyTagValuesChanged = useCallback(() => {
       persistTemplateTags()
@@ -545,6 +611,14 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       if (!view) return
       view.dispatch(view.state.tr.setMeta(TEMPLATE_TAG_VALUES_TR_META, true))
     }, [persistTemplateTags])
+
+    const applyFormAnswers = useCallback(
+      (nextAnswers: FormAnswers) => {
+        persistForm(formTemplateRef.current, nextAnswers)
+        notifyTagValuesChanged()
+      },
+      [persistForm, notifyTagValuesChanged]
+    )
 
     const layoutResult = useMemo(() => {
       if (!previewOn && !divergenceOn) return null
@@ -564,7 +638,17 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     useEffect(() => {
       const hydrated = hydrateTemplateTagCatalog(documentRef.current)
       const meta = readTemplateTagMetadata(hydrated.editorMetadata)
-      useTemplateTagStore.getState().reset(meta.tags, meta.values)
+      const form = formFromMetadata(hydrated.editorMetadata)
+      const answers = readFormAnswers(hydrated.editorMetadata)
+      setFormTemplate(form)
+      setFormAnswers(answers)
+      formTemplateRef.current = form
+      formAnswersRef.current = answers
+      const mapped = answersToTagValues(form, answers)
+      useTemplateTagStore.getState().reset(
+        mergeCatalogWithForm(meta.tags, form),
+        { ...meta.values, ...mapped }
+      )
       if (hydrated !== documentRef.current) {
         documentRef.current = hydrated
         setDocument(hydrated)
@@ -680,11 +764,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             const numbering = numberingDefinitionFromTransaction(tr)
             const numberingDefinitions = numbering
               ? [
-                  ...current.numberingDefinitions.filter(
-                    (definition) => definition.id !== numbering.id
-                  ),
-                  numbering,
-                ]
+                ...current.numberingDefinitions.filter(
+                  (definition) => definition.id !== numbering.id
+                ),
+                numbering,
+              ]
               : current.numberingDefinitions
             const semantic = toSemanticDocument(next.doc, {
               assets,
@@ -755,7 +839,17 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         setHeaderFooterEditing(null)
         const hydrated = hydrateTemplateTagCatalog(next)
         const tagMeta = readTemplateTagMetadata(hydrated.editorMetadata)
-        useTemplateTagStore.getState().reset(tagMeta.tags, tagMeta.values)
+        const form = formFromMetadata(hydrated.editorMetadata)
+        const answers = readFormAnswers(hydrated.editorMetadata)
+        setFormTemplate(form)
+        setFormAnswers(answers)
+        formTemplateRef.current = form
+        formAnswersRef.current = answers
+        const mapped = answersToTagValues(form, answers)
+        useTemplateTagStore.getState().reset(
+          mergeCatalogWithForm(tagMeta.tags, form),
+          { ...tagMeta.values, ...mapped }
+        )
         updateDocument(hydrated)
         setDocument(hydrated)
         const metadata = hydrated.editorMetadata as
@@ -810,6 +904,13 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       [loadDocument]
     )
 
+    useEffect(() => {
+      if (workspaceTab !== "document") return
+      const view = viewRef.current
+      if (!view) return
+      view.dispatch(view.state.tr.setMeta(TEMPLATE_TAG_VALUES_TR_META, true))
+    }, [workspaceTab])
+
     const onOpenDocx = useCallback(
       async (file: File) => {
         try {
@@ -848,6 +949,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
 
     const onExportPdf = useCallback(async () => {
       try {
+        persistForm(formTemplateRef.current, formAnswersRef.current)
         const bytes = await serializeEmbedPdf(documentRef.current)
         const blob = new Blob([bytes as BlobPart], {
           type: "application/pdf",
@@ -864,10 +966,29 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           `PDF export unavailable: ${error instanceof Error ? error.message : String(error)}`
         )
       }
-    }, [])
+    }, [persistForm])
+
+    const generatePdfFromForm = useCallback(
+      async (answers: FormAnswers) => {
+        persistForm(formTemplateRef.current, answers)
+        setStatus("Generating PDF…")
+        try {
+          const bytes = await serializeEmbedPdf(documentRef.current)
+          setStatus("Generated PDF from form answers")
+          return bytes
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error)
+          setStatus(`PDF export unavailable: ${message}`)
+          throw error
+        }
+      },
+      [persistForm]
+    )
 
     const onPrint = useCallback(async () => {
       try {
+        persistForm(formTemplateRef.current, formAnswersRef.current)
         setStatus("Preparing print…")
         const bytes = await serializeEmbedPdf(
           applyTemplateTagValues(documentRef.current)
@@ -880,50 +1001,55 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           `Print unavailable: ${error instanceof Error ? error.message : String(error)}`
         )
       }
-    }, [])
+    }, [persistForm])
 
     const onNew = useCallback(() => {
       const metadata = documentRef.current.editorMetadata as
         | {
-            defaultPageSetup?: {
-              pageWidth: number
-              pageHeight: number
-              marginTop: number
-              marginRight: number
-              marginBottom: number
-              marginLeft: number
-            }
-            pageUnit?: PageSetupUnit
+          defaultPageSetup?: {
+            pageWidth: number
+            pageHeight: number
+            marginTop: number
+            marginRight: number
+            marginBottom: number
+            marginLeft: number
           }
+          pageUnit?: PageSetupUnit
+        }
         | undefined
       const defaults = metadata?.defaultPageSetup
       const blank = createBlankDocument(
         defaults
           ? {
-              pageWidth: defaults.pageWidth,
-              pageHeight: defaults.pageHeight,
-              margins: {
-                top: defaults.marginTop,
-                right: defaults.marginRight,
-                bottom: defaults.marginBottom,
-                left: defaults.marginLeft,
-              },
-            }
+            pageWidth: defaults.pageWidth,
+            pageHeight: defaults.pageHeight,
+            margins: {
+              top: defaults.marginTop,
+              right: defaults.marginRight,
+              bottom: defaults.marginBottom,
+              left: defaults.marginLeft,
+            },
+          }
           : undefined
       )
       const seeded = mergeDefaultTemplateTags([], {})
+      const emptyForm = createEmptyForm()
       useTemplateTagStore.getState().reset(seeded.tags, seeded.values)
       loadDocument({
         ...blank,
-        editorMetadata: writeTemplateTagMetadata(
-          {
-            ...(blank.editorMetadata ?? {}),
-            ...(defaults ? { defaultPageSetup: defaults } : {}),
-            pageUnit,
-            customPalettes: customPalettesRef.current,
-          },
-          seeded.tags,
-          seeded.values
+        editorMetadata: writeFormMetadata(
+          writeTemplateTagMetadata(
+            {
+              ...(blank.editorMetadata ?? {}),
+              ...(defaults ? { defaultPageSetup: defaults } : {}),
+              pageUnit,
+              customPalettes: customPalettesRef.current,
+            },
+            seeded.tags,
+            seeded.values
+          ),
+          emptyForm,
+          {}
         ),
       })
       setStatus("New blank document")
@@ -964,7 +1090,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const styleNames = useMemo(() => {
       const defs = document.styles?.definitions ?? []
       return paragraphStyleOptions(defs)
-    }, [document.styles])
+    }, [document.styles?.definitions])
 
     const applyStyleById = useCallback(
       (styleId: string | null) => {
@@ -1117,9 +1243,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         )
         const transaction = refsChanged
           ? view.state.tr.setNodeMarkup(position, undefined, {
-              ...targetAttrs,
-              ...headerFooterAttrs,
-            })
+            ...targetAttrs,
+            ...headerFooterAttrs,
+          })
           : view.state.tr.setMeta(HEADER_FOOTER_CONTENT_TR_META, true)
         view.dispatch(transaction)
       },
@@ -1139,7 +1265,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         updateDocument(next)
         syncMainHeaderFooter(next, headerFooterEditing.sectionId)
       },
-      [headerFooterEditing, syncMainHeaderFooter, updateDocument]
+      [syncMainHeaderFooter, headerFooterEditing, updateDocument]
     )
 
     const handleHeaderFooterViewChange = useCallback(
@@ -1229,6 +1355,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         onInsertPageBreak: () => run(insertPageBreak()),
         onInsertTag: () => setInsertTagOpen(true),
         onToggleTagsSidebar: toggleTagsSidebarOpen,
+        onWorkspaceTabChange: setWorkspaceTab,
         onInsertLink: () => setLinkOpen(true),
         onInsertColumnBreak: () => {
           run(insertColumnBreak())
@@ -1293,8 +1420,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             .flatMap((block) =>
               block.type === "paragraph"
                 ? block.children
-                    .filter((child) => child.type === "text")
-                    .map((child) => (child.type === "text" ? child.text : ""))
+                  .filter((child) => child.type === "text")
+                  .map((child) => (child.type === "text" ? child.text : ""))
                 : []
             )
             .join(" ")
@@ -1324,22 +1451,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       }),
       [
         applyStyleById,
-        fontCatalog,
-        onExportPdf,
-        onPrint,
         onInsertImage,
         beginHeaderFooterEditing,
         onNew,
-        onOpenDocx,
-        onSaveDocx,
-        run,
         runClipboard,
-        saveStyleFromSelection,
-        selectionSnapshot,
-        setZoom,
-        toggleDarkPages,
-        toggleRulerVisible,
-        toggleTagsSidebarOpen,
+        saveStyleFromSelection, fontCatalog, onExportPdf, onOpenDocx, onPrint, onSaveDocx, run, selectionSnapshot, setWorkspaceTab, setZoom, toggleDarkPages, toggleRulerVisible, toggleTagsSidebarOpen
       ]
     )
 
@@ -1399,9 +1515,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         {...(darkPages ? { "data-apex-dark-pages": "true" } : {})}
         {...(headerFooterEditing
           ? {
-              "data-apex-header-footer-editing": "true",
-              "data-apex-header-footer-kind": headerFooterEditing.kind,
-            }
+            "data-apex-header-footer-editing": "true",
+            "data-apex-header-footer-kind": headerFooterEditing.kind,
+          }
           : {})}
       >
         <EditorChrome
@@ -1417,6 +1533,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             printLayout: true,
             tableOptionsOpen: tablePropsOpen,
             tagsSidebarOpen,
+            workspaceTab,
           }}
           resources={{
             fonts: BUILTIN_FONT_INDEX,
@@ -1438,21 +1555,50 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           }}
         >
           <div className="flex min-h-0 flex-1">
-            <div className="flex min-h-0 min-w-0 flex-1 gap-3 p-3">
+            <div className={workspaceTab === "document" ? "flex min-h-0 min-w-0 flex-1 gap-3 p-3" : "flex min-h-0 min-w-0 flex-1"}>
               <div className="relative min-h-0 min-w-0 flex-1">
                 <div
                   ref={hostRef}
-                  className="apex-editor-surface h-full overflow-auto rounded-lg"
+                  className={
+                    workspaceTab === "document"
+                      ? "apex-editor-surface h-full overflow-auto rounded-lg"
+                      : "apex-editor-surface apex-editor-surface--layout-hidden"
+                  }
+                  aria-hidden={workspaceTab !== "document"}
                 />
+                {workspaceTab === "form" ? (
+                  <div className="apex-form-workspace absolute inset-0 z-20 overflow-hidden">
+                    <FormBuilder
+                      form={formTemplate}
+                      onFormChange={(next) =>
+                        persistForm(next, formAnswersRef.current)
+                      }
+                    />
+                  </div>
+                ) : null}
+                {workspaceTab === "preview" ? (
+                  <div className="apex-form-preview absolute inset-0 z-20 overflow-hidden">
+                    <FormPreview
+                      form={formTemplate}
+                      answers={formAnswers}
+                      onAnswersChange={applyFormAnswers}
+                      onGeneratePdf={generatePdfFromForm}
+                      onOpenFormBuilder={() => setWorkspaceTab("form")}
+                    />
+                  </div>
+                ) : null}
                 <TableReorderOverlay
                   viewRef={viewRef}
                   surfaceRef={hostRef}
                   revision={selectionSnapshot.revision}
                   inTable={selectionSnapshot.table.inTable}
                   zoom={zoom}
-                  readOnly={readOnly}
+                  readOnly={readOnly || workspaceTab !== "document"}
                 />
-                {headerFooterEditing && hostRef.current && viewRef.current ? (
+                {workspaceTab === "document" &&
+                  headerFooterEditing &&
+                  hostRef.current &&
+                  viewRef.current ? (
                   <HeaderFooterEditor
                     key={`${headerFooterEditing.sectionId}:${headerFooterEditing.kind}:${headerFooterEditing.variant}`}
                     surface={hostRef.current}
@@ -1472,46 +1618,48 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                   />
                 ) : null}
               </div>
-              {previewOn && layoutResult ? (
+              {workspaceTab === "document" && previewOn && layoutResult ? (
                 <PrintPreview displayList={layoutResult.displayList} />
               ) : null}
             </div>
-            <TagsSidebar
-              open={tagsSidebarOpen}
-              tags={templateTags}
-              values={templateTagValues}
-              width={tagsSidebarWidth}
-              onWidthChange={setTagsSidebarWidth}
-              onToggle={toggleTagsSidebarOpen}
-              onCreate={() => {
-                setEditingTag(null)
-                setTagEditorMode("create")
-                setTagEditorOpen(true)
-              }}
-              onEdit={(tag) => {
-                setEditingTag(tag)
-                setTagEditorMode("edit")
-                setTagEditorOpen(true)
-              }}
-              onDelete={(tag) => {
-                if (
-                  !window.confirm(
-                    `Delete “${tag.label}” and remove it from the document?`
-                  )
-                ) {
-                  return
-                }
-                useTemplateTagStore.getState().removeTag(tag.id)
-                persistTemplateTags()
-                run(removeTemplateTagInstances(tag.id))
-                setStatus(`Deleted tag ${tag.label}`)
-              }}
-              onValueChange={(tag, value) => {
-                useTemplateTagStore.getState().setValue(tag.id, value)
-                notifyTagValuesChanged()
-              }}
-            />
-            {tablePropsOpen ? (
+            {workspaceTab === "document" ? (
+              <TagsSidebar
+                open={tagsSidebarOpen}
+                tags={templateTags}
+                values={templateTagValues}
+                width={tagsSidebarWidth}
+                onWidthChange={setTagsSidebarWidth}
+                onToggle={toggleTagsSidebarOpen}
+                onCreate={() => {
+                  setEditingTag(null)
+                  setTagEditorMode("create")
+                  setTagEditorOpen(true)
+                }}
+                onEdit={(tag) => {
+                  setEditingTag(tag)
+                  setTagEditorMode("edit")
+                  setTagEditorOpen(true)
+                }}
+                onDelete={(tag) => {
+                  if (
+                    !window.confirm(
+                      `Delete “${tag.label}” and remove it from the document?`
+                    )
+                  ) {
+                    return
+                  }
+                  useTemplateTagStore.getState().removeTag(tag.id)
+                  persistTemplateTags()
+                  run(removeTemplateTagInstances(tag.id))
+                  setStatus(`Deleted tag ${tag.label}`)
+                }}
+                onValueChange={(tag, value) => {
+                  useTemplateTagStore.getState().setValue(tag.id, value)
+                  notifyTagValuesChanged()
+                }}
+              />
+            ) : null}
+            {workspaceTab === "document" && tablePropsOpen ? (
               <TablePropertiesDialog
                 key={`${tableOptionsSelection.positions.join(":")}:${tableOptionsSelection.sizing?.selectedColumns.join(",") ?? ""}`}
                 open
@@ -1714,16 +1862,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             spacingAfter: selectionSnapshot.paragraph?.spacingAfter,
             value240ths:
               selectionSnapshot.paragraph?.lineSpacing &&
-              typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
-              "value240ths" in
+                typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
+                "value240ths" in
                 (selectionSnapshot.paragraph.lineSpacing as object)
                 ? Number(
-                    (
-                      selectionSnapshot.paragraph.lineSpacing as {
-                        value240ths: number
-                      }
-                    ).value240ths
-                  )
+                  (
+                    selectionSnapshot.paragraph.lineSpacing as {
+                      value240ths: number
+                    }
+                  ).value240ths
+                )
                 : null,
           }}
           onApply={(options) => {
@@ -1913,9 +2061,9 @@ function mountEditorHeadless(
         const asset = imageAssetFromTransaction(tr)
         const assets = asset
           ? [
-              ...documentRef.current.assets.filter((a) => a.id !== asset.id),
-              asset,
-            ]
+            ...documentRef.current.assets.filter((a) => a.id !== asset.id),
+            asset,
+          ]
           : documentRef.current.assets
         const semantic = toSemanticDocument(next.doc, {
           assets,

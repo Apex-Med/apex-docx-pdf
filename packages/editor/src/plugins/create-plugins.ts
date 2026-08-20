@@ -20,6 +20,7 @@ import { createImagePasteDropPlugin } from "./image-paste-drop"
 import { createNodeIdentityPlugin } from "./node-identity"
 import { createTemplateTagCaretPlugin } from "./template-tag-caret"
 import { createTemplateTagDropPlugin } from "./template-tag-drop"
+import { createTemplateBlocksPlugin } from "./template-blocks"
 
 export type CreateEditorPluginsOptions = Readonly<{
   enablePagination?: boolean
@@ -57,6 +58,7 @@ export function createEditorPlugins(
     createTableContextMenuPlugin(),
     createTableCaretPlugin(),
     createTemplateTagCaretPlugin(),
+    createTemplateBlocksPlugin(),
     createImagePasteDropPlugin(),
     createTemplateTagDropPlugin(),
     gapCursor(),

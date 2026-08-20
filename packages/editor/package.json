@@ -52,6 +52,7 @@
     "@apexmed/devtools": "workspace:*",
     "@apexmed/docx": "workspace:*",
     "@apexmed/fonts": "workspace:*",
+    "@apexmed/forms": "workspace:*",
     "@apexmed/images": "workspace:*",
     "@apexmed/layout": "workspace:*",
     "@apexmed/pdf": "workspace:*",

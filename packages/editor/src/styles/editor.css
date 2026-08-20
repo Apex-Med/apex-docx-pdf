@@ -684,15 +684,15 @@
 }
 
 .apex-header-footer-editor__content .ProseMirror > section[data-section] {
-  width: 100% !important;
-  min-height: 0 !important;
+  width: 100%;
+  min-height: 0;
   padding: 0 var(--apex-header-footer-margin-right, 0) 0
-    var(--apex-header-footer-margin-left, 0) !important;
-  margin: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  overflow: visible !important;
+    var(--apex-header-footer-margin-left, 0);
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .apex-header-footer-editor__content .ProseMirror p {
@@ -701,6 +701,8 @@
 
 .dark
   .apex-editor-root[data-apex-dark-pages]
+  .apex-editor-surface
+  .ProseMirror
   .apex-header-footer-overlay
   :is(
     [data-color="#000000" i],
@@ -974,6 +976,17 @@
 .apex-editor-root :focus-visible {
   outline: 2px solid var(--apex-accent);
   outline-offset: 2px;
+}
+
+/*
+ * Form fields already draw their own ring (Input, InputGroup, DatePicker).
+ * Keep the chrome outline off those controls so composite inputs like
+ * dd/mm/yyyy don't each get a nested focus box.
+ */
+.apex-form-preview :focus-visible,
+.apex-form-workspace :focus-visible,
+.apex-editor-root [data-slot="input-group-control"]:focus-visible {
+  outline: none;
 }
 
 /*
@@ -1653,6 +1666,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* biome-ignore lint/style/noDescendingSpecificity: catch-all must follow component motion rules so equal-specificity transitions still reduce */
   .apex-editor-root *,
   .apex-editor-root *::before,
   .apex-editor-root *::after {
@@ -1775,7 +1789,7 @@
 .apex-editor-root[data-apex-tag-dragging] .prosemirror-dropcursor-inline,
 .apex-editor-root[data-apex-tag-dragging] .prosemirror-dropcursor-block,
 body:has(.apex-editor-root[data-apex-tag-dragging]) > .apex-pm-dropcursor {
-  display: none !important;
+  display: none;
 }
 
 /* contenteditable=false chips skip the native ::selection paint. */
@@ -1786,6 +1800,104 @@ body:has(.apex-editor-root[data-apex-tag-dragging]) > .apex-pm-dropcursor {
   background: Highlight;
   color: HighlightText;
   opacity: 1;
+}
+
+.apex-editor-workspace-tabs {
+  border-bottom: 1px solid var(--apex-chrome-border);
+  background: var(--apex-chrome-bg);
+}
+
+.apex-editor-surface--layout-hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-marker {
+  margin: 0.2em 0;
+  padding: 0.15em 0.55em;
+  border: 1px dashed #2563eb;
+  border-radius: 0.25em;
+  font-size: 0.75em;
+  line-height: 1.4;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-marker--error {
+  border-color: #dc2626;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.apex-editor-surface .ProseMirror .apex-template-image {
+  display: inline;
+  padding: 0 0.28em;
+  margin: 0 0.04em;
+  border: 1px dashed #7c3aed;
+  border-radius: 0.2em;
+  font-size: 0.85em;
+  color: #7c3aed;
+  background: #f5f3ff;
+}
+
+.apex-form-workspace,
+.apex-form-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--apex-chrome-bg);
+  color: var(--apex-chrome-fg);
+}
+
+.apex-form-builder {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Fixed columns — do not size to inspector content (chips, long selects). */
+.apex-form-builder > [data-apex-form-palette] {
+  box-sizing: border-box;
+  width: 240px;
+  min-width: 240px;
+  max-width: 240px;
+  flex-shrink: 0;
+}
+
+.apex-form-builder > [data-apex-form-settings] {
+  box-sizing: border-box;
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+  flex-shrink: 0;
+}
+
+.apex-form-builder > [data-apex-form-settings] [data-slot="combobox-chips"],
+.apex-form-builder > [data-apex-form-settings] [data-slot="select-trigger"],
+.apex-form-builder > [data-apex-form-settings] [data-slot="number-field"],
+.apex-form-builder > [data-apex-form-settings] input,
+.apex-form-builder > [data-apex-form-settings] textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.apex-form-builder [data-question-selected] {
+  border-color: var(--apex-accent);
+  background-color: color-mix(
+    in oklab,
+    var(--apex-accent) 6%,
+    var(--background, var(--apex-chrome-bg))
+  );
+  box-shadow:
+    inset 0 0 0 2px var(--apex-accent),
+    0 0 0 2px color-mix(in oklab, var(--apex-accent) 32%, transparent);
 }
 
 .apex-tags-sidebar {

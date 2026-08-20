@@ -72,6 +72,9 @@ export {
   insertPageBreak,
   insertColumnBreak,
   insertTemplateTag,
+  insertTemplateMarker,
+  insertTemplateImage,
+  wrapTemplateRegion,
   updateTemplateTagInstances,
   removeTemplateTagInstances,
   arrowPastTemplateTag,
@@ -170,10 +173,14 @@ export {
   type RegisterFontCallback,
 } from "./fonts"
 export { createEditorPlugins } from "./plugins/create-plugins"
+export { createTemplateBlocksPlugin } from "./plugins/template-blocks"
 export {
   applyTemplateTagValues,
   defaultTemplateTags,
+  encodeTemplateImage,
+  encodeTemplateMarker,
   encodeTemplatePlaceholder,
+  findImagePlaceholders,
   findValuePlaceholders,
   hydrateTemplateTagCatalog,
   isPrintedAtTag,
@@ -181,6 +188,7 @@ export {
   isTodayTag,
   isValidTemplatePath,
   mergeDefaultTemplateTags,
+  paragraphIsStandaloneMarker,
   readTemplateTagMetadata,
   slugifyLabel,
   uniqueSlug,

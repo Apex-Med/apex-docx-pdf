@@ -8,6 +8,7 @@
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../../../components/**/*.{ts,tsx}";
 @source "../../../packages/editor/src/**/*.{ts,tsx}";
+@source "../../../packages/forms/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
 @theme inline {

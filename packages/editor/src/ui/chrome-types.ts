@@ -3,6 +3,14 @@ import type { EditorSelectionSnapshot } from "../plugins/selection-state"
 
 export type ParagraphAlignment = "left" | "center" | "right" | "justify"
 
+export type EditorWorkspaceTab = "document" | "form" | "preview"
+
+export const EDITOR_WORKSPACE_TABS = [
+  ["document", "Document"],
+  ["form", "Form"],
+  ["preview", "Preview"],
+] as const satisfies ReadonlyArray<readonly [EditorWorkspaceTab, string]>
+
 export type ParagraphSpacingOptions = Readonly<{
   spacingBefore?: number
   spacingAfter?: number
@@ -37,6 +45,7 @@ export type EditorChromeActions = Readonly<{
   onInsertColumnBreak: () => void
   onInsertTag: () => void
   onToggleTagsSidebar: () => void
+  onWorkspaceTabChange: (tab: EditorWorkspaceTab) => void
   onBold: () => void
   onItalic: () => void
   onUnderline: () => void
@@ -96,6 +105,7 @@ export type EditorChromeViewState = Readonly<{
   printLayout: boolean
   tableOptionsOpen: boolean
   tagsSidebarOpen: boolean
+  workspaceTab: EditorWorkspaceTab
 }>
 
 export const DARK_PAGES_STORAGE_KEY = "apex-editor-dark-pages"

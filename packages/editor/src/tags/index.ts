@@ -28,6 +28,17 @@ export {
   templateTagExportText,
   type ValuePlaceholderMatch,
 } from "./placeholder"
+export {
+  encodeTemplateImage,
+  encodeTemplateMarker,
+  findImagePlaceholders,
+  paragraphIsStandaloneMarker,
+  parseStandaloneMarker,
+  TEMPLATE_MARKER_TYPES,
+  type TemplateImageMatch,
+  type TemplateMarkerMatch,
+  type TemplateMarkerType,
+} from "./block-placeholder"
 export { isValidTemplatePath, prettifySlug, slugifyLabel, uniqueSlug } from "./slug"
 export { useTemplateTagStore } from "./store"
 export {

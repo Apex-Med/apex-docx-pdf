@@ -1,0 +1,79 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "apexmed",
+  "homepage": "https://github.com/craig-bredenkamp/apex-docx-pdf",
+  "items": [
+    {
+      "name": "form-builder",
+      "type": "registry:component",
+      "title": "Form Builder",
+      "description": "Formester-style builder: field palette, live preview, and question settings.",
+      "dependencies": [
+        "@apexmed/forms",
+        "@tanstack/react-form",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ],
+      "registryDependencies": [
+        "button",
+        "input",
+        "label",
+        "textarea",
+        "checkbox",
+        "switch",
+        "badge",
+        "scroll-area",
+        "select",
+        "separator",
+        "tooltip",
+        "number-field",
+        "date-picker",
+        "radio-group",
+        "autocomplete",
+        "cascader",
+        "sortable"
+      ],
+      "files": [
+        {
+          "path": "packages/forms/src/ui/FormBuilder.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "packages/forms/src/ui/field-preview.tsx",
+          "type": "registry:component"
+        }
+      ]
+    },
+    {
+      "name": "form-runtime",
+      "type": "registry:component",
+      "title": "Form Runtime",
+      "description": "TanStack Form runtime for filling Apex forms and driving template tags.",
+      "dependencies": [
+        "@apexmed/forms",
+        "@tanstack/react-form"
+      ],
+      "registryDependencies": [
+        "button",
+        "input",
+        "label",
+        "textarea",
+        "checkbox",
+        "select",
+        "radio-group",
+        "combobox",
+        "autocomplete",
+        "cascader",
+        "date-picker",
+        "number-field"
+      ],
+      "files": [
+        {
+          "path": "packages/forms/src/ui/FormRuntime.tsx",
+          "type": "registry:component"
+        }
+      ]
+    }
+  ]
+}

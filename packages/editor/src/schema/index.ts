@@ -503,6 +503,7 @@ const nodes: Record<string, NodeSpec> = {
       repeatAsHeader: { default: false },
       allowBreakAcrossPages: { default: true },
       height: { default: null },
+      marker: { default: null },
     },
     toDOM: (node) => {
       const height = node.attrs.height as {
@@ -513,10 +514,12 @@ const nodes: Record<string, NodeSpec> = {
         height && Number.isFinite(height.value)
           ? `${Number(height.value) / 20}pt`
           : ""
+      const marker = node.attrs.marker as string | null
       return [
         "tr",
         {
           "data-node-id": node.attrs.nodeId ?? "",
+          ...(marker ? { "data-template-row-marker": marker } : {}),
           style: heightPt
             ? `height:${heightPt};--apex-row-height:${heightPt}`
             : "",
@@ -624,6 +627,53 @@ const nodes: Record<string, NodeSpec> = {
         "data-tab": "true",
         style: "display:inline-block;width:2em;",
       },
+    ],
+  },
+  template_marker: {
+    group: "block",
+    atom: true,
+    selectable: true,
+    attrs: {
+      nodeId: { default: null },
+      marker: { default: "if" },
+      path: { default: "" },
+      label: { default: "" },
+    },
+    parseDOM: [{ tag: "p[data-template-marker]" }],
+    toDOM: (node) => [
+      "p",
+      {
+        "data-template-marker": String(node.attrs.marker ?? "if"),
+        "data-template-path": String(node.attrs.path ?? ""),
+        "data-node-id": node.attrs.nodeId ?? "",
+        class: "apex-template-marker",
+        contenteditable: "false",
+      },
+      String(node.attrs.label || node.attrs.path || node.attrs.marker),
+    ],
+  },
+  template_image: {
+    inline: true,
+    group: "inline",
+    atom: true,
+    selectable: true,
+    attrs: {
+      nodeId: { default: null },
+      tagId: { default: "" },
+      slug: { default: "image" },
+      label: { default: "Image" },
+    },
+    parseDOM: [{ tag: "span[data-template-image]" }],
+    toDOM: (node) => [
+      "span",
+      {
+        "data-template-image": String(node.attrs.slug ?? ""),
+        "data-tag-id": String(node.attrs.tagId ?? ""),
+        "data-node-id": node.attrs.nodeId ?? "",
+        class: "apex-template-image",
+        contenteditable: "false",
+      },
+      String(node.attrs.label ?? node.attrs.slug),
     ],
   },
   template_tag: {

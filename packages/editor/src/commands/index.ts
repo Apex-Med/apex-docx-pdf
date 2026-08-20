@@ -2735,3 +2735,67 @@ export const tableCommands = {
   moveRow: moveTableRow,
   moveColumn: moveTableColumn,
 }
+
+export function insertTemplateMarker(
+  marker: "if" | "else" | "endIf" | "each" | "endEach",
+  path = ""
+): Command {
+  return (state, dispatch) => {
+    const type = state.schema.nodes.template_marker
+    if (!type) return false
+    const node = type.create({
+      marker,
+      path,
+      label: path || marker,
+    })
+    if (dispatch) {
+      dispatch(state.tr.replaceSelectionWith(node).scrollIntoView())
+    }
+    return true
+  }
+}
+
+export function wrapTemplateRegion(
+  kind: "if" | "each",
+  path: string
+): Command {
+  return (state, dispatch) => {
+    const type = state.schema.nodes.template_marker
+    if (!type) return false
+    const { $from, $to } = state.selection
+    const startDepth = Math.max($from.depth, 1)
+    const endDepth = Math.max($to.depth, 1)
+    const start = $from.before(startDepth)
+    const end = $to.after(endDepth)
+    const open = type.create({
+      marker: kind,
+      path,
+      label: path || kind,
+    })
+    const close = type.create({
+      marker: kind === "if" ? "endIf" : "endEach",
+      path,
+      label: path || kind,
+    })
+    if (dispatch) {
+      dispatch(state.tr.insert(end, close).insert(start, open).scrollIntoView())
+    }
+    return true
+  }
+}
+
+export function insertTemplateImage(slug: string, label?: string): Command {
+  return (state, dispatch) => {
+    const type = state.schema.nodes.template_image
+    if (!type) return false
+    const node = type.create({
+      slug,
+      tagId: `tag:${slug}`,
+      label: label ?? slug,
+    })
+    if (dispatch) {
+      dispatch(state.tr.replaceSelectionWith(node).scrollIntoView())
+    }
+    return true
+  }
+}

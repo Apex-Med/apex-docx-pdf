@@ -14,6 +14,7 @@
       "@apexmed/docx",
       "@apexmed/engine",
       "@apexmed/fonts",
+      "@apexmed/forms",
       "@apexmed/images",
       "@apexmed/layout",
       "@apexmed/pdf",

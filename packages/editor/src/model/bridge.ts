@@ -37,10 +37,15 @@ import { normalizeTableSizing } from "../schema/table-sizing"
 import {
   definitionFromNodeAttrs,
   definitionFromPlaceholder,
+  encodeTemplateImage,
+  encodeTemplateMarker,
   encodeTemplatePlaceholder,
+  findImagePlaceholders,
   findValuePlaceholders,
+  paragraphIsStandaloneMarker,
   readTemplateTagMetadata,
   TEMPLATE_TAG_CARET_ZWSP,
+  type TemplateMarkerType,
   type TemplateTagDefinition,
 } from "../tags"
 
@@ -235,6 +240,20 @@ function inlineFromPm(
         styleId,
         directStyle,
         ...(href ? { href } : {}),
+      },
+    ]
+  }
+  if (node.type.name === "template_image") {
+    const slug = String(node.attrs.slug ?? "image")
+    return [
+      {
+        type: "text",
+        id: nodeIdentity(node.attrs.nodeId, "editor:image-tag", ids),
+        source: source(ctx.sourcePart, path),
+        text: encodeTemplateImage(slug),
+        style: ctx.styles.defaults.text,
+        styleId: null,
+        directStyle: null,
       },
     ]
   }
@@ -771,6 +790,37 @@ function tableFromPm(
   }
 }
 
+function markerParagraphFromPm(
+  node: PMNode,
+  ctx: BridgeContext,
+  ids: { n: number },
+  path: string
+): SemanticParagraph {
+  const marker = String(node.attrs.marker ?? "if") as TemplateMarkerType
+  const pathAttr = String(node.attrs.path ?? "")
+  const text = encodeTemplateMarker(marker, pathAttr || undefined)
+  return {
+    type: "paragraph",
+    id: nodeIdentity(node.attrs.nodeId, "editor:marker", ids),
+    source: source(ctx.sourcePart, path),
+    properties: paragraphPropertiesFromNode(node),
+    styleId: null,
+    directProperties: paragraphPropertiesFromNode(node),
+    paragraphMarkStyle: ctx.styles.defaults.text,
+    children: [
+      {
+        type: "text",
+        id: nodeId(nextId("editor:text", ids)),
+        source: source(ctx.sourcePart, path),
+        text,
+        style: ctx.styles.defaults.text,
+        styleId: null,
+        directStyle: null,
+      },
+    ],
+  }
+}
+
 function blockFromPm(
   node: PMNode,
   schema: Schema,
@@ -778,6 +828,8 @@ function blockFromPm(
   ids: { n: number },
   path: string
 ): SemanticBlock {
+  if (node.type.name === "template_marker")
+    return markerParagraphFromPm(node, ctx, ids, path)
   if (node.type.name === "paragraph")
     return paragraphFromPm(node, schema, ctx, ids, path)
   if (node.type.name === "table")
@@ -1042,49 +1094,92 @@ function pmNodesFromTemplateText(
     child.href ?? null,
     child.anchor ?? null
   )
-  const matches = findValuePlaceholders(child.text)
-  if (matches.length === 0) {
+  const valueMatches = findValuePlaceholders(child.text)
+  const imageMatches = findImagePlaceholders(child.text)
+  const hits = [
+    ...valueMatches.map((match) => ({
+      start: match.start,
+      end: match.end,
+      kind: "value" as const,
+      match,
+    })),
+    ...imageMatches.map((match) => ({
+      start: match.start,
+      end: match.end,
+      kind: "image" as const,
+      match,
+    })),
+  ].sort((left, right) => left.start - right.start)
+  if (hits.length === 0) {
     return [schema.text(child.text, marks)]
   }
   const nodes: PMNode[] = []
   let cursor = 0
-  for (const match of matches) {
-    if (match.start > cursor) {
-      nodes.push(schema.text(child.text.slice(cursor, match.start), marks))
+  for (const hit of hits) {
+    if (hit.start < cursor) continue
+    if (hit.start > cursor) {
+      nodes.push(schema.text(child.text.slice(cursor, hit.start), marks))
     }
-    const tag = bySlug.get(match.slug) ?? definitionFromPlaceholder(match)
-    const type = schema.nodes.template_tag
-    if (type && tag) {
-      nodes.push(
-        type.create({
-          nodeId: String(child.id),
-          tagId: tag.id,
-          slug: tag.slug,
-          kind: tag.kind,
-          label: tag.label,
-          datePattern: tag.date?.pattern ?? null,
-          includeTime: tag.date?.includeTime ?? false,
-          fontFamily: child.style.fontFamily,
-          fontSize: child.style.fontSize,
-          fontWeight: child.style.fontWeight,
-          fontStyle: child.style.fontStyle,
-          underline: child.style.underline,
-          strikethrough: child.style.strikethrough ?? false,
-          color: child.style.color,
-          highlightColor: child.style.highlightColor ?? null,
-          verticalAlignment: child.style.verticalAlignment ?? "baseline",
-          styleId: child.styleId ?? null,
-        })
-      )
+    if (hit.kind === "image") {
+      const type = schema.nodes.template_image
+      if (type) {
+        nodes.push(
+          type.create({
+            nodeId: String(child.id),
+            tagId: `tag:${hit.match.path}`,
+            slug: hit.match.path,
+            label: hit.match.path,
+          })
+        )
+      } else {
+        nodes.push(schema.text(child.text.slice(hit.start, hit.end), marks))
+      }
     } else {
-      nodes.push(schema.text(child.text.slice(match.start, match.end), marks))
+      const tag =
+        bySlug.get(hit.match.slug) ?? definitionFromPlaceholder(hit.match)
+      const type = schema.nodes.template_tag
+      if (type && tag) {
+        nodes.push(
+          type.create({
+            nodeId: String(child.id),
+            tagId: tag.id,
+            slug: tag.slug,
+            kind: tag.kind,
+            label: tag.label,
+            datePattern: tag.date?.pattern ?? null,
+            includeTime: tag.date?.includeTime ?? false,
+            fontFamily: child.style.fontFamily,
+            fontSize: child.style.fontSize,
+            fontWeight: child.style.fontWeight,
+            fontStyle: child.style.fontStyle,
+            underline: child.style.underline,
+            strikethrough: child.style.strikethrough ?? false,
+            color: child.style.color,
+            highlightColor: child.style.highlightColor ?? null,
+            verticalAlignment: child.style.verticalAlignment ?? "baseline",
+            styleId: child.styleId ?? null,
+          })
+        )
+      } else {
+        nodes.push(schema.text(child.text.slice(hit.start, hit.end), marks))
+      }
     }
-    cursor = match.end
+    cursor = hit.end
   }
   if (cursor < child.text.length) {
     nodes.push(schema.text(child.text.slice(cursor), marks))
   }
   return nodes
+}
+
+function standaloneMarkerFromParagraph(
+  paragraph: SemanticParagraph
+): ReturnType<typeof paragraphIsStandaloneMarker> {
+  if (paragraph.children.some((child) => child.type !== "text")) return null
+  const text = paragraph.children
+    .map((child) => (child.type === "text" ? child.text : ""))
+    .join("")
+  return paragraphIsStandaloneMarker(text)
 }
 
 function pmParagraphFromSemantic(
@@ -1097,6 +1192,16 @@ function pmParagraphFromSemantic(
   }>,
   tags: readonly TemplateTagDefinition[] = []
 ): PMNode {
+  const marker = standaloneMarkerFromParagraph(paragraph)
+  const markerType = schema.nodes.template_marker
+  if (marker && markerType) {
+    return markerType.create({
+      nodeId: String(paragraph.id),
+      marker: marker.type,
+      path: marker.path ?? "",
+      label: marker.path ?? marker.type,
+    })
+  }
   const content = pmInlinesFromSemantic(
     schema,
     paragraph.children,

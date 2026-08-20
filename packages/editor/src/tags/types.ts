@@ -25,7 +25,7 @@ export type TemplateTagDateOptions = Readonly<{
   pattern: string
 }>
 
-export type TemplateTagSource = "user" | "system"
+export type TemplateTagSource = "user" | "system" | "form"
 
 export type TemplateTagDefinition = Readonly<{
   id: string

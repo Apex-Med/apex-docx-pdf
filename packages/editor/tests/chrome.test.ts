@@ -95,6 +95,7 @@ const noopActions: EditorChromeActions = {
   onInsertPageBreak: () => undefined,
   onInsertTag: () => undefined,
   onToggleTagsSidebar: () => undefined,
+  onWorkspaceTabChange: () => undefined,
   onInsertLink: () => undefined,
   onInsertColumnBreak: () => undefined,
   onBold: () => undefined,
@@ -280,6 +281,13 @@ describe("editor chrome components", () => {
     // Manual page-break atom is a zero-size marker; spacers paint the sheet.
     expect(raw).toContain("apex-manual-page-break")
     expect(raw).toMatch(/\.apex-manual-page-break\s*\{[^}]*height:\s*0/s)
+    expect(raw).toContain("apex-editor-surface--layout-hidden")
+    expect(raw).toContain("apex-editor-workspace-tabs")
+    expect(raw).toContain("apex-form-builder")
+    expect(raw).toContain(".apex-form-preview :focus-visible")
+    expect(raw).toContain('[data-slot="input-group-control"]:focus-visible')
+    expect(raw).toContain("data-question-selected")
+    expect(raw).toContain("apex-template-marker")
   })
 
   test("table options is an in-layout collapsible sidebar", () => {
@@ -500,6 +508,16 @@ describe("editor chrome components", () => {
     )
     expect(chrome).toContain('key="apex-editor-pages"')
     expect(chrome).toContain("pageHostRef={pagesRef}")
+    expect(chrome).toContain("EDITOR_WORKSPACE_TABS")
+    expect(chrome).toContain("workspaceTab")
+    expect(chrome).toContain("onWorkspaceTabChange")
+    const types = readFileSync(
+      join(import.meta.dir, "../src/ui/chrome-types.ts"),
+      "utf8"
+    )
+    expect(types).toContain('["document", "Document"]')
+    expect(types).toContain('["form", "Form"]')
+    expect(types).toContain('["preview", "Preview"]')
   })
 
   test("ruler aligns to the page sheet instead of self-centering with the tab button", () => {
@@ -548,6 +566,28 @@ describe("editor chrome components", () => {
     expect(editor).toContain("printPdfBytes")
     expect(editor).toContain("serializeEmbedPdf")
     expect(editor).not.toContain("window.print()")
+    expect(editor).toContain("FormBuilder")
+    expect(editor).toContain("FormPreview")
+    expect(editor).toContain("workspaceTab")
+    expect(editor).toContain("apex-editor-surface--layout-hidden")
+    expect(editor).toContain('workspaceTab === "preview"')
+    expect(editor).toContain('workspaceTab === "document" ? (')
+    expect(editor).toContain("<TagsSidebar")
+    expect(editor).not.toContain(
+      "open={tagsSidebarOpen && workspaceTab === \"document\"}"
+    )
+    const formPreview = readFileSync(
+      join(import.meta.dir, "../src/ui/FormPreview.tsx"),
+      "utf8"
+    )
+    expect(formPreview).toContain("FormRuntime")
+    expect(formPreview).toContain("Generate PDF")
+    expect(formPreview).toContain("onGeneratePdf")
+    expect(formPreview).toContain("Back to form")
+    expect(formPreview).toContain('step === "pdf"')
+    expect(formPreview).toContain("PDFViewer")
+    expect(formPreview).toContain("showUpload={false}")
+    expect(formPreview).not.toContain("<iframe")
   })
 
   test("file menu actions use native labels instead of cancelled nested clicks", () => {

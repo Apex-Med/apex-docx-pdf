@@ -40,11 +40,31 @@
       }
     },
     {
+      "includes": ["packages/forms/tests/**", "packages/editor/tests/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["packages/ui/src/components/label.tsx"],
       "linter": {
         "rules": {
           "a11y": {
             "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/components/group.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
           }
         }
       }

@@ -71,7 +71,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 import { flushSync } from "react-dom"
 
-import { loadSharedPdfEngine } from "@/lib/pdf-thumbnail-utils"
+import { loadSharedPdfEngine } from "@workspace/ui/lib/pdf-thumbnail-utils"
 import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -109,7 +109,7 @@ import {
   DocumentViewerThumbnailSidebar,
   useElementWidth,
   useInlineThumbnailSidebar,
-} from "@/components/extend/document-viewer-sidebar"
+} from "@workspace/ui/components/document-viewer-sidebar"
 
 export type PDFViewerPageOverlayProps = {
   pageNumber: number
@@ -168,7 +168,9 @@ export type PDFViewerProps = {
 }
 
 const DEFAULT_ZOOM = 1
-const ZOOM_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]
+const MIN_ZOOM = 0.1
+const MAX_ZOOM = 2
+const ZOOM_OPTIONS = [MIN_ZOOM, 0.25, 0.5, 0.75, 1, 1.25, 1.5, MAX_ZOOM]
 const PAGE_GAP = 24
 const THUMBNAIL_PAGE_WIDTH = 92
 const THUMBNAIL_IMAGE_PADDING = 8
@@ -448,7 +450,9 @@ function getVisibleThumbnailItems({
   if (start === -1) start = items.length - 1
 
   let end = start
-  while (end < items.length && items[end].top <= viewportBottom) {
+  while (end < items.length) {
+    const item = items[end]
+    if (!item || item.top > viewportBottom) break
     end += 1
   }
 
@@ -787,12 +791,12 @@ function PDFViewerSearchControl({
         pageNumber: result.pageIndex + 1,
         ...(firstRect
           ? {
-              pageCoordinates: {
-                x: firstRect.origin.x,
-                y: firstRect.origin.y,
-              },
-              alignY: 30,
-            }
+            pageCoordinates: {
+              x: firstRect.origin.x,
+              y: firstRect.origin.y,
+            },
+            alignY: 30,
+          }
           : {}),
         behavior: "auto",
       })
@@ -841,12 +845,12 @@ function PDFViewerSearchControl({
             pageNumber: firstResult.pageIndex + 1,
             ...(firstRect
               ? {
-                  pageCoordinates: {
-                    x: firstRect.origin.x,
-                    y: firstRect.origin.y,
-                  },
-                  alignY: 30,
-                }
+                pageCoordinates: {
+                  x: firstRect.origin.x,
+                  y: firstRect.origin.y,
+                },
+                alignY: 30,
+              }
               : {}),
             behavior: "auto",
           })
@@ -1109,15 +1113,13 @@ function PDFViewerToolbar({
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Zoom out"
-                disabled={
-                  controlsDisabled || currentZoomLevel <= ZOOM_OPTIONS[0]
-                }
+                disabled={controlsDisabled || currentZoomLevel <= MIN_ZOOM}
                 onClick={() => {
                   const nextZoom = [...ZOOM_OPTIONS]
                     .reverse()
                     .find((option) => option < currentZoomLevel)
 
-                  onZoomChange(nextZoom ?? ZOOM_OPTIONS[0])
+                  onZoomChange(nextZoom ?? MIN_ZOOM)
                 }}
               >
                 <HugeiconsIcon icon={MinusSignCircleIcon} className="size-4" />
@@ -1125,6 +1127,10 @@ function PDFViewerToolbar({
             </ToolbarTooltip>
             <Select
               value={String(currentZoomLevel)}
+              items={ZOOM_OPTIONS.map((option) => ({
+                value: String(option),
+                label: `${Math.round(option * 100)}%`,
+              }))}
               onValueChange={(value) => onZoomChange(Number(value))}
               disabled={controlsDisabled}
               modal={false}
@@ -1154,18 +1160,13 @@ function PDFViewerToolbar({
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Zoom in"
-                disabled={
-                  controlsDisabled ||
-                  currentZoomLevel >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
-                }
+                disabled={controlsDisabled || currentZoomLevel >= MAX_ZOOM}
                 onClick={() => {
                   const nextZoom = ZOOM_OPTIONS.find(
                     (option) => option > currentZoomLevel
                   )
 
-                  onZoomChange(
-                    nextZoom ?? ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
-                  )
+                  onZoomChange(nextZoom ?? MAX_ZOOM)
                 }}
               >
                 <HugeiconsIcon icon={PlusSignCircleIcon} className="size-4" />
@@ -1356,18 +1357,18 @@ function PDFViewerThumbnails({
         const thumbnailImageStyle: React.CSSProperties =
           pageRotationDelta % 2 === 1
             ? {
-                height: meta.width,
-                transform: `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
-                width: meta.height,
-              }
+              height: meta.width,
+              transform: `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
+              width: meta.height,
+            }
             : {
-                height: meta.height,
-                transform:
-                  pageRotationDelta === 0
-                    ? undefined
-                    : `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
-                width: meta.width,
-              }
+              height: meta.height,
+              transform:
+                pageRotationDelta === 0
+                  ? undefined
+                  : `rotate(${rotationToDegrees(pageRotationDelta)}deg)`,
+              width: meta.width,
+            }
 
         return (
           <div
@@ -1964,15 +1965,15 @@ function applyPageRotationDeltasToScrollerLayout({
       layout.strategy === ScrollStrategy.Horizontal
         ? maxHeight
         : layout.startSpacing +
-          startSpacingAdjustment +
-          offset +
-          layout.endSpacing,
+        startSpacingAdjustment +
+        offset +
+        layout.endSpacing,
     totalWidth:
       layout.strategy === ScrollStrategy.Horizontal
         ? layout.startSpacing +
-          startSpacingAdjustment +
-          offset +
-          layout.endSpacing
+        startSpacingAdjustment +
+        offset +
+        layout.endSpacing
         : maxWidth,
   }
 }
@@ -2058,14 +2059,14 @@ function PDFViewerScroller({
         style={
           scrollerLayout.strategy === ScrollStrategy.Horizontal
             ? {
-                width: scrollerLayout.startSpacing,
-                height: "100%",
-                flexShrink: 0,
-              }
+              width: scrollerLayout.startSpacing,
+              height: "100%",
+              flexShrink: 0,
+            }
             : {
-                height: scrollerLayout.startSpacing,
-                width: "100%",
-              }
+              height: scrollerLayout.startSpacing,
+              width: "100%",
+            }
         }
       />
       <div
@@ -2077,13 +2078,13 @@ function PDFViewerScroller({
           boxSizing: "border-box",
           ...(scrollerLayout.strategy === ScrollStrategy.Horizontal
             ? {
-                flexDirection: "row",
-                minHeight: "100%",
-              }
+              flexDirection: "row",
+              minHeight: "100%",
+            }
             : {
-                flexDirection: "column",
-                minWidth: "fit-content",
-              }),
+              flexDirection: "column",
+              minWidth: "fit-content",
+            }),
         }}
       >
         {scrollerLayout.items.map((item) => (
@@ -2115,14 +2116,14 @@ function PDFViewerScroller({
         style={
           scrollerLayout.strategy === ScrollStrategy.Horizontal
             ? {
-                width: scrollerLayout.endSpacing,
-                height: "100%",
-                flexShrink: 0,
-              }
+              width: scrollerLayout.endSpacing,
+              height: "100%",
+              flexShrink: 0,
+            }
             : {
-                height: scrollerLayout.endSpacing,
-                width: "100%",
-              }
+              height: scrollerLayout.endSpacing,
+              width: "100%",
+            }
         }
       />
     </div>
@@ -2357,12 +2358,12 @@ function PDFViewerInner({
           pageNumber,
           ...(pageSize
             ? {
-                pageCoordinates: {
-                  x: ((area.left ?? 0) / 100) * pageSize.width,
-                  y: (area.top / 100) * pageSize.height,
-                },
-                alignY: 25,
-              }
+              pageCoordinates: {
+                x: ((area.left ?? 0) / 100) * pageSize.width,
+                y: (area.top / 100) * pageSize.height,
+              },
+              alignY: 25,
+            }
             : {}),
           behavior: options?.behavior === "smooth" ? "smooth" : "auto",
         })
@@ -2414,10 +2415,12 @@ function PDFViewerInner({
 
       const previousDeltas = pageRotationDeltasRef.current
       const nextDeltas = new Map(previousDeltas)
+      const fallbackTargetPageIndex = targetPageIndexes[0]
+      if (fallbackTargetPageIndex === undefined) return
       const referencePageIndex =
         activePage > 0 && currentDocument.pages[activePage - 1]
           ? activePage - 1
-          : targetPageIndexes[0]
+          : fallbackTargetPageIndex
       let scrollDelta = 0
 
       for (const pageIndex of targetPageIndexes) {
@@ -2470,7 +2473,7 @@ function PDFViewerInner({
       if (viewport && scrollDelta !== 0) {
         viewport.scrollTop += scrollDelta
       }
-      ;(
+      ; (
         thumbnailPlugin as {
           calculateWindowState?: (documentId: string) => void
         } | null
@@ -2851,8 +2854,8 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
       }),
       createPluginRegistration(ZoomPluginPackage, {
         defaultZoomLevel: defaultZoom,
-        minZoom: ZOOM_OPTIONS[0],
-        maxZoom: ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1],
+        minZoom: MIN_ZOOM,
+        maxZoom: MAX_ZOOM,
       }),
       createPluginRegistration(RotatePluginPackage),
     ])

@@ -1,7 +1,10 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 
-import { readDarkPagesPreference } from "./chrome-types"
+import {
+  readDarkPagesPreference,
+  type EditorWorkspaceTab,
+} from "./chrome-types"
 import type { PageSetupUnit } from "./PageSetupDialog"
 
 export const EDITOR_PREFERENCES_STORAGE_KEY = "apex-editor-preferences"
@@ -21,6 +24,7 @@ export type EditorPreferenceValues = Readonly<{
   tagsSidebarOpen: boolean
   tagsSidebarWidth: number
   tableOptionsWidth: number
+  workspaceTab: EditorWorkspaceTab
 }>
 
 type EditorPreferenceActions = Readonly<{
@@ -34,6 +38,7 @@ type EditorPreferenceActions = Readonly<{
   toggleTagsSidebarOpen: () => void
   setTagsSidebarWidth: (width: number) => void
   setTableOptionsWidth: (width: number) => void
+  setWorkspaceTab: (tab: EditorWorkspaceTab) => void
 }>
 
 export type EditorPreferencesState = EditorPreferenceValues &
@@ -41,6 +46,10 @@ export type EditorPreferencesState = EditorPreferenceValues &
 
 type MutableEditorPreferenceValues = {
   -readonly [Key in keyof EditorPreferenceValues]: EditorPreferenceValues[Key]
+}
+
+function isWorkspaceTab(value: unknown): value is EditorWorkspaceTab {
+  return value === "document" || value === "form" || value === "preview"
 }
 
 function isPageSetupUnit(value: unknown): value is PageSetupUnit {
@@ -110,6 +119,9 @@ export function normalizeEditorPreferences(
   ) {
     normalized.tableOptionsWidth = Math.round(candidate.tableOptionsWidth)
   }
+  if (isWorkspaceTab(candidate.workspaceTab)) {
+    normalized.workspaceTab = candidate.workspaceTab
+  }
 
   return normalized
 }
@@ -125,6 +137,7 @@ export const useEditorPreferences = create<EditorPreferencesState>()(
       tagsSidebarOpen: true,
       tagsSidebarWidth: DEFAULT_TAGS_SIDEBAR_WIDTH,
       tableOptionsWidth: DEFAULT_TABLE_OPTIONS_WIDTH,
+      workspaceTab: "document",
       setZoom: (zoom) => set({ zoom }),
       setRulerVisible: (rulerVisible) => set({ rulerVisible }),
       toggleRulerVisible: () =>
@@ -151,6 +164,7 @@ export const useEditorPreferences = create<EditorPreferencesState>()(
             MAX_TABLE_OPTIONS_WIDTH
           ),
         }),
+      setWorkspaceTab: (workspaceTab) => set({ workspaceTab }),
     }),
     {
       name: EDITOR_PREFERENCES_STORAGE_KEY,
@@ -164,6 +178,7 @@ export const useEditorPreferences = create<EditorPreferencesState>()(
         tagsSidebarOpen,
         tagsSidebarWidth,
         tableOptionsWidth,
+        workspaceTab,
       }) => ({
         zoom,
         rulerVisible,
@@ -172,6 +187,7 @@ export const useEditorPreferences = create<EditorPreferencesState>()(
         tagsSidebarOpen,
         tagsSidebarWidth,
         tableOptionsWidth,
+        workspaceTab,
       }),
       merge: (persisted, current) => ({
         ...current,

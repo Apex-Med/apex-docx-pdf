@@ -8,6 +8,7 @@ const PUBLIC_PACKAGES = [
   ["docx", "@apexmed/docx"],
   ["engine", "@apexmed/engine"],
   ["fonts", "@apexmed/fonts"],
+  ["forms", "@apexmed/forms"],
   ["images", "@apexmed/images"],
   ["layout", "@apexmed/layout"],
   ["pdf", "@apexmed/pdf"],

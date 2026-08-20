@@ -12,6 +12,7 @@ const PACKAGE_DIRECTORIES = [
   "docx",
   "engine",
   "fonts",
+  "forms",
   "images",
   "layout",
   "pdf",

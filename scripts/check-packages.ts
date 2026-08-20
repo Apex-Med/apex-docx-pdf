@@ -9,6 +9,7 @@ const packages = [
   "docx",
   "engine",
   "fonts",
+  "forms",
   "images",
   "layout",
   "pdf",

@@ -126,6 +126,7 @@ describe("dark mode adaptivity", () => {
         pageUnit: "cm",
         tagsSidebarWidth: 360,
         tableOptionsWidth: 400,
+        workspaceTab: "form",
       })
     ).toEqual({
       zoom: 125,
@@ -134,6 +135,7 @@ describe("dark mode adaptivity", () => {
       pageUnit: "cm",
       tagsSidebarWidth: 360,
       tableOptionsWidth: 400,
+      workspaceTab: "form",
     })
     expect(
       normalizeEditorPreferences({

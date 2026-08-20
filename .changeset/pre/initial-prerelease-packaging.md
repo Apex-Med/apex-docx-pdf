@@ -6,6 +6,7 @@
 "@apexmed/docx": patch
 "@apexmed/engine": patch
 "@apexmed/fonts": patch
+"@apexmed/forms": patch
 "@apexmed/images": patch
 "@apexmed/layout": patch
 "@apexmed/pdf": patch
