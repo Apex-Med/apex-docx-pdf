@@ -26,7 +26,13 @@ const server = Bun.spawn({
   ],
   cwd: webRoot,
   // Never let a developer's shell turn this into a live Convex test.
-  env: { ...process.env, CONVEX_URL: "", VITE_CONVEX_URL: "" },
+  env: {
+    ...process.env,
+    CONVEX_URL: "",
+    VITE_CONVEX_URL: "",
+    VITE_CLERK_PUBLISHABLE_KEY: "",
+    CLERK_SECRET_KEY: "",
+  },
   stdout: "pipe",
   stderr: "pipe",
 })
@@ -115,10 +121,12 @@ async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
       )
     }
     try {
-      const response = await fetch(baseUrl)
+      const response = await fetch(baseUrl, {
+        signal: AbortSignal.timeout(2_000),
+      })
       if (response.ok) return
     } catch {
-      // Vite is still starting.
+      // Vite is still starting or the first accepted connection hung.
     }
     await Bun.sleep(200)
   }
