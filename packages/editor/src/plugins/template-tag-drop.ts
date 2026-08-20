@@ -1,4 +1,9 @@
-import { Fragment, Slice, type Node as PMNode, type Schema } from "prosemirror-model"
+import {
+  Fragment,
+  Slice,
+  type Node as PMNode,
+  type Schema,
+} from "prosemirror-model"
 import { Plugin } from "prosemirror-state"
 import { dropPoint } from "prosemirror-transform"
 import type { EditorView } from "prosemirror-view"
@@ -85,7 +90,8 @@ export function createTemplateTagDropPlugin(): Plugin {
         dragleave(view, event) {
           if (!isActiveTagDrag(event)) return false
           const related = event.relatedTarget
-          if (related instanceof Node && view.dom.contains(related)) return false
+          if (related instanceof Node && view.dom.contains(related))
+            return false
           hideTagDropCaret(view)
           setTagDraggingAttr(view, false)
           return false

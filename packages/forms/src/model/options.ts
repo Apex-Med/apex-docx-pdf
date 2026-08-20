@@ -117,13 +117,13 @@ function leadingIndent(line: string): number {
   return count
 }
 
-function assignValues(options: MutableOption[], parentPath: readonly string[]): void {
+function assignValues(
+  options: MutableOption[],
+  parentPath: readonly string[]
+): void {
   const taken = new Set<string>()
   for (const option of options) {
-    const slug = uniqueKey(
-      slugifyKey(option.label) || "option",
-      taken
-    )
+    const slug = uniqueKey(slugifyKey(option.label) || "option", taken)
     taken.add(slug)
     const value =
       parentPath.length > 0 ? `${parentPath.join("/")}/${slug}` : slug

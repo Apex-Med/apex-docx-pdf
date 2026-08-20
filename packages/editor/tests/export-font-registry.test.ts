@@ -32,9 +32,7 @@ function textRun(
   }
 }
 
-function documentWith(
-  runs: ReturnType<typeof textRun>[]
-) {
+function documentWith(runs: ReturnType<typeof textRun>[]) {
   return {
     type: "document" as const,
     id: "document" as never,

@@ -91,7 +91,7 @@ export function Calendar({
     day: "size-(--cell-size) py-px text-sm",
     day_button: cn(
       buttonClassNames,
-      "in-data-disabled:pointer-events-none in-[.range-middle]:rounded-none in-[.range-end:not(.range-start)]:rounded-s-none in-[.range-start:not(.range-end)]:rounded-e-none in-[.range-middle]:in-data-selected:bg-accent in-data-selected:bg-primary in-[.range-middle]:in-data-selected:text-foreground in-data-disabled:text-muted-foreground/72 in-data-outside:text-muted-foreground/72 in-data-selected:in-data-outside:text-primary-foreground in-data-selected:text-primary-foreground in-data-disabled:line-through outline-none in-[[data-selected]:not(.range-middle)]:transition-[border-radius,box-shadow] focus-visible:z-1 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      "outline-none focus-visible:z-1 focus-visible:ring-[3px] focus-visible:ring-ring/50 in-data-outside:text-muted-foreground/72 in-data-selected:bg-primary in-data-selected:text-primary-foreground in-data-selected:in-data-outside:text-primary-foreground in-data-disabled:pointer-events-none in-data-disabled:text-muted-foreground/72 in-data-disabled:line-through in-[.range-end:not(.range-start)]:rounded-s-none in-[.range-middle]:rounded-none in-[.range-middle]:in-data-selected:bg-accent in-[.range-middle]:in-data-selected:text-foreground in-[.range-start:not(.range-end)]:rounded-e-none in-[[data-selected]:not(.range-middle)]:transition-[border-radius,box-shadow]"
     ),
     dropdown: "absolute inset-0 bg-popover opacity-0",
     dropdown_root:
@@ -121,8 +121,7 @@ export function Calendar({
   ).reduce(
     (acc, key) => {
       const userClass = classNames?.[key as keyof typeof classNames]
-      const baseClass =
-        defaultClassNames[key as keyof typeof defaultClassNames]
+      const baseClass = defaultClassNames[key as keyof typeof defaultClassNames]
 
       acc[key as keyof typeof defaultClassNames] = userClass
         ? cn(baseClass, userClass)
@@ -157,7 +156,7 @@ export function Calendar({
           className={cn(
             className,
             (orientation === "left" || orientation === "right") &&
-            "rtl:rotate-180"
+              "rtl:rotate-180"
           )}
           aria-hidden="true"
           {...props}

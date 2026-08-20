@@ -55,7 +55,9 @@ function placeCaretBesideTag(
   return true
 }
 
-export function isTemplateTagCaretAnchor(node: PMNode | null | undefined): boolean {
+export function isTemplateTagCaretAnchor(
+  node: PMNode | null | undefined
+): boolean {
   return Boolean(node?.isText && node.text === TEMPLATE_TAG_CARET_ZWSP)
 }
 

@@ -22,24 +22,25 @@ import type {
   ApexReferenceType,
 } from "./types"
 
-const KIND_TO_APEX: Partial<Record<FormQuestionKind | FormLayoutKind, ApexFieldType>> =
-  {
-    short_text: "text",
-    long_text: "textarea",
-    number: "number",
-    date: "date",
-    boolean: "yes_no",
-    select: "select",
-    multi_select: "multiselect",
-    autocomplete: "select",
-    cascader: "select",
-    reference: "reference",
-    attachment: "file",
-    repeater: "repeater",
-    context: "reference",
-    section: "section",
-    heading: "heading",
-  }
+const KIND_TO_APEX: Partial<
+  Record<FormQuestionKind | FormLayoutKind, ApexFieldType>
+> = {
+  short_text: "text",
+  long_text: "textarea",
+  number: "number",
+  date: "date",
+  boolean: "yes_no",
+  select: "select",
+  multi_select: "multiselect",
+  autocomplete: "select",
+  cascader: "select",
+  reference: "reference",
+  attachment: "file",
+  repeater: "repeater",
+  context: "reference",
+  section: "section",
+  heading: "heading",
+}
 
 const APEX_LEAF = new Set<ApexFieldType>([
   "text",
@@ -254,7 +255,11 @@ function toApexVisibility(
     })
     return undefined
   }
-  if (group.match === "any" || group.rules.length > 1 || supported.length !== group.rules.length) {
+  if (
+    group.match === "any" ||
+    group.rules.length > 1 ||
+    supported.length !== group.rules.length
+  ) {
     diagnostics.push({
       code: "CONDITION_SIMPLIFIED",
       severity: "warning",

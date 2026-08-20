@@ -566,7 +566,9 @@ describe("dialogs and commands (phase 5 / 8)", () => {
 
   test("updating a style from selected text refreshes every matching paragraph", () => {
     const state = createEditorStateFromDocx(
-      buildMinimalDocx({ paragraphs: ["First heading", "Body", "Second heading"] })
+      buildMinimalDocx({
+        paragraphs: ["First heading", "Body", "Second heading"],
+      })
     )
     const heading: StyleDefinition = {
       id: "Heading1",
@@ -607,17 +609,19 @@ describe("dialogs and commands (phase 5 / 8)", () => {
     )
     const firstSelected = bothStyled.state.apply(
       bothStyled.state.tr.setSelection(
-        TextSelection.create(
-          bothStyled.state.doc,
-          firstText.from,
-          firstText.to
-        )
+        TextSelection.create(bothStyled.state.doc, firstText.from, firstText.to)
       )
     )
-    const restyled = applyCommandToSemantic(firstSelected, setFontFamily("Aptos"))
+    const restyled = applyCommandToSemantic(
+      firstSelected,
+      setFontFamily("Aptos")
+    )
     const sized = applyCommandToSemantic(restyled.state, setFontSize(320))
     const weighted = applyCommandToSemantic(sized.state, setFontWeight(500))
-    const colored = applyCommandToSemantic(weighted.state, setTextColor("#2563eb"))
+    const colored = applyCommandToSemantic(
+      weighted.state,
+      setTextColor("#2563eb")
+    )
     const highlighted = applyCommandToSemantic(
       colored.state,
       setHighlightColor("#fef08a")

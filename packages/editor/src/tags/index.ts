@@ -39,7 +39,12 @@ export {
   type TemplateMarkerMatch,
   type TemplateMarkerType,
 } from "./block-placeholder"
-export { isValidTemplatePath, prettifySlug, slugifyLabel, uniqueSlug } from "./slug"
+export {
+  isValidTemplatePath,
+  prettifySlug,
+  slugifyLabel,
+  uniqueSlug,
+} from "./slug"
 export { useTemplateTagStore } from "./store"
 export {
   DATE_ONLY_PATTERNS,

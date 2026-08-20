@@ -163,11 +163,7 @@ function handleTableChromeClick(view: EditorView, event: MouseEvent): boolean {
   if (nearestBelow) {
     const page = pageBoxForTable(nearestBelow.table)
     const closeAbove = nearestBelow.box.top - click.y < 120
-    if (
-      closeAbove &&
-      click.x >= page.left &&
-      click.x <= page.right
-    ) {
+    if (closeAbove && click.x >= page.left && click.x <= page.right) {
       const found = tableNodeAt(view, nearestBelow.table)
       if (found && !view.state.doc.resolve(found.pos).nodeBefore) {
         return placeAroundTable(view, found.pos, found.node, "before")

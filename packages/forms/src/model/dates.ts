@@ -10,10 +10,7 @@ export type DateAnswerOptions = Readonly<{
   dateRange?: boolean
 }>
 
-export function isDateAnswerPart(
-  value: string,
-  includeTime: boolean
-): boolean {
+export function isDateAnswerPart(value: string, includeTime: boolean): boolean {
   if (includeTime) return DATETIME_RE.test(value)
   return DATE_RE.test(value) || DATETIME_RE.test(value)
 }
@@ -36,7 +33,9 @@ export function isCompleteDateAnswer(
   if (options.dateRange === true) {
     return (
       parts.length === 2 &&
-      parts.every((part) => isDateAnswerPart(part, options.includeTime === true))
+      parts.every((part) =>
+        isDateAnswerPart(part, options.includeTime === true)
+      )
     )
   }
   return (

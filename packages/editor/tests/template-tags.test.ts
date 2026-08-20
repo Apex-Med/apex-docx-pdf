@@ -39,7 +39,10 @@ const style: TextStyle = {
   color: "#000000",
 }
 
-function paragraph(text: string, extras: Partial<SemanticDocument> = {}): SemanticDocument {
+function paragraph(
+  text: string,
+  extras: Partial<SemanticDocument> = {}
+): SemanticDocument {
   const blank = createBlankDocument()
   const run: SemanticText = {
     type: "text",
@@ -182,9 +185,7 @@ describe("template tag bridge", () => {
   })
 
   test("hydrate adopts unknown value tags and leaves #each alone", () => {
-    const document = paragraph(
-      "Hi {{customer.name:string}} {{#each items}}"
-    )
+    const document = paragraph("Hi {{customer.name:string}} {{#each items}}")
     const hydrated = hydrateTemplateTagCatalog(document)
     const tags = (
       hydrated.editorMetadata as { templateTags?: { slug: string }[] }
@@ -269,4 +270,3 @@ describe("template tag CSS", () => {
     expect(EDITOR_CSS).toBe(raw)
   })
 })
-

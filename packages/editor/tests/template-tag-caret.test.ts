@@ -26,7 +26,10 @@ const tag = {
 
 function tagPosition(doc: {
   descendants: (
-    fn: (node: { type: { name: string }; nodeSize: number }, pos: number) => void
+    fn: (
+      node: { type: { name: string }; nodeSize: number },
+      pos: number
+    ) => void
   ) => void
 }): number {
   let found = -1
@@ -82,7 +85,10 @@ describe("template tag caret", () => {
     )
     const before = inserted.state.apply(
       inserted.state.tr.setSelection(
-        TextSelection.create(inserted.state.doc, tagPosition(inserted.state.doc))
+        TextSelection.create(
+          inserted.state.doc,
+          tagPosition(inserted.state.doc)
+        )
       )
     )
     const right = applyCommandToSemantic(before, arrowPastTemplateTag(1))

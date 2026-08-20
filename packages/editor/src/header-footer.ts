@@ -219,11 +219,7 @@ export function headerFooterText(
   if (!id) return ""
   const definitions = kind === "header" ? document.headers : document.footers
   const definition = definitions.find((entry) => entry.id === id)
-  return (
-    definition?.blocks
-      .map(blockText)
-      .join("\n") ?? ""
-  )
+  return definition?.blocks.map(blockText).join("\n") ?? ""
 }
 
 /** Apply a plain-text header/footer edit to one section without mutating peers. */

@@ -11,7 +11,10 @@ describe("devtools public API", () => {
   })
 
   test("display-list preview hides layout-trace diagnostics unless overlays are requested", () => {
-    const source = readFileSync(join(import.meta.dir, "../src/index.tsx"), "utf8")
+    const source = readFileSync(
+      join(import.meta.dir, "../src/index.tsx"),
+      "utf8"
+    )
     expect(source).toContain("HIDDEN_TRACE_OVERLAYS")
     expect(source).toContain(
       "overlays={{ ...HIDDEN_TRACE_OVERLAYS, ...overlays }}"
@@ -22,7 +25,10 @@ describe("devtools public API", () => {
   })
 
   test("glyph-run SVG preserves spaces so tag-adjacent gaps do not collapse", () => {
-    const source = readFileSync(join(import.meta.dir, "../src/index.tsx"), "utf8")
+    const source = readFileSync(
+      join(import.meta.dir, "../src/index.tsx"),
+      "utf8"
+    )
     expect(source).toContain('xmlSpace="preserve"')
     expect(source).toContain('whiteSpace: "pre"')
     expect(source).toContain("isWhitespaceOnlyGlyphText")

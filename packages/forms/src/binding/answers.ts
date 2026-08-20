@@ -53,7 +53,11 @@ function mapAnswer(
   if (question.kind === "number" && typeof value === "number") {
     return { kind: "number", value }
   }
-  if (question.kind === "date" && typeof value === "string" && value.length > 0) {
+  if (
+    question.kind === "date" &&
+    typeof value === "string" &&
+    value.length > 0
+  ) {
     return { kind: "date", value }
   }
   if (typeof value === "boolean") {
@@ -62,9 +66,7 @@ function mapAnswer(
   if (typeof value === "string") {
     const kind: BoundTagKind = question.kind === "date" ? "date" : "string"
     if (value.length === 0 || isOtherSentinel(value)) return null
-    return kind === "date"
-      ? { kind: "date", value }
-      : { kind: "string", value }
+    return kind === "date" ? { kind: "date", value } : { kind: "string", value }
   }
   if (Array.isArray(value)) {
     if (value.every((item) => typeof item === "string")) {
@@ -89,14 +91,12 @@ function toTemplateValue(
   question: FormQuestion,
   value: FormAnswerValue | undefined
 ): unknown {
-  if (value === undefined || value === null) return question.kind === "boolean" ? false : ""
+  if (value === undefined || value === null)
+    return question.kind === "boolean" ? false : ""
   if (typeof value === "string") {
     return isOtherSentinel(value) ? "" : value
   }
-  if (
-    Array.isArray(value) &&
-    value.every((item) => typeof item === "string")
-  ) {
+  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
     return resolvedChoiceStrings(value)
   }
   if (question.kind === "repeater" && Array.isArray(value)) {

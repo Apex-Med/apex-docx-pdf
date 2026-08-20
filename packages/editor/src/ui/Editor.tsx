@@ -645,10 +645,12 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
       formTemplateRef.current = form
       formAnswersRef.current = answers
       const mapped = answersToTagValues(form, answers)
-      useTemplateTagStore.getState().reset(
-        mergeCatalogWithForm(meta.tags, form),
-        { ...meta.values, ...mapped }
-      )
+      useTemplateTagStore
+        .getState()
+        .reset(mergeCatalogWithForm(meta.tags, form), {
+          ...meta.values,
+          ...mapped,
+        })
       if (hydrated !== documentRef.current) {
         documentRef.current = hydrated
         setDocument(hydrated)
@@ -764,11 +766,11 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             const numbering = numberingDefinitionFromTransaction(tr)
             const numberingDefinitions = numbering
               ? [
-                ...current.numberingDefinitions.filter(
-                  (definition) => definition.id !== numbering.id
-                ),
-                numbering,
-              ]
+                  ...current.numberingDefinitions.filter(
+                    (definition) => definition.id !== numbering.id
+                  ),
+                  numbering,
+                ]
               : current.numberingDefinitions
             const semantic = toSemanticDocument(next.doc, {
               assets,
@@ -846,10 +848,12 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         formTemplateRef.current = form
         formAnswersRef.current = answers
         const mapped = answersToTagValues(form, answers)
-        useTemplateTagStore.getState().reset(
-          mergeCatalogWithForm(tagMeta.tags, form),
-          { ...tagMeta.values, ...mapped }
-        )
+        useTemplateTagStore
+          .getState()
+          .reset(mergeCatalogWithForm(tagMeta.tags, form), {
+            ...tagMeta.values,
+            ...mapped,
+          })
         updateDocument(hydrated)
         setDocument(hydrated)
         const metadata = hydrated.editorMetadata as
@@ -977,8 +981,7 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           setStatus("Generated PDF from form answers")
           return bytes
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error)
+          const message = error instanceof Error ? error.message : String(error)
           setStatus(`PDF export unavailable: ${message}`)
           throw error
         }
@@ -1006,30 +1009,30 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
     const onNew = useCallback(() => {
       const metadata = documentRef.current.editorMetadata as
         | {
-          defaultPageSetup?: {
-            pageWidth: number
-            pageHeight: number
-            marginTop: number
-            marginRight: number
-            marginBottom: number
-            marginLeft: number
+            defaultPageSetup?: {
+              pageWidth: number
+              pageHeight: number
+              marginTop: number
+              marginRight: number
+              marginBottom: number
+              marginLeft: number
+            }
+            pageUnit?: PageSetupUnit
           }
-          pageUnit?: PageSetupUnit
-        }
         | undefined
       const defaults = metadata?.defaultPageSetup
       const blank = createBlankDocument(
         defaults
           ? {
-            pageWidth: defaults.pageWidth,
-            pageHeight: defaults.pageHeight,
-            margins: {
-              top: defaults.marginTop,
-              right: defaults.marginRight,
-              bottom: defaults.marginBottom,
-              left: defaults.marginLeft,
-            },
-          }
+              pageWidth: defaults.pageWidth,
+              pageHeight: defaults.pageHeight,
+              margins: {
+                top: defaults.marginTop,
+                right: defaults.marginRight,
+                bottom: defaults.marginBottom,
+                left: defaults.marginLeft,
+              },
+            }
           : undefined
       )
       const seeded = mergeDefaultTemplateTags([], {})
@@ -1243,9 +1246,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         )
         const transaction = refsChanged
           ? view.state.tr.setNodeMarkup(position, undefined, {
-            ...targetAttrs,
-            ...headerFooterAttrs,
-          })
+              ...targetAttrs,
+              ...headerFooterAttrs,
+            })
           : view.state.tr.setMeta(HEADER_FOOTER_CONTENT_TR_META, true)
         view.dispatch(transaction)
       },
@@ -1420,8 +1423,8 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             .flatMap((block) =>
               block.type === "paragraph"
                 ? block.children
-                  .filter((child) => child.type === "text")
-                  .map((child) => (child.type === "text" ? child.text : ""))
+                    .filter((child) => child.type === "text")
+                    .map((child) => (child.type === "text" ? child.text : ""))
                 : []
             )
             .join(" ")
@@ -1455,7 +1458,19 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         beginHeaderFooterEditing,
         onNew,
         runClipboard,
-        saveStyleFromSelection, fontCatalog, onExportPdf, onOpenDocx, onPrint, onSaveDocx, run, selectionSnapshot, setWorkspaceTab, setZoom, toggleDarkPages, toggleRulerVisible, toggleTagsSidebarOpen
+        saveStyleFromSelection,
+        fontCatalog,
+        onExportPdf,
+        onOpenDocx,
+        onPrint,
+        onSaveDocx,
+        run,
+        selectionSnapshot,
+        setWorkspaceTab,
+        setZoom,
+        toggleDarkPages,
+        toggleRulerVisible,
+        toggleTagsSidebarOpen,
       ]
     )
 
@@ -1515,9 +1530,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
         {...(darkPages ? { "data-apex-dark-pages": "true" } : {})}
         {...(headerFooterEditing
           ? {
-            "data-apex-header-footer-editing": "true",
-            "data-apex-header-footer-kind": headerFooterEditing.kind,
-          }
+              "data-apex-header-footer-editing": "true",
+              "data-apex-header-footer-kind": headerFooterEditing.kind,
+            }
           : {})}
       >
         <EditorChrome
@@ -1555,7 +1570,13 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
           }}
         >
           <div className="flex min-h-0 flex-1">
-            <div className={workspaceTab === "document" ? "flex min-h-0 min-w-0 flex-1 gap-3 p-3" : "flex min-h-0 min-w-0 flex-1"}>
+            <div
+              className={
+                workspaceTab === "document"
+                  ? "flex min-h-0 min-w-0 flex-1 gap-3 p-3"
+                  : "flex min-h-0 min-w-0 flex-1"
+              }
+            >
               <div className="relative min-h-0 min-w-0 flex-1">
                 <div
                   ref={hostRef}
@@ -1596,9 +1617,9 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
                   readOnly={readOnly || workspaceTab !== "document"}
                 />
                 {workspaceTab === "document" &&
-                  headerFooterEditing &&
-                  hostRef.current &&
-                  viewRef.current ? (
+                headerFooterEditing &&
+                hostRef.current &&
+                viewRef.current ? (
                   <HeaderFooterEditor
                     key={`${headerFooterEditing.sectionId}:${headerFooterEditing.kind}:${headerFooterEditing.variant}`}
                     surface={hostRef.current}
@@ -1862,16 +1883,16 @@ export const ApexEditor = forwardRef<ApexEditorHandle, ApexEditorProps>(
             spacingAfter: selectionSnapshot.paragraph?.spacingAfter,
             value240ths:
               selectionSnapshot.paragraph?.lineSpacing &&
-                typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
-                "value240ths" in
+              typeof selectionSnapshot.paragraph.lineSpacing === "object" &&
+              "value240ths" in
                 (selectionSnapshot.paragraph.lineSpacing as object)
                 ? Number(
-                  (
-                    selectionSnapshot.paragraph.lineSpacing as {
-                      value240ths: number
-                    }
-                  ).value240ths
-                )
+                    (
+                      selectionSnapshot.paragraph.lineSpacing as {
+                        value240ths: number
+                      }
+                    ).value240ths
+                  )
                 : null,
           }}
           onApply={(options) => {
@@ -2061,9 +2082,9 @@ function mountEditorHeadless(
         const asset = imageAssetFromTransaction(tr)
         const assets = asset
           ? [
-            ...documentRef.current.assets.filter((a) => a.id !== asset.id),
-            asset,
-          ]
+              ...documentRef.current.assets.filter((a) => a.id !== asset.id),
+              asset,
+            ]
           : documentRef.current.assets
         const semantic = toSemanticDocument(next.doc, {
           assets,

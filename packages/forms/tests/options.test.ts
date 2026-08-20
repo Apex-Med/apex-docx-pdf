@@ -16,7 +16,9 @@ describe("form options", () => {
   })
 
   test("parseOptionTree nests indented lines and round-trips labels", () => {
-    const tree = parseOptionTree("Cardiology\n  Ward A\n  Ward B\nICU\n  Ward C")
+    const tree = parseOptionTree(
+      "Cardiology\n  Ward A\n  Ward B\nICU\n  Ward C"
+    )
     expect(tree).toEqual([
       {
         value: "cardiology",

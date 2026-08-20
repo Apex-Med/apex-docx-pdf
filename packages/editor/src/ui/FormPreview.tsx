@@ -111,7 +111,11 @@ export function FormPreview({
               )}
             </Button>
           ) : (
-            <Button type="button" variant="outline" onClick={() => setStep("form")}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep("form")}
+            >
               Back to form
             </Button>
           )
@@ -173,8 +177,14 @@ function PreviewHeader({
     <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
       <div className="min-w-0">
         <h2 className="truncate text-sm font-medium">{title}</h2>
-        <nav aria-label="Preview steps" className="flex items-center gap-2 text-xs">
-          <StepLabel current={step === "form"} onClick={step === "pdf" ? onBack : undefined}>
+        <nav
+          aria-label="Preview steps"
+          className="flex items-center gap-2 text-xs"
+        >
+          <StepLabel
+            current={step === "form"}
+            onClick={step === "pdf" ? onBack : undefined}
+          >
             1. Fill form
           </StepLabel>
           <span className="text-muted-foreground" aria-hidden="true">
@@ -183,7 +193,9 @@ function PreviewHeader({
           <StepLabel current={step === "pdf"}>2. PDF</StepLabel>
         </nav>
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      ) : null}
     </header>
   )
 }

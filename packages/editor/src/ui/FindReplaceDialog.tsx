@@ -31,9 +31,7 @@ export function findTextInDoc(
   let found: FindMatch | null = null
   doc.nodesBetween(pos, doc.content.size, (node, nodePos) => {
     if (found || !node.isText || !node.text) return
-    const haystack = options.caseSensitive
-      ? node.text
-      : node.text.toLowerCase()
+    const haystack = options.caseSensitive ? node.text : node.text.toLowerCase()
     const localFrom = Math.max(0, pos - nodePos)
     const index = haystack.indexOf(needle, localFrom)
     if (index >= 0) {
@@ -118,7 +116,9 @@ export function FindReplaceDialog({
     }
     view.dispatch(
       view.state.tr
-        .setSelection(TextSelection.create(view.state.doc, match.from, match.to))
+        .setSelection(
+          TextSelection.create(view.state.doc, match.from, match.to)
+        )
         .scrollIntoView()
     )
     view.focus()
@@ -152,9 +152,7 @@ export function FindReplaceDialog({
     if (!runFind()) return false
     const next = view.state.selection
     view.dispatch(
-      view.state.tr
-        .insertText(replaceText, next.from, next.to)
-        .scrollIntoView()
+      view.state.tr.insertText(replaceText, next.from, next.to).scrollIntoView()
     )
     setStatus("Replaced")
     return true
@@ -171,7 +169,9 @@ export function FindReplaceDialog({
       setStatus("No matches")
       return 0
     }
-    const matches = findAllTextInDoc(view.state.doc, findText, { caseSensitive })
+    const matches = findAllTextInDoc(view.state.doc, findText, {
+      caseSensitive,
+    })
     if (matches.length === 0) {
       setStatus("No matches")
       return 0

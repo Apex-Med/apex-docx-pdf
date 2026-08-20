@@ -1,7 +1,10 @@
 import { OFFLINE_FONT_CATALOG } from "@apexmed/fonts"
 import { join } from "node:path"
 
-const output = join(import.meta.dir, "../src/fonts/catalog-font-urls.generated.ts")
+const output = join(
+  import.meta.dir,
+  "../src/fonts/catalog-font-urls.generated.ts"
+)
 const assets = OFFLINE_FONT_CATALOG.flatMap(({ faces }) =>
   faces.map(({ asset }) => asset)
 )

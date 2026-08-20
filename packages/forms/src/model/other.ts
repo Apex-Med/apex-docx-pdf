@@ -20,7 +20,9 @@ export function isKnownChoiceValue(
   return knownChoiceValues(options).has(value)
 }
 
-export function isUnresolvedOtherValue(value: string | undefined | null): boolean {
+export function isUnresolvedOtherValue(
+  value: string | undefined | null
+): boolean {
   if (typeof value !== "string") return false
   return isOtherSentinel(value.trim())
 }
@@ -29,7 +31,11 @@ export function otherTextFromSelectValue(
   value: string | undefined,
   options: readonly FormOption[] | undefined
 ): string {
-  if (typeof value !== "string" || value.length === 0 || isOtherSentinel(value)) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    isOtherSentinel(value)
+  ) {
     return ""
   }
   if (isKnownChoiceValue(value, options)) return ""
@@ -41,7 +47,8 @@ export function isOtherSelectedValue(
   options: readonly FormOption[] | undefined,
   allowOther: boolean
 ): boolean {
-  if (!allowOther || typeof value !== "string" || value.length === 0) return false
+  if (!allowOther || typeof value !== "string" || value.length === 0)
+    return false
   return isOtherSentinel(value) || !isKnownChoiceValue(value, options)
 }
 
@@ -90,9 +97,7 @@ export function joinMultiSelectValues(
   return [...known, otherText.length === 0 ? OTHER_OPTION_VALUE : otherText]
 }
 
-export function resolvedChoiceStrings(
-  value: readonly string[]
-): string[] {
+export function resolvedChoiceStrings(value: readonly string[]): string[] {
   return value.filter(
     (item) => item.trim().length > 0 && !isOtherSentinel(item)
   )

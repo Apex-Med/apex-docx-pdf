@@ -358,10 +358,10 @@ export function PlaygroundWorkspace({
     const dateValue =
       field.kind === "date" && typeof value === "string" && value !== ""
         ? playgroundDateInputToIso(
-          value,
-          dateFieldInputPrecision(field),
-          PLAYGROUND_RENDER_OPTIONS.timeZone
-        )
+            value,
+            dateFieldInputPrecision(field),
+            PLAYGROUND_RENDER_OPTIONS.timeZone
+          )
         : undefined
     if (
       field.kind === "date" &&
@@ -1588,10 +1588,10 @@ function FieldInput({
           value={
             field.kind === "date" && datePrecision !== undefined
               ? playgroundDateInputValue(
-                value,
-                datePrecision,
-                PLAYGROUND_RENDER_OPTIONS.timeZone
-              )
+                  value,
+                  datePrecision,
+                  PLAYGROUND_RENDER_OPTIONS.timeZone
+                )
               : typeof value === "string" || typeof value === "number"
                 ? String(value)
                 : ""

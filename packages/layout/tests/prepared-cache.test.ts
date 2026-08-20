@@ -7,10 +7,7 @@ import {
   type SemanticParagraph,
   type TextStyle,
 } from "@apexmed/core"
-import {
-  createPreparedBlockCache,
-  layoutDocument,
-} from "../src/index"
+import { createPreparedBlockCache, layoutDocument } from "../src/index"
 
 const style: TextStyle = {
   fontFamily: "Helvetica",

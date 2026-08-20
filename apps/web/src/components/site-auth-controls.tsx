@@ -54,7 +54,10 @@ function AuthControlsFallback({
       <Link
         to="/sign-in"
         search={{ redirect: "/app" }}
-        className={cn(buttonVariants({ size: "sm" }), "tracking-normal normal-case")}
+        className={cn(
+          buttonVariants({ size: "sm" }),
+          "tracking-normal normal-case"
+        )}
       >
         Log in / Sign up
       </Link>

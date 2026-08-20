@@ -43,7 +43,7 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
     const paragraphs = result.document.sections[0]?.blocks.filter(
       (b) => b.type === "paragraph"
     )
-    expect((paragraphs?.length ?? 0)).toBeGreaterThanOrEqual(2)
+    expect(paragraphs?.length ?? 0).toBeGreaterThanOrEqual(2)
     expect(new Set(paragraphs?.map((paragraph) => paragraph.id)).size).toBe(
       paragraphs?.length ?? 0
     )
@@ -118,7 +118,7 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
     )
     expect(texts.join("")).toContain("First")
     expect(texts.join("")).toContain("Second")
-    expect((paragraphs?.length ?? 99)).toBeLessThanOrEqual(2)
+    expect(paragraphs?.length ?? 99).toBeLessThanOrEqual(2)
   })
 
   test("insertTable produces an editable table structure in the PM doc", () => {
@@ -221,7 +221,8 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
   })
 
   test("manual page break gets a full page-stack spacer placement", () => {
-    const { layoutDocument } = require("@apexmed/layout") as typeof import("@apexmed/layout")
+    const { layoutDocument } =
+      require("@apexmed/layout") as typeof import("@apexmed/layout")
     const {
       mergeManualPageBreakPlacements,
       pageBreaksFromTrace,
@@ -267,14 +268,16 @@ describe("editing UX: Enter, Backspace, page break visuals, tables", () => {
   })
 
   test("keymap includes Enter and Backspace bindings", () => {
-    const { editorKeymap } = require("../src/commands") as typeof import("../src/commands")
+    const { editorKeymap } =
+      require("../src/commands") as typeof import("../src/commands")
     // Plugin stores bindings; smoke that the keymap plugin exists
     expect(editorKeymap).toBeTruthy()
     expect(editorKeymap.spec).toBeTruthy()
   })
 
   test("keymap binds Tab to indent-or-next-cell", () => {
-    const { handleTab, handleShiftTab } = require("../src/commands") as typeof import("../src/commands")
+    const { handleTab, handleShiftTab } =
+      require("../src/commands") as typeof import("../src/commands")
     expect(handleTab).toBeTypeOf("function")
     expect(handleShiftTab).toBeTypeOf("function")
   })

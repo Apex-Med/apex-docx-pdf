@@ -30,9 +30,7 @@ export function PortalContainerProvider({
 }
 
 /** Ref suitable for Base UI Portal `container` prop (supports ShadowRoot). */
-export function usePortalContainer():
-  | PortalContainerRef
-  | undefined {
+export function usePortalContainer(): PortalContainerRef | undefined {
   const ctx = React.useContext(PortalContainerContext)
   return ctx ?? undefined
 }

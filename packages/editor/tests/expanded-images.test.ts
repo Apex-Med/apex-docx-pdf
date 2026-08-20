@@ -34,9 +34,9 @@ describe("expanded image insert", () => {
     expect(asset.rasterFallback?.bytes.length).toBeGreaterThan(0)
     const result = applyCommandToSemantic(state, command)
     expect(result.applied).toBe(true)
-    expect(result.document.assets.some((a) => a.mimeType === "image/svg+xml")).toBe(
-      true
-    )
+    expect(
+      result.document.assets.some((a) => a.mimeType === "image/svg+xml")
+    ).toBe(true)
   })
 
   test("setImageAltText updates selected image", () => {

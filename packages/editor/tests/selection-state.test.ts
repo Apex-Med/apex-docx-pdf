@@ -54,7 +54,9 @@ describe("selection-state plugin", () => {
     expect(getSelectionSnapshot(state)?.empty).toBe(true)
     const end = state.doc.content.size - 2
     state = state.apply(
-      state.tr.setSelection(TextSelection.create(state.doc, 1, Math.max(1, end)))
+      state.tr.setSelection(
+        TextSelection.create(state.doc, 1, Math.max(1, end))
+      )
     )
     // blank doc may still be empty selection range; just ensure plugin runs
     expect(getSelectionSnapshot(state)).not.toBeNull()

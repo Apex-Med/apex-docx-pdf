@@ -14,10 +14,16 @@ describe("form conditions", () => {
   test("eq / neq / in / not_in compare string answers", () => {
     const answers = { kind: "referral" }
     expect(
-      isRuleSatisfied({ fieldKey: "kind", op: "eq", value: "referral" }, answers)
+      isRuleSatisfied(
+        { fieldKey: "kind", op: "eq", value: "referral" },
+        answers
+      )
     ).toBe(true)
     expect(
-      isRuleSatisfied({ fieldKey: "kind", op: "neq", value: "admission" }, answers)
+      isRuleSatisfied(
+        { fieldKey: "kind", op: "neq", value: "admission" },
+        answers
+      )
     ).toBe(true)
     expect(
       isRuleSatisfied(
@@ -38,7 +44,9 @@ describe("form conditions", () => {
     expect(
       isRuleSatisfied({ fieldKey: "n", op: "is_empty" }, { n: "__other__" })
     ).toBe(true)
-    expect(isRuleSatisfied({ fieldKey: "n", op: "is_set" }, { n: 3 })).toBe(true)
+    expect(isRuleSatisfied({ fieldKey: "n", op: "is_set" }, { n: 3 })).toBe(
+      true
+    )
     expect(
       isRuleSatisfied({ fieldKey: "n", op: "gt", value: 2 }, { n: 3 })
     ).toBe(true)

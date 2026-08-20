@@ -181,8 +181,10 @@ export function FontPicker(props: FontPickerProps): ReactNode {
   const weightControl = selectedMeta ? (
     <div className="flex flex-col gap-2 px-1 py-0.5">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-xs font-medium text-muted-foreground">Weight</span>
-        <span className="text-xs tabular-nums text-muted-foreground">
+        <span className="text-xs font-medium text-muted-foreground">
+          Weight
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">
           <span className="font-medium text-foreground">
             {fontWeightLabel(displayWeight)}
           </span>{" "}
@@ -214,8 +216,7 @@ export function FontPicker(props: FontPickerProps): ReactNode {
           getAriaLabel={() => `Font weight for ${props.value}`}
           getAriaValueText={(_formattedValue, value) => {
             const weight =
-              weights[clampWeightIndex(value, weights.length)] ??
-              displayWeight
+              weights[clampWeightIndex(value, weights.length)] ?? displayWeight
             return `${fontWeightLabel(weight)}, ${weight}`
           }}
           className="w-full"

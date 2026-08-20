@@ -134,7 +134,10 @@ const UNIT_GROUPS: readonly UnitGroupSeed[] = [
     group: "Laboratory · SI",
     units: [
       { value: "mol/L", keywords: "molar si concentration" },
-      { value: "mmol/L", keywords: "millimole si glucose electrolytes sodium potassium" },
+      {
+        value: "mmol/L",
+        keywords: "millimole si glucose electrolytes sodium potassium",
+      },
       { value: "µmol/L", keywords: "umol/L micromole si bilirubin creatinine" },
       { value: "nmol/L", keywords: "nanomole si hormones" },
       { value: "pmol/L", keywords: "picomole si hormones insulin" },
@@ -152,14 +155,23 @@ const UNIT_GROUPS: readonly UnitGroupSeed[] = [
       { value: "mOsm/L", keywords: "osmolarity si" },
       { value: "mOsm/kg", keywords: "osmolality si" },
       { value: "mmol/mol", keywords: "hba1c ifcc si" },
-      { value: "mEq/L", keywords: "milliequivalent electrolytes sodium potassium bicarbonate" },
+      {
+        value: "mEq/L",
+        keywords: "milliequivalent electrolytes sodium potassium bicarbonate",
+      },
     ],
   },
   {
     group: "Laboratory · US",
     units: [
-      { value: "mg/dL", keywords: "us conventional glucose cholesterol creatinine calcium" },
-      { value: "g/dL", keywords: "us conventional haemoglobin hemoglobin albumin protein" },
+      {
+        value: "mg/dL",
+        keywords: "us conventional glucose cholesterol creatinine calcium",
+      },
+      {
+        value: "g/dL",
+        keywords: "us conventional haemoglobin hemoglobin albumin protein",
+      },
       { value: "µg/dL", keywords: "ug/dL mcg/dL us iron cortisol" },
       { value: "ng/dL", keywords: "us hormones testosterone" },
       { value: "pg/mL", keywords: "us hormones bnp" },
@@ -220,15 +232,15 @@ const UNIT_GROUPS: readonly UnitGroupSeed[] = [
   },
 ]
 
-export const NUMBER_UNIT_OPTIONS: readonly NumberUnitOption[] = UNIT_GROUPS.flatMap(
-  (group) =>
+export const NUMBER_UNIT_OPTIONS: readonly NumberUnitOption[] =
+  UNIT_GROUPS.flatMap((group) =>
     group.units.map((unit) => ({
       value: unit.value,
       label: unit.value,
       group: group.group,
       ...(unit.keywords ? { keywords: unit.keywords } : {}),
     }))
-)
+  )
 
 export const NUMBER_UNIT_VALUES = new Set(
   NUMBER_UNIT_OPTIONS.map((unit) => unit.value)

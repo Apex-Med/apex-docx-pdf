@@ -54,7 +54,9 @@ describe("form node ops", () => {
     form = addNode(form, pageId, "short_text", { label: "Name" })
     form = addNode(form, pageId, "short_text", { label: "Name" })
     form = addNode(form, pageId, "repeater", { label: "Medications" })
-    const repeater = form.pages[0]!.nodes.find((node) => node.kind === "repeater")
+    const repeater = form.pages[0]!.nodes.find(
+      (node) => node.kind === "repeater"
+    )
     expect(repeater).toBeDefined()
     form = addNode(form, pageId, "short_text", {
       label: "Name",
@@ -94,7 +96,9 @@ describe("form node ops", () => {
     expect(copy?.key).not.toBe(repeater.key)
     if (copy && "children" in copy) {
       expect(copy.children?.[0]?.id).not.toBe(
-        "children" in repeater ? repeater.children?.[0]?.id : copy.children?.[0]?.id
+        "children" in repeater
+          ? repeater.children?.[0]?.id
+          : copy.children?.[0]?.id
       )
     }
   })
@@ -282,10 +286,7 @@ describe("form node ops", () => {
     if (numbered.kind !== "number") throw new Error("expected number")
     expect(numbered.required).toBe(true)
     expect(numbered.validation).toEqual({ min: 1, max: 10 })
-    const withUnit = nodeWithKind(
-      { ...numbered, unit: "mmol/L" },
-      "number"
-    )
+    const withUnit = nodeWithKind({ ...numbered, unit: "mmol/L" }, "number")
     expect(withUnit.kind).toBe("number")
     if (withUnit.kind !== "number") throw new Error("expected number")
     expect(withUnit.unit).toBe("mmol/L")

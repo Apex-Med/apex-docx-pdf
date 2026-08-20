@@ -116,8 +116,7 @@ type LayoutTraceEventBase = Readonly<{
 }>
 
 export type LayoutTraceEvent =
-  | (LayoutTraceEventBase &
-      Readonly<{ kind: "block" | "table"; bounds: Rect }>)
+  | (LayoutTraceEventBase & Readonly<{ kind: "block" | "table"; bounds: Rect }>)
   | (LayoutTraceEventBase &
       Readonly<{
         kind: "line"

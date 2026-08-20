@@ -248,7 +248,7 @@ function TypographyStyleActionMenu({
       />
       <DropdownMenuContent
         align="start"
-        className="min-w-64 w-auto"
+        className="w-auto min-w-64"
         side="right"
         sideOffset={0}
       >
@@ -712,7 +712,7 @@ export function Toolbar({
                 </SelectTrigger>
                 <SelectContent
                   alignItemWithTrigger={false}
-                  className="w-auto min-w-48 max-h-80!"
+                  className="max-h-80! w-auto min-w-48"
                 >
                   <SelectGroup>
                     {styleNames.map((style) => (
@@ -1292,46 +1292,46 @@ export function Toolbar({
         role="toolbar"
         aria-label="Formatting toolbar"
       >
-      <div
-        ref={measureRef}
-        className="pointer-events-none absolute top-0 left-0 -z-50 flex h-12 items-center gap-1 opacity-0"
-        aria-hidden
-      >
-        {TOOLBAR_ORDER.map((id) => renderItem(id))}
-      </div>
+        <div
+          ref={measureRef}
+          className="pointer-events-none absolute top-0 left-0 -z-50 flex h-12 items-center gap-1 opacity-0"
+          aria-hidden
+        >
+          {TOOLBAR_ORDER.map((id) => renderItem(id))}
+        </div>
 
-      {shownItems.map((id) => renderItem(id))}
+        {shownItems.map((id) => renderItem(id))}
 
-      <div className="ml-auto flex h-9 shrink-0 items-center justify-end gap-1">
-        {snapshot.table.inTable ? (
-          <ToolbarIconButton
-            label="Open table options"
-            icon={ViewSidebarRightIcon}
-            pressed={tableOptionsOpen}
-            onClick={actions.onTableProperties}
-          />
-        ) : null}
-        {overflowItems.length > 0 ? (
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="More tools"
-                  className="apex-editor-toolbar__more"
-                />
-              }
-            >
-              <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-            </PopoverTrigger>
-            <PopoverContent className="flex max-w-[min(100vw-2rem,360px)] flex-wrap gap-2 p-2">
-              {overflowItems.map((id) => renderItem(id, true))}
-            </PopoverContent>
-          </Popover>
-        ) : null}
-      </div>
+        <div className="ml-auto flex h-9 shrink-0 items-center justify-end gap-1">
+          {snapshot.table.inTable ? (
+            <ToolbarIconButton
+              label="Open table options"
+              icon={ViewSidebarRightIcon}
+              pressed={tableOptionsOpen}
+              onClick={actions.onTableProperties}
+            />
+          ) : null}
+          {overflowItems.length > 0 ? (
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="More tools"
+                    className="apex-editor-toolbar__more"
+                  />
+                }
+              >
+                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+              </PopoverTrigger>
+              <PopoverContent className="flex max-w-[min(100vw-2rem,360px)] flex-wrap gap-2 p-2">
+                {overflowItems.map((id) => renderItem(id, true))}
+              </PopoverContent>
+            </Popover>
+          ) : null}
+        </div>
       </div>
       {styleActionMenu ? (
         <TypographyStyleActionMenu

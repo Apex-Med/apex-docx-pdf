@@ -12,59 +12,59 @@ import {
   detectTanStackStartProject,
   removeTanStackLiveAdapter,
   unpatchTanStackRoot,
-} from '../tanstack-adapter.mjs';
+} from "../tanstack-adapter.mjs"
 
 export const tanstackStart = {
-  name: 'tanstack-start',
+  name: "tanstack-start",
 
   detect(cwd) {
-    return detectTanStackStartProject(cwd);
+    return detectTanStackStartProject(cwd)
   },
 
   inject: {
-    kind: 'adapter',
+    kind: "adapter",
 
     apply({ cwd, port, token, project }) {
-      return applyTanStackLiveAdapter({ cwd, port, token, project });
+      return applyTanStackLiveAdapter({ cwd, port, token, project })
     },
 
     remove({ cwd, project }) {
-      return removeTanStackLiveAdapter({ cwd, project });
+      return removeTanStackLiveAdapter({ cwd, project })
     },
 
     // The mount component's extension follows the root route's, so the path
     // cannot live in the static ignore list.
     ignorePatterns(project) {
-      return project?.componentFile ? [project.componentFile] : [];
+      return project?.componentFile ? [project.componentFile] : []
     },
 
     artifacts({ project }) {
-      if (!project) return [];
+      if (!project) return []
       return [
         {
-          kind: 'created',
+          kind: "created",
           path: project.componentFile,
-          marker: 'impeccable-live-tanstack',
-          pruneTo: 'src',
+          marker: "impeccable-live-tanstack",
+          pruneTo: "src",
         },
         {
-          kind: 'patched',
+          kind: "patched",
           path: project.rootRoute,
-          patch: 'tanstack-root',
+          patch: "tanstack-root",
           markers: [TANSTACK_MARKER_OPEN],
         },
-      ];
+      ]
     },
 
     unpatch: {
-      'tanstack-root': unpatchTanStackRoot,
+      "tanstack-root": unpatchTanStackRoot,
     },
   },
 
   source: {
-    extensions: ['.tsx', '.jsx'],
-    preview: 'source',
-    styleMode: 'scoped',
-    commentSyntax: 'jsx',
+    extensions: [".tsx", ".jsx"],
+    preview: "source",
+    styleMode: "scoped",
+    commentSyntax: "jsx",
   },
-};
+}

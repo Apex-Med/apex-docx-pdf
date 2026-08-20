@@ -141,7 +141,9 @@ describe("resolveStyles", () => {
       alignment: "right",
     })
     expect(paragraph.alignment).toBe("right")
-    expect(paragraph.spacingBefore).toBe(DEFAULT_PARAGRAPH_PROPERTIES.spacingBefore)
+    expect(paragraph.spacingBefore).toBe(
+      DEFAULT_PARAGRAPH_PROPERTIES.spacingBefore
+    )
 
     const text = resolveTextStyle(styles, null, { color: "#FF0000" })
     expect(text.color).toBe("#FF0000")

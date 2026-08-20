@@ -10,10 +10,7 @@ import {
 import { layoutDocument } from "@apexmed/layout"
 import { EditorState, type Transaction } from "prosemirror-state"
 
-import {
-  fromSemanticDocument,
-  toSemanticDocument,
-} from "../src/model/bridge"
+import { fromSemanticDocument, toSemanticDocument } from "../src/model/bridge"
 import {
   detectOversizedNonSplittable,
   pageBreaksFromTrace,
@@ -117,10 +114,7 @@ describe("pagination from layout path", () => {
     expect(response.displayList.pages.length).toBeGreaterThan(1)
     expect(response.trace).toBeDefined()
 
-    const placements = pageBreaksFromTrace(
-      response.trace,
-      response.displayList
-    )
+    const placements = pageBreaksFromTrace(response.trace, response.displayList)
     expect(placements.length).toBeGreaterThan(0)
     for (const placement of placements) {
       expect(placement.charOffset).toBeGreaterThanOrEqual(0)
@@ -182,16 +176,15 @@ describe("pagination from layout path", () => {
     expect(after.length).toBe(before.length)
     // Every decoration at or after the insert point must advance by the insert size.
     for (let i = 0; i < before.length; i += 1) {
-      const expected =
-        before[i]! >= insertPos ? before[i]! + 1 : before[i]!
+      const expected = before[i]! >= insertPos ? before[i]! + 1 : before[i]!
       expect(after[i]).toBe(expected)
     }
 
     const nextSemantic = toSemanticDocument(tr.doc)
     expect(
-      (
-        nextSemantic.sections[0]!.blocks[0] as SemanticParagraph
-      ).children.some((c) => c.type === "text" && c.text.startsWith("X"))
+      (nextSemantic.sections[0]!.blocks[0] as SemanticParagraph).children.some(
+        (c) => c.type === "text" && c.text.startsWith("X")
+      )
     ).toBe(true)
   })
 

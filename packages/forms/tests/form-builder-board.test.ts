@@ -174,14 +174,10 @@ describe("form builder board", () => {
     expect(next.nested[repeaterId]).toEqual([dose!.id, drug!.id])
   })
 
-
   test("a repeater does not collide with its own nested droppable", () => {
     const repeaterId = "rep_1"
     expect(
-      pickDropCollision(
-        [parentDropId(repeaterId), CANVAS_COLUMN],
-        repeaterId
-      )
+      pickDropCollision([parentDropId(repeaterId), CANVAS_COLUMN], repeaterId)
     ).toBe(CANVAS_COLUMN)
   })
 

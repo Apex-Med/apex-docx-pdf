@@ -8,61 +8,163 @@
         "role": "neutral",
         "displayName": "Paper",
         "canonical": "oklch(1 0 0)",
-        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.89 0 0)", "oklch(1 0 0)"]
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.27 0 0)",
+          "oklch(0.39 0 0)",
+          "oklch(0.52 0 0)",
+          "oklch(0.65 0 0)",
+          "oklch(0.77 0 0)",
+          "oklch(0.89 0 0)",
+          "oklch(1 0 0)"
+        ]
       },
       "ink": {
         "role": "neutral",
         "displayName": "Ink",
         "canonical": "oklch(0.145 0 0)",
-        "tonalRamp": ["oklch(0.145 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.89 0 0)", "oklch(0.985 0 0)"]
+        "tonalRamp": [
+          "oklch(0.145 0 0)",
+          "oklch(0.27 0 0)",
+          "oklch(0.39 0 0)",
+          "oklch(0.52 0 0)",
+          "oklch(0.65 0 0)",
+          "oklch(0.77 0 0)",
+          "oklch(0.89 0 0)",
+          "oklch(0.985 0 0)"
+        ]
       },
       "panel": {
         "role": "neutral",
         "displayName": "Panel Gray",
         "canonical": "oklch(0.97 0 0)",
-        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.89 0 0)", "oklch(0.97 0 0)"]
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.27 0 0)",
+          "oklch(0.39 0 0)",
+          "oklch(0.52 0 0)",
+          "oklch(0.65 0 0)",
+          "oklch(0.77 0 0)",
+          "oklch(0.89 0 0)",
+          "oklch(0.97 0 0)"
+        ]
       },
       "muted-ink": {
         "role": "neutral",
         "displayName": "Muted Ink",
         "canonical": "oklch(0.42 0 0)",
-        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.34 0 0)", "oklch(0.42 0 0)", "oklch(0.55 0 0)", "oklch(0.68 0 0)", "oklch(0.82 0 0)", "oklch(0.95 0 0)"]
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.25 0 0)",
+          "oklch(0.34 0 0)",
+          "oklch(0.42 0 0)",
+          "oklch(0.55 0 0)",
+          "oklch(0.68 0 0)",
+          "oklch(0.82 0 0)",
+          "oklch(0.95 0 0)"
+        ]
       },
       "hairline": {
         "role": "neutral",
         "displayName": "Hairline",
         "canonical": "oklch(0.922 0 0)",
-        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.52 0 0)", "oklch(0.65 0 0)", "oklch(0.77 0 0)", "oklch(0.86 0 0)", "oklch(0.922 0 0)"]
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.27 0 0)",
+          "oklch(0.39 0 0)",
+          "oklch(0.52 0 0)",
+          "oklch(0.65 0 0)",
+          "oklch(0.77 0 0)",
+          "oklch(0.86 0 0)",
+          "oklch(0.922 0 0)"
+        ]
       },
       "pipeline-blue": {
         "role": "primary",
         "displayName": "Pipeline Blue",
         "canonical": "oklch(0.46 0.16 246)",
-        "tonalRamp": ["oklch(0.15 0.06 246)", "oklch(0.27 0.11 246)", "oklch(0.39 0.15 246)", "oklch(0.46 0.16 246)", "oklch(0.58 0.15 246)", "oklch(0.70 0.13 246)", "oklch(0.83 0.08 246)", "oklch(0.95 0.025 246)"]
+        "tonalRamp": [
+          "oklch(0.15 0.06 246)",
+          "oklch(0.27 0.11 246)",
+          "oklch(0.39 0.15 246)",
+          "oklch(0.46 0.16 246)",
+          "oklch(0.58 0.15 246)",
+          "oklch(0.70 0.13 246)",
+          "oklch(0.83 0.08 246)",
+          "oklch(0.95 0.025 246)"
+        ]
       },
       "destructive": {
         "role": "primary",
         "displayName": "Destructive Red",
         "canonical": "oklch(0.577 0.245 27.325)",
-        "tonalRamp": ["oklch(0.15 0.07 27.325)", "oklch(0.27 0.14 27.325)", "oklch(0.40 0.20 27.325)", "oklch(0.577 0.245 27.325)", "oklch(0.68 0.20 27.325)", "oklch(0.78 0.14 27.325)", "oklch(0.88 0.08 27.325)", "oklch(0.95 0.03 27.325)"]
+        "tonalRamp": [
+          "oklch(0.15 0.07 27.325)",
+          "oklch(0.27 0.14 27.325)",
+          "oklch(0.40 0.20 27.325)",
+          "oklch(0.577 0.245 27.325)",
+          "oklch(0.68 0.20 27.325)",
+          "oklch(0.78 0.14 27.325)",
+          "oklch(0.88 0.08 27.325)",
+          "oklch(0.95 0.03 27.325)"
+        ]
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Landing-page propositions and strongest product statements." },
-      "headline": { "displayName": "Headline", "purpose": "Major section openings and workflow milestones." },
-      "title": { "displayName": "Title", "purpose": "Panel titles and technical headings." },
-      "body": { "displayName": "Body", "purpose": "Explanations, task guidance, and application copy." },
-      "label": { "displayName": "Label", "purpose": "Controls, statuses, metadata, and compact instrumentation." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing-page propositions and strongest product statements."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Major section openings and workflow milestones."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel titles and technical headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Explanations, task guidance, and application copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Controls, statuses, metadata, and compact instrumentation."
+      }
     },
     "shadows": [
-      { "name": "work-surface", "value": "0 1px 2px rgb(0 0 0 / 0.05)", "purpose": "Quiet separation for cards and bounded task surfaces." },
-      { "name": "overlay", "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)", "purpose": "Menus, dialogs, and transient floating interfaces." },
-      { "name": "navigation-lift", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Mobile navigation when it must read above the page." }
+      {
+        "name": "work-surface",
+        "value": "0 1px 2px rgb(0 0 0 / 0.05)",
+        "purpose": "Quiet separation for cards and bounded task surfaces."
+      },
+      {
+        "name": "overlay",
+        "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+        "purpose": "Menus, dialogs, and transient floating interfaces."
+      },
+      {
+        "name": "navigation-lift",
+        "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+        "purpose": "Mobile navigation when it must read above the page."
+      }
     ],
     "motion": [
-      { "name": "state", "value": "150ms ease", "purpose": "Color, border, transform, and icon-state transitions." },
-      { "name": "overlay", "value": "100ms ease", "purpose": "Dialog and backdrop entry or exit." },
-      { "name": "reduced-motion", "value": "0.01ms", "purpose": "Global effective motion floor under prefers-reduced-motion." }
+      {
+        "name": "state",
+        "value": "150ms ease",
+        "purpose": "Color, border, transform, and icon-state transitions."
+      },
+      {
+        "name": "overlay",
+        "value": "100ms ease",
+        "purpose": "Dialog and backdrop entry or exit."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Global effective motion floor under prefers-reduced-motion."
+      }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
@@ -131,11 +233,31 @@
       "Dense technical information made legible through rhythm, not ornament."
     ],
     "rules": [
-      { "name": "The Signal, Not Decoration Rule", "body": "Pipeline Blue marks meaning or action; it never becomes a colorful dashboard wash.", "section": "colors" },
-      { "name": "The Ink-and-Paper Rule", "body": "Establish hierarchy with neutral contrast first. Add hue only when the interface gains information from it.", "section": "colors" },
-      { "name": "The One Typeface Rule", "body": "Do not introduce a display face to manufacture personality; let Geist Mono's scale and spacing carry the hierarchy.", "section": "typography" },
-      { "name": "The Case Has Meaning Rule", "body": "Uppercase and wide tracking identify controls, statuses, and compact technical headings, not general prose.", "section": "typography" },
-      { "name": "The Structure Before Shadow Rule", "body": "A shadow may clarify an actual layer; it may not compensate for weak spacing, contrast, or borders.", "section": "elevation" }
+      {
+        "name": "The Signal, Not Decoration Rule",
+        "body": "Pipeline Blue marks meaning or action; it never becomes a colorful dashboard wash.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-and-Paper Rule",
+        "body": "Establish hierarchy with neutral contrast first. Add hue only when the interface gains information from it.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Typeface Rule",
+        "body": "Do not introduce a display face to manufacture personality; let Geist Mono's scale and spacing carry the hierarchy.",
+        "section": "typography"
+      },
+      {
+        "name": "The Case Has Meaning Rule",
+        "body": "Uppercase and wide tracking identify controls, statuses, and compact technical headings, not general prose.",
+        "section": "typography"
+      },
+      {
+        "name": "The Structure Before Shadow Rule",
+        "body": "A shadow may clarify an actual layer; it may not compensate for weak spacing, contrast, or borders.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do build hierarchy with Ink-and-Paper contrast, type scale, whitespace, rules, and alignment before adding color.",

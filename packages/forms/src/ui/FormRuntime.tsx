@@ -223,7 +223,9 @@ function RuntimeNode({
     }
     if (node.kind === "text") {
       return (
-        <p className="text-sm text-muted-foreground">{node.body ?? node.label}</p>
+        <p className="text-sm text-muted-foreground">
+          {node.body ?? node.label}
+        </p>
       )
     }
     return null
@@ -233,7 +235,11 @@ function RuntimeNode({
     const bound = node.context?.binding
     const value = bound ? (context?.[bound] ?? "") : ""
     return (
-      <LabeledField label={node.label} description={node.description} required={node.required}>
+      <LabeledField
+        label={node.label}
+        description={node.description}
+        required={node.required}
+      >
         <Input value={value} readOnly disabled />
       </LabeledField>
     )
@@ -346,12 +352,18 @@ function QuestionControl({
       const options = question.options ?? []
       const allowOther = question.allowOther === true
       const stringValue = typeof value === "string" ? value : ""
-      const otherSelected = isOtherSelectedValue(stringValue, options, allowOther)
+      const otherSelected = isOtherSelectedValue(
+        stringValue,
+        options,
+        allowOther
+      )
       const otherText = otherTextFromSelectValue(stringValue, options)
       return (
         <div className="flex flex-col gap-2">
           <Select
-            value={selectValueForControl(stringValue, options, allowOther) || null}
+            value={
+              selectValueForControl(stringValue, options, allowOther) || null
+            }
             items={[
               ...options.map((option) => ({
                 value: option.value,
@@ -431,7 +443,10 @@ function QuestionControl({
           {(question.options ?? []).map((option) => {
             const checked = known.includes(option.value)
             return (
-              <div key={option.value} className="flex items-center gap-2 text-sm">
+              <div
+                key={option.value}
+                className="flex items-center gap-2 text-sm"
+              >
                 <Checkbox
                   checked={checked}
                   disabled={readOnly}
@@ -456,7 +471,9 @@ function QuestionControl({
                 disabled={readOnly}
                 onCheckedChange={(next) => {
                   const on = next === true
-                  onChange(joinMultiSelectValues(known, on, on ? otherText : ""))
+                  onChange(
+                    joinMultiSelectValues(known, on, on ? otherText : "")
+                  )
                 }}
               />
               <span className="shrink-0">Other</span>
@@ -498,7 +515,9 @@ function QuestionControl({
       return (
         <FileUpload
           disabled={readOnly}
-          accept={(question.attachment?.accept ?? DEFAULT_ATTACHMENT_ACCEPT).join(",")}
+          accept={(
+            question.attachment?.accept ?? DEFAULT_ATTACHMENT_ACCEPT
+          ).join(",")}
           maxFiles={maxCount}
           maxSize={maxFileSizeMb * 1024 * 1024}
           multiple={maxCount > 1}
@@ -515,9 +534,7 @@ function QuestionControl({
       )
     }
     case "repeater": {
-      const rows = Array.isArray(value)
-        ? (value as FormRepeaterRow[])
-        : []
+      const rows = Array.isArray(value) ? (value as FormRepeaterRow[]) : []
       return (
         <div className="flex flex-col gap-3">
           {rows.map((row, index) => (
@@ -539,7 +556,9 @@ function QuestionControl({
                         <QuestionControl
                           question={child}
                           value={childField.state.value as FormAnswerValue}
-                          onChange={(next) => childField.handleChange(next as never)}
+                          onChange={(next) =>
+                            childField.handleChange(next as never)
+                          }
                           form={form}
                           values={row as FormAnswers}
                           path={childPath}
@@ -616,11 +635,13 @@ function LongTextField({
     <Textarea
       value={value}
       disabled={disabled}
-      onChange={(event) =>
-        onChange(normalizeBulletMarkers(event.target.value))
-      }
+      onChange={(event) => onChange(normalizeBulletMarkers(event.target.value))}
       onKeyDown={(event) => {
-        if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+        if (
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.nativeEvent.isComposing
+        ) {
           return
         }
         const target = event.currentTarget
@@ -693,7 +714,10 @@ function LabeledField({
   children: ReactNode
 }>): ReactNode {
   return (
-    <div className="flex flex-col gap-1.5" data-invalid={Boolean(error) || undefined}>
+    <div
+      className="flex flex-col gap-1.5"
+      data-invalid={Boolean(error) || undefined}
+    >
       <Label>
         {label}
         {required ? <span className="text-destructive">*</span> : null}

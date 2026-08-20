@@ -26,7 +26,9 @@ export function kindFromPaletteId(id: string): string | null {
   return kind.length > 0 ? kind : null
 }
 
-export function parentDropId(id: string): `${typeof PARENT_ID_PREFIX}${string}` {
+export function parentDropId(
+  id: string
+): `${typeof PARENT_ID_PREFIX}${string}` {
   return `${PARENT_ID_PREFIX}${id}`
 }
 
@@ -171,7 +173,10 @@ export function moveBoardItem(
   const activeContainer = findContainer(board, activeId)
   const overContainer = findContainer(board, overId)
   if (!activeContainer || !overContainer) return board
-  if (overContainer === PALETTE_COLUMN && kindFromPaletteId(activeId) === null) {
+  if (
+    overContainer === PALETTE_COLUMN &&
+    kindFromPaletteId(activeId) === null
+  ) {
     return board
   }
   // Hovering the wrapping repeater card while already inside it would
@@ -246,13 +251,17 @@ function ancestorContains(
   if (activeId === parentId) return true
   const children = board.nested[activeId]
   if (!children) return false
-  return children.includes(parentId) || children.some((child) =>
-    ancestorContains(board, child, parentId)
+  return (
+    children.includes(parentId) ||
+    children.some((child) => ancestorContains(board, child, parentId))
   )
 }
 
 function sameList(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((id, index) => id === right[index])
+  return (
+    left.length === right.length &&
+    left.every((id, index) => id === right[index])
+  )
 }
 
 function sameNested(

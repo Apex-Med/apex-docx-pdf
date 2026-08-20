@@ -14,13 +14,14 @@ export type ShadowCssTransformResult = Readonly<{
   hoistedPropertyRules: string
 }>
 
-const PROPERTY_BLOCK =
-  /@property\s+[^{]+\{[^}]*\}/gsu
+const PROPERTY_BLOCK = /@property\s+[^{]+\{[^}]*\}/gsu
 
 /**
  * Transform a Tailwind-produced stylesheet for shadow DOM hosting.
  */
-export function transformCssForShadowDom(css: string): ShadowCssTransformResult {
+export function transformCssForShadowDom(
+  css: string
+): ShadowCssTransformResult {
   const properties: string[] = []
   let body = css.replace(PROPERTY_BLOCK, (match) => {
     properties.push(match)

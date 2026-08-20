@@ -2,7 +2,11 @@ import { isNodeVisible, visibleInputQuestions } from "./conditions"
 import { isCompleteDateAnswer } from "./dates"
 import { resolveDefaultValue } from "./defaults"
 import { flattenChoiceOptions } from "./options"
-import { isOtherSentinel, isUnresolvedOtherValue, resolvedChoiceStrings } from "./other"
+import {
+  isOtherSentinel,
+  isUnresolvedOtherValue,
+  resolvedChoiceStrings,
+} from "./other"
 import {
   isLayoutBlock,
   isQuestion,
@@ -47,7 +51,9 @@ function isStringArray(value: FormAnswerValue): value is readonly string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
 }
 
-function isFileArray(value: FormAnswerValue): value is readonly FormFileValue[] {
+function isFileArray(
+  value: FormAnswerValue
+): value is readonly FormFileValue[] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -67,7 +73,8 @@ function isRepeaterRows(
   return (
     Array.isArray(value) &&
     value.every(
-      (item) => item !== null && typeof item === "object" && !Array.isArray(item)
+      (item) =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
     ) &&
     !isStringArray(value) &&
     !isFileArray(value)
@@ -202,7 +209,9 @@ function validateQuestion(
         return
       }
       if (!question.allowOther) {
-        const allowed = new Set((question.options ?? []).map((option) => option.value))
+        const allowed = new Set(
+          (question.options ?? []).map((option) => option.value)
+        )
         if (value.some((item) => !allowed.has(item))) {
           errors[key] = `${label} has an invalid option`
         }
@@ -309,10 +318,7 @@ export function stripHiddenAnswers(
   return next
 }
 
-export function fieldErrorPath(
-  questionKey: string,
-  nested?: string
-): string {
+export function fieldErrorPath(questionKey: string, nested?: string): string {
   return nested ? errorPath(questionKey, nested) : questionKey
 }
 

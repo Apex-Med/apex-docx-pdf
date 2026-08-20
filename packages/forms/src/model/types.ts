@@ -59,14 +59,7 @@ export type FormValidation = Readonly<{
 }>
 
 export type FormConditionOp =
-  | "eq"
-  | "neq"
-  | "in"
-  | "not_in"
-  | "is_set"
-  | "is_empty"
-  | "gt"
-  | "lt"
+  "eq" | "neq" | "in" | "not_in" | "is_set" | "is_empty" | "gt" | "lt"
 
 export type FormConditionRule = Readonly<{
   fieldKey: string
@@ -170,7 +163,9 @@ export type ReferenceResolver = Readonly<{
   fields?: readonly Readonly<{ key: string; label: string }>[]
 }>
 
-export type FormContextValues = Readonly<Partial<Record<ContextBinding, string>>>
+export type FormContextValues = Readonly<
+  Partial<Record<ContextBinding, string>>
+>
 
 export const FORM_TEMPLATE_META_KEY = "formTemplate"
 export const FORM_ANSWERS_META_KEY = "formAnswers"
@@ -194,21 +189,22 @@ export const FORM_QUESTION_KIND_LABELS: Record<FormQuestionKind, string> = {
   context: "Context",
 }
 
-export const FORM_QUESTION_KIND_DESCRIPTIONS: Record<FormQuestionKind, string> = {
-  short_text: "A single line for names, IDs, or other short answers.",
-  long_text: "Several lines for notes, comments, or explanations.",
-  number: "A numeric value. Optionally add a unit and a min/max range.",
-  date: "A calendar date. Optionally include the time, a date range, or quick picks.",
-  boolean: "A simple yes or no choice.",
-  select: "Choose one option from a list.",
-  multi_select: "Choose one or more options from a list.",
-  autocomplete: "Search a long list, then pick one option.",
-  cascader: "Choose from nested options, such as category then subcategory.",
-  reference: "Look up an existing record, such as a patient or clinician.",
-  attachment: "Upload one or more files.",
-  repeater: "A repeating group of questions, such as a list of medications.",
-  context: "Filled automatically from the current patient, user, or visit.",
-}
+export const FORM_QUESTION_KIND_DESCRIPTIONS: Record<FormQuestionKind, string> =
+  {
+    short_text: "A single line for names, IDs, or other short answers.",
+    long_text: "Several lines for notes, comments, or explanations.",
+    number: "A numeric value. Optionally add a unit and a min/max range.",
+    date: "A calendar date. Optionally include the time, a date range, or quick picks.",
+    boolean: "A simple yes or no choice.",
+    select: "Choose one option from a list.",
+    multi_select: "Choose one or more options from a list.",
+    autocomplete: "Search a long list, then pick one option.",
+    cascader: "Choose from nested options, such as category then subcategory.",
+    reference: "Look up an existing record, such as a patient or clinician.",
+    attachment: "Upload one or more files.",
+    repeater: "A repeating group of questions, such as a list of medications.",
+    context: "Filled automatically from the current patient, user, or visit.",
+  }
 
 export const FORM_LAYOUT_KIND_LABELS: Record<FormLayoutKind, string> = {
   section: "Section",

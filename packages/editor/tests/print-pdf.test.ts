@@ -22,9 +22,7 @@ function createPrintHost(options?: {
   }
   printed: Window[]
   focused: Window[]
-}
-
-{
+} {
   const fireLoad = options?.fireLoad ?? true
   const printed: Window[] = []
   const focused: Window[] = []

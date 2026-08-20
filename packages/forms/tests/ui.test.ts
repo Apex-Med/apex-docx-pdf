@@ -54,7 +54,7 @@ describe("forms UI", () => {
     expect(builder).toContain("Max files")
     expect(builder).toContain("Max size (MB)")
     expect(builder).toContain("FileAcceptCombobox")
-    expect(builder).toContain('@workspace/ui/components/file-accept-combobox')
+    expect(builder).toContain("@workspace/ui/components/file-accept-combobox")
     expect(builder).not.toContain("TooltipContent")
     expect(builder).toContain("HoverCardContent")
     expect(builder).toContain("descriptionForKind")
@@ -66,7 +66,7 @@ describe("forms UI", () => {
     expect(runtime).toContain("joinMultiSelectValues")
     expect(runtime).toContain("items={[")
     expect(runtime).toContain("FileUpload")
-    expect(runtime).toContain('@workspace/ui/components/file-upload')
+    expect(runtime).toContain("@workspace/ui/components/file-upload")
     expect(builder).toContain("items={")
     const preview = readFileSync(
       join(import.meta.dir, "../src/ui/field-preview.tsx"),

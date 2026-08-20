@@ -50,10 +50,7 @@
       "type": "registry:component",
       "title": "Form Runtime",
       "description": "TanStack Form runtime for filling Apex forms and driving template tags.",
-      "dependencies": [
-        "@apexmed/forms",
-        "@tanstack/react-form"
-      ],
+      "dependencies": ["@apexmed/forms", "@tanstack/react-form"],
       "registryDependencies": [
         "button",
         "input",

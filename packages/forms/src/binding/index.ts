@@ -5,7 +5,11 @@ export {
   type TagValues,
 } from "./answers"
 export { bindingDiagnostics, markerBalanceDiagnostics } from "./diagnostics"
-export { questionFromTag, boundTagFromSeed, type TagSeed } from "./question-from-tag"
+export {
+  questionFromTag,
+  boundTagFromSeed,
+  type TagSeed,
+} from "./question-from-tag"
 export { markerPlaceholdersForTag, tagsFromForm } from "./tags-from-form"
 export {
   DEFAULT_DATE_PATTERN,

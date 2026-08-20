@@ -197,7 +197,12 @@ function sameTagValues(
   return leftKeys.every((id) => {
     const a = left[id]
     const b = right[id]
-    return a !== undefined && b !== undefined && a.kind === b.kind && a.value === b.value
+    return (
+      a !== undefined &&
+      b !== undefined &&
+      a.kind === b.kind &&
+      a.value === b.value
+    )
   })
 }
 

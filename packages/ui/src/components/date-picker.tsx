@@ -153,7 +153,7 @@ function DateSegmentInput({
       aria-label={ariaLabel}
       data-slot="input-group-control"
       className={cn(
-        "h-7 min-w-0 appearance-none border-0 bg-transparent text-center text-sm tabular-nums shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:border-0 focus:shadow-none focus:ring-0 focus:outline-none focus-visible:border-0 focus-visible:shadow-none focus-visible:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        "h-7 min-w-0 appearance-none border-0 bg-transparent text-center text-sm tabular-nums shadow-none ring-0 outline-none placeholder:text-muted-foreground focus:border-0 focus:shadow-none focus:ring-0 focus:outline-none focus-visible:border-0 focus-visible:shadow-none focus-visible:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
         maxLength === 4 ? "w-10" : "w-7"
       )}
       disabled={disabled}
@@ -459,9 +459,7 @@ function DatePicker({
   const startDate = parseDate(parsed.start.date)
   const endDate = parseDate(parsed.end?.date ?? "")
   const startDateKey = parsed.start.date
-  const [month, setMonth] = React.useState<Date>(
-    () => startDate ?? new Date()
-  )
+  const [month, setMonth] = React.useState<Date>(() => startDate ?? new Date())
   const [open, setOpen] = React.useState(false)
   const startYearRef = React.useRef<HTMLInputElement>(null)
   const startHourRef = React.useRef<HTMLInputElement>(null)
@@ -538,9 +536,9 @@ function DatePicker({
       parsed.start.date.length > 0
         ? parsed.start
         : {
-          date: nextDate,
-          time: parsed.start.time || (includeTime ? DEFAULT_TIME : ""),
-        }
+            date: nextDate,
+            time: parsed.start.time || (includeTime ? DEFAULT_TIME : ""),
+          }
     commit(start, {
       date: nextDate,
       time: parsed.end?.time || (includeTime ? DEFAULT_TIME : ""),
@@ -708,10 +706,7 @@ function DatePicker({
         <PopoverContent
           align="start"
           alignOffset={-4}
-          className={cn(
-            "p-3",
-            quickSelect ? "w-[26rem]" : "w-[18.25rem]"
-          )}
+          className={cn("p-3", quickSelect ? "w-[26rem]" : "w-[18.25rem]")}
           sideOffset={8}
         >
           <div className="flex w-full min-w-0 flex-col gap-3">
@@ -724,36 +719,36 @@ function DatePicker({
               )}
             >
               {quickSelect ? (
-                <div className="relative min-w-0 max-sm:order-1 max-sm:border-t max-sm:pt-3 sm:pe-3 sm:border-e">
+                <div className="relative min-w-0 max-sm:order-1 max-sm:border-t max-sm:pt-3 sm:border-e sm:pe-3">
                   <div className="flex h-full w-full min-w-0 flex-col gap-0.5">
                     {range
                       ? rangePresets.map((preset) => (
-                        <Button
-                          key={preset.label}
-                          className="w-full min-w-0 justify-start overflow-hidden"
-                          onClick={() => {
-                            applyRange(
-                              { from: preset.from, to: preset.to },
-                              { close: true }
-                            )
-                          }}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <span className="truncate">{preset.label}</span>
-                        </Button>
-                      ))
+                          <Button
+                            key={preset.label}
+                            className="w-full min-w-0 justify-start overflow-hidden"
+                            onClick={() => {
+                              applyRange(
+                                { from: preset.from, to: preset.to },
+                                { close: true }
+                              )
+                            }}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <span className="truncate">{preset.label}</span>
+                          </Button>
+                        ))
                       : singlePresets.map((preset) => (
-                        <Button
-                          key={preset.label}
-                          className="w-full min-w-0 justify-start overflow-hidden"
-                          onClick={() => applySingleDate(preset.date)}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <span className="truncate">{preset.label}</span>
-                        </Button>
-                      ))}
+                          <Button
+                            key={preset.label}
+                            className="w-full min-w-0 justify-start overflow-hidden"
+                            onClick={() => applySingleDate(preset.date)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <span className="truncate">{preset.label}</span>
+                          </Button>
+                        ))}
                   </div>
                 </div>
               ) : null}

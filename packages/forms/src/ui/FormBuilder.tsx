@@ -197,7 +197,10 @@ const PALETTE_ITEMS = [...QUESTION_PALETTE, ...LAYOUT_PALETTE]
 
 const PALETTE_IDS = PALETTE_ITEMS.map((item) => paletteDragId(item.kind))
 
-const CONDITION_OPS: readonly Readonly<{ op: FormConditionOp; label: string }>[] = [
+const CONDITION_OPS: readonly Readonly<{
+  op: FormConditionOp
+  label: string
+}>[] = [
   { op: "eq", label: "is" },
   { op: "neq", label: "is not" },
   { op: "in", label: "is one of" },
@@ -292,7 +295,9 @@ export function FormBuilder({
   }, [page])
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
@@ -414,7 +419,10 @@ export function FormBuilder({
       onDragCancel={onDragCancel}
       onDragEnd={onDragEnd}
     >
-      <div className="apex-form-builder" data-dragging={activeDrag !== null || undefined}>
+      <div
+        className="apex-form-builder"
+        data-dragging={activeDrag !== null || undefined}
+      >
         <FieldPalette
           onAdd={(kind) => {
             if (!page) return
@@ -476,7 +484,10 @@ export function FormBuilder({
       </div>
       <DragOverlay dropAnimation={null}>
         {activeDrag?.type === "palette" ? (
-          <PaletteChipFace item={paletteItemForKind(activeDrag.kind)} dragging />
+          <PaletteChipFace
+            item={paletteItemForKind(activeDrag.kind)}
+            dragging
+          />
         ) : activeDrag?.type === "node" ? (
           <DraggingQuestionCard
             node={findNode(form, activeDrag.id)?.node}
@@ -518,11 +529,7 @@ function FieldPalette({
               items={QUESTION_PALETTE}
               onAdd={onAdd}
             />
-            <PaletteGroup
-              title="Layout"
-              items={LAYOUT_PALETTE}
-              onAdd={onAdd}
-            />
+            <PaletteGroup title="Layout" items={LAYOUT_PALETTE} onAdd={onAdd} />
           </div>
         </SortableContext>
       </ScrollArea>
@@ -565,13 +572,17 @@ function PaletteChipFace({
       type="button"
       variant="outline"
       className={cn(
-        "w-full justify-start active:translate-y-0 focus-visible:ring-inset",
+        "w-full justify-start focus-visible:ring-inset active:translate-y-0",
         dragging && "shadow-md",
         className
       )}
       {...props}
     >
-      <HugeiconsIcon icon={item.icon} strokeWidth={2} data-icon="inline-start" />
+      <HugeiconsIcon
+        icon={item.icon}
+        strokeWidth={2}
+        data-icon="inline-start"
+      />
       <span className="truncate">{item.label}</span>
     </Button>
   )
@@ -653,8 +664,7 @@ function FormCanvas({
 }>): ReactNode {
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_COLUMN })
   const canvasIds = board.canvas
-  const acceptingEmpty =
-    canvasIds.length === 0 && dropTarget?.parentId === null
+  const acceptingEmpty = canvasIds.length === 0 && dropTarget?.parentId === null
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40">
       <div className="flex items-center gap-2 overflow-x-auto border-b bg-background px-3 py-2">
@@ -672,7 +682,13 @@ function FormCanvas({
             {entry.title || `Page ${index + 1}`}
           </Button>
         ))}
-        <Button type="button" size="icon-sm" variant="ghost" aria-label="Add page" onClick={onAddPage}>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Add page"
+          onClick={onAddPage}
+        >
           <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
         </Button>
       </div>
@@ -687,16 +703,18 @@ function FormCanvas({
           <div
             ref={setNodeRef}
             className={cn(
-              "relative z-10 flex min-h-full w-full min-w-0 max-w-xl flex-col overflow-hidden rounded-xl border bg-background p-6 shadow-sm",
+              "relative z-10 flex min-h-full w-full max-w-xl min-w-0 flex-col overflow-hidden rounded-xl border bg-background p-6 shadow-sm",
               (isOver || acceptingEmpty) &&
-              canvasIds.length === 0 &&
-              "ring-2 ring-primary/40"
+                canvasIds.length === 0 &&
+                "ring-2 ring-primary/40"
             )}
           >
             <div className="mb-6">
               <h2 className="text-lg font-medium">{form.name}</h2>
               {page?.description ? (
-                <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {page.description}
+                </p>
               ) : (
                 <p className="mt-1 text-sm text-muted-foreground">
                   {page?.title || "Form preview"}
@@ -710,7 +728,11 @@ function FormCanvas({
                   acceptingEmpty && "border-primary bg-primary/5"
                 )}
               >
-                <HugeiconsIcon icon={Layout01Icon} strokeWidth={2} className="mb-2 size-6 text-muted-foreground" />
+                <HugeiconsIcon
+                  icon={Layout01Icon}
+                  strokeWidth={2}
+                  className="mb-2 size-6 text-muted-foreground"
+                />
                 <p className="text-sm font-medium">Drag a question here</p>
               </div>
             ) : (
@@ -725,7 +747,10 @@ function FormCanvas({
                     return (
                       <InsertSlot
                         key={node.id}
-                        before={dropTarget?.parentId === null && dropTarget.index === index}
+                        before={
+                          dropTarget?.parentId === null &&
+                          dropTarget.index === index
+                        }
                         after={
                           dropTarget?.parentId === null &&
                           dropTarget.index === canvasIds.length &&
@@ -769,7 +794,11 @@ function DraggingQuestionCard({
     >
       <div className="mb-2 flex items-center gap-1">
         <span className="text-muted-foreground">
-          <HugeiconsIcon icon={DragDropVerticalIcon} strokeWidth={2} className="size-4" />
+          <HugeiconsIcon
+            icon={DragDropVerticalIcon}
+            strokeWidth={2}
+            className="size-4"
+          />
         </span>
         <span className="text-[11px] tracking-wide text-muted-foreground uppercase">
           {labelForKind(node.kind)}
@@ -790,7 +819,10 @@ function DraggingQuestionCard({
               </p>
             ) : (
               nested.map((child) => (
-                <div key={child.id} className="rounded-md border bg-background p-2">
+                <div
+                  key={child.id}
+                  className="rounded-md border bg-background p-2"
+                >
                   <div className="mb-1 text-[11px] text-muted-foreground uppercase">
                     {labelForKind(child.kind)}
                   </div>
@@ -879,7 +911,11 @@ function SortablePreviewCard({
             className="relative z-20 text-muted-foreground hover:text-foreground"
             aria-label={`Reorder ${node.label}`}
           >
-            <HugeiconsIcon icon={DragDropVerticalIcon} strokeWidth={2} className="size-4" />
+            <HugeiconsIcon
+              icon={DragDropVerticalIcon}
+              strokeWidth={2}
+              className="size-4"
+            />
           </SortableItemHandle>
           <span className="text-[11px] tracking-wide text-muted-foreground uppercase">
             {labelForKind(node.kind)}
@@ -966,7 +1002,10 @@ function RepeaterPreview({
   const accepting = insertIndex !== -1
   return (
     <div className="flex flex-col gap-2">
-      <LabeledName label={node.label} required={isQuestion(node) ? node.required : false} />
+      <LabeledName
+        label={node.label}
+        required={isQuestion(node) ? node.required : false}
+      />
       <SortableContext
         items={sortableIds(nestedIds)}
         strategy={verticalListSortingStrategy}
@@ -1046,7 +1085,10 @@ function RepeaterPreview({
                               onRemove(child.id)
                             }}
                           >
-                            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                            <HugeiconsIcon
+                              icon={Delete02Icon}
+                              strokeWidth={2}
+                            />
                           </Button>
                         </div>
                         <FieldPreview node={child} />
@@ -1094,7 +1136,9 @@ function SettingsPanel({
   onRemove: (id: string) => void
   onRemovePage: (id: string) => void
 }>): ReactNode {
-  const node = selectedNodeId ? (findNode(form, selectedNodeId)?.node ?? null) : null
+  const node = selectedNodeId
+    ? (findNode(form, selectedNodeId)?.node ?? null)
+    : null
   return (
     <aside
       data-apex-form-settings=""
@@ -1161,7 +1205,9 @@ function SettingsPanel({
               sources={visibilitySourceQuestions(form).filter(
                 (question) => question.id !== node.id
               )}
-              onChange={(patch) => onFormChange(updateNode(form, node.id, patch))}
+              onChange={(patch) =>
+                onFormChange(updateNode(form, node.id, patch))
+              }
             />
           ) : null}
           <Separator />
@@ -1173,7 +1219,9 @@ function SettingsPanel({
               Drag a tag into the document to bind this form.
             </p>
             {tags.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No bindable questions yet.</p>
+              <p className="text-xs text-muted-foreground">
+                No bindable questions yet.
+              </p>
             ) : (
               tags.map((tag) => <TagBadge key={tag.id} tag={tag} />)
             )}
@@ -1230,7 +1278,7 @@ function FormSettings({
     },
   })
   return (
-    <div className="flex w-full min-w-0 max-w-full flex-col gap-3">
+    <div className="flex w-full max-w-full min-w-0 flex-col gap-3">
       <settings.Field name="name">
         {(field) => (
           <div className="flex w-full min-w-0 flex-col gap-1.5">
@@ -1312,7 +1360,9 @@ function NodeInspector({
           : (node.options ?? []).map((option) => option.label).join("\n")
         : "",
       contextBinding:
-        isQuestion(node) && node.context?.binding ? node.context.binding : "patient",
+        isQuestion(node) && node.context?.binding
+          ? node.context.binding
+          : "patient",
       min: isQuestion(node) ? (node.validation?.min ?? null) : null,
       max: isQuestion(node) ? (node.validation?.max ?? null) : null,
       unit: isQuestion(node) ? (node.unit ?? "") : "",
@@ -1343,12 +1393,13 @@ function NodeInspector({
           .map((part) => part.trim())
           .filter((part) => part.length > 0)
         const maxCount =
-          typeof values.maxCount === "number" && Number.isFinite(values.maxCount)
+          typeof values.maxCount === "number" &&
+          Number.isFinite(values.maxCount)
             ? Math.max(1, Math.floor(values.maxCount))
             : 1
         const maxFileSizeMb =
           typeof values.maxFileSizeMb === "number" &&
-            Number.isFinite(values.maxFileSizeMb)
+          Number.isFinite(values.maxFileSizeMb)
             ? Math.max(1, values.maxFileSizeMb)
             : 10
         const optionsText =
@@ -1378,10 +1429,11 @@ function NodeInspector({
             (current.required === values.required &&
               (current.includeTime === true) === values.includeTime &&
               (current.quickDateSelection === true) ===
-              values.quickDateSelection &&
+                values.quickDateSelection &&
               (current.dateRange === true) === values.dateRange &&
               (current.allowOther === true) === values.allowOther &&
-              (current.context?.binding ?? "patient") === values.contextBinding &&
+              (current.context?.binding ?? "patient") ===
+                values.contextBinding &&
               (current.validation?.min ?? null) === min &&
               (current.validation?.max ?? null) === max &&
               (current.unit ?? "") === values.unit &&
@@ -1395,61 +1447,64 @@ function NodeInspector({
           label: values.label,
           description: values.description,
           key: slugifyKey(values.label),
-          ...(isLayoutBlock(current) && current.kind === "text" ? { body: values.body } : {}),
+          ...(isLayoutBlock(current) && current.kind === "text"
+            ? { body: values.body }
+            : {}),
           ...(isQuestion(current)
             ? {
-              required: values.required,
-              includeTime: values.includeTime,
-              quickDateSelection: values.quickDateSelection,
-              dateRange: values.dateRange,
-              allowOther: values.allowOther,
-              options:
-                isChoiceKind(current.kind)
-                  ? options
-                  : current.options,
-              context:
-                current.kind === "context" && isContextBinding(values.contextBinding)
-                  ? { binding: values.contextBinding }
-                  : current.context,
-              validation:
-                current.kind === "number"
-                  ? {
-                    ...(typeof min === "number" && Number.isFinite(min)
-                      ? { min }
-                      : {}),
-                    ...(typeof max === "number" && Number.isFinite(max)
-                      ? { max }
-                      : {}),
-                  }
-                  : current.validation,
-              unit:
-                current.kind === "number"
-                  ? (values.unit.trim() || undefined)
-                  : current.unit,
-              attachment:
-                current.kind === "attachment"
-                  ? {
-                    accept:
-                      accept.length > 0 ? accept : [...DEFAULT_ATTACHMENT_ACCEPT],
-                    maxCount,
-                    maxFileSizeMb,
-                  }
-                  : current.attachment,
-            }
+                required: values.required,
+                includeTime: values.includeTime,
+                quickDateSelection: values.quickDateSelection,
+                dateRange: values.dateRange,
+                allowOther: values.allowOther,
+                options: isChoiceKind(current.kind) ? options : current.options,
+                context:
+                  current.kind === "context" &&
+                  isContextBinding(values.contextBinding)
+                    ? { binding: values.contextBinding }
+                    : current.context,
+                validation:
+                  current.kind === "number"
+                    ? {
+                        ...(typeof min === "number" && Number.isFinite(min)
+                          ? { min }
+                          : {}),
+                        ...(typeof max === "number" && Number.isFinite(max)
+                          ? { max }
+                          : {}),
+                      }
+                    : current.validation,
+                unit:
+                  current.kind === "number"
+                    ? values.unit.trim() || undefined
+                    : current.unit,
+                attachment:
+                  current.kind === "attachment"
+                    ? {
+                        accept:
+                          accept.length > 0
+                            ? accept
+                            : [...DEFAULT_ATTACHMENT_ACCEPT],
+                        maxCount,
+                        maxFileSizeMb,
+                      }
+                    : current.attachment,
+              }
             : {}),
         })
       },
     },
   })
   return (
-    <div className="flex w-full min-w-0 max-w-full flex-col gap-3">
+    <div className="flex w-full max-w-full min-w-0 flex-col gap-3">
       <div className="flex w-full min-w-0 flex-col gap-1.5">
         <Label>{isQuestion(node) ? "Question type" : "Block type"}</Label>
         <Select
           value={node.kind}
-          items={(isQuestion(node) ? FORM_QUESTION_KINDS : FORM_LAYOUT_KINDS).map(
-            (kind) => ({ value: kind, label: labelForKind(kind) })
-          )}
+          items={(isQuestion(node)
+            ? FORM_QUESTION_KINDS
+            : FORM_LAYOUT_KINDS
+          ).map((kind) => ({ value: kind, label: labelForKind(kind) }))}
           onValueChange={(value) => {
             if (typeof value !== "string" || value === node.kind) return
             if (isQuestion(node) && isQuestionKind(value)) {
@@ -1461,7 +1516,7 @@ function NodeInspector({
             }
           }}
         >
-          <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+          <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1486,7 +1541,9 @@ function NodeInspector({
               value={field.state.value}
               onChange={(event) => field.handleChange(event.target.value)}
             />
-            <p className="truncate text-xs text-muted-foreground">Key: {node.key}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              Key: {node.key}
+            </p>
           </div>
         )}
       </form.Field>
@@ -1541,10 +1598,11 @@ function NodeInspector({
                   label: CONTEXT_BINDING_LABELS[binding],
                 }))}
                 onValueChange={(value) => {
-                  if (typeof value === "string") field.handleChange(value as ContextBinding)
+                  if (typeof value === "string")
+                    field.handleChange(value as ContextBinding)
                 }}
               >
-                <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+                <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1702,9 +1760,9 @@ function NodeInspector({
         </div>
       ) : null}
       {isQuestion(node) &&
-        (node.kind === "select" ||
-          node.kind === "multi_select" ||
-          node.kind === "autocomplete") ? (
+      (node.kind === "select" ||
+        node.kind === "multi_select" ||
+        node.kind === "autocomplete") ? (
         <>
           <form.Field name="optionsText">
             {(field) => (
@@ -1824,7 +1882,9 @@ function DefaultValueControl({
           value={typeof value === "string" ? value : ""}
           placeholder="Default answer"
           onChange={(event) =>
-            onChange(event.target.value.length > 0 ? event.target.value : undefined)
+            onChange(
+              event.target.value.length > 0 ? event.target.value : undefined
+            )
           }
         />
       )
@@ -1835,7 +1895,9 @@ function DefaultValueControl({
           value={typeof value === "string" ? value : ""}
           placeholder="Default answer"
           onChange={(event) =>
-            onChange(event.target.value.length > 0 ? event.target.value : undefined)
+            onChange(
+              event.target.value.length > 0 ? event.target.value : undefined
+            )
           }
         />
       )
@@ -1868,7 +1930,7 @@ function DefaultValueControl({
             if (next === "no") onChange(false)
           }}
         >
-          <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+          <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
             <SelectValue placeholder="Choose default" />
           </SelectTrigger>
           <SelectContent>
@@ -1891,7 +1953,9 @@ function DefaultValueControl({
             options={options}
             allowCustomValue
             placeholder="Default answer"
-            onValueChange={(next) => onChange(next.length > 0 ? next : undefined)}
+            onValueChange={(next) =>
+              onChange(next.length > 0 ? next : undefined)
+            }
           />
         )
       }
@@ -1906,7 +1970,7 @@ function DefaultValueControl({
             if (typeof next === "string") onChange(next)
           }}
         >
-          <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+          <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
             <SelectValue placeholder="Choose default" />
           </SelectTrigger>
           <SelectContent>
@@ -1940,7 +2004,10 @@ function DefaultValueControl({
           {(node.options ?? []).map((option) => {
             const checked = selected.includes(option.value)
             return (
-              <div key={option.value} className="flex items-center gap-2 text-sm">
+              <div
+                key={option.value}
+                className="flex items-center gap-2 text-sm"
+              >
                 <Checkbox
                   checked={checked}
                   onCheckedChange={(next) => {
@@ -2000,7 +2067,7 @@ function DateDefaultControl({
           }
         }}
       >
-        <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+        <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
           <SelectValue placeholder="Choose default" />
         </SelectTrigger>
         <SelectContent>
@@ -2041,12 +2108,12 @@ function ConditionEditor({
       rules: (existingRules.length > 0
         ? existingRules
         : [
-          {
-            fieldKey: sources[0]?.key ?? "",
-            op: "eq" as const,
-            value: "",
-          },
-        ]
+            {
+              fieldKey: sources[0]?.key ?? "",
+              op: "eq" as const,
+              value: "",
+            },
+          ]
       ).map((rule) => ({
         fieldKey: rule.fieldKey,
         op: rule.op,
@@ -2112,7 +2179,7 @@ function ConditionEditor({
                             }
                           }}
                         >
-                          <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+                          <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -2129,8 +2196,11 @@ function ConditionEditor({
                     {(field) => (
                       <div className="flex w-full min-w-0 flex-col gap-3">
                         {field.state.value.map((rule, index) => {
-                          const source = sources.find((entry) => entry.key === rule.fieldKey)
-                          const needsValue = rule.op !== "is_set" && rule.op !== "is_empty"
+                          const source = sources.find(
+                            (entry) => entry.key === rule.fieldKey
+                          )
+                          const needsValue =
+                            rule.op !== "is_set" && rule.op !== "is_empty"
                           return (
                             <div
                               // biome-ignore lint/suspicious/noArrayIndexKey: condition rows are ordered editor slots
@@ -2148,17 +2218,24 @@ function ConditionEditor({
                                   const next = [...field.state.value]
                                   const current = next[index]
                                   if (!current) return
-                                  next[index] = { ...current, fieldKey: value, value: "" }
+                                  next[index] = {
+                                    ...current,
+                                    fieldKey: value,
+                                    value: "",
+                                  }
                                   field.handleChange(next)
                                 }}
                               >
-                                <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+                                <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
                                   <SelectValue placeholder="Question" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectGroup>
                                     {sources.map((question) => (
-                                      <SelectItem key={question.id} value={question.key}>
+                                      <SelectItem
+                                        key={question.id}
+                                        value={question.key}
+                                      >
                                         {question.label}
                                       </SelectItem>
                                     ))}
@@ -2172,7 +2249,9 @@ function ConditionEditor({
                                   label: entry.label,
                                 }))}
                                 onValueChange={(value) => {
-                                  const op = CONDITION_OPS.find((entry) => entry.op === value)?.op
+                                  const op = CONDITION_OPS.find(
+                                    (entry) => entry.op === value
+                                  )?.op
                                   if (!op) return
                                   const next = [...field.state.value]
                                   const current = next[index]
@@ -2181,13 +2260,16 @@ function ConditionEditor({
                                   field.handleChange(next)
                                 }}
                               >
-                                <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+                                <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectGroup>
                                     {CONDITION_OPS.map((entry) => (
-                                      <SelectItem key={entry.op} value={entry.op}>
+                                      <SelectItem
+                                        key={entry.op}
+                                        value={entry.op}
+                                      >
                                         {entry.label}
                                       </SelectItem>
                                     ))}
@@ -2218,7 +2300,9 @@ function ConditionEditor({
                                 disabled={field.state.value.length <= 1}
                                 onClick={() =>
                                   field.handleChange(
-                                    field.state.value.filter((_, ruleIndex) => ruleIndex !== index)
+                                    field.state.value.filter(
+                                      (_, ruleIndex) => ruleIndex !== index
+                                    )
                                   )
                                 }
                               >
@@ -2278,7 +2362,7 @@ function ConditionValueInput({
           if (typeof next === "string") onChange(next)
         }}
       >
-        <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+        <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
           <SelectValue placeholder="Value" />
         </SelectTrigger>
         <SelectContent>
@@ -2306,7 +2390,7 @@ function ConditionValueInput({
           if (typeof next === "string") onChange(next)
         }}
       >
-        <SelectTrigger className="w-full min-w-0 max-w-full overflow-hidden">
+        <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden">
           <SelectValue placeholder="Value" />
         </SelectTrigger>
         <SelectContent>
@@ -2321,11 +2405,18 @@ function ConditionValueInput({
       </Select>
     )
   }
-  if (source?.kind === "number" && (op === "eq" || op === "neq" || op === "gt" || op === "lt")) {
+  if (
+    source?.kind === "number" &&
+    (op === "eq" || op === "neq" || op === "gt" || op === "lt")
+  ) {
     return (
       <NumberField
         className="w-full min-w-0"
-        value={value.trim().length === 0 || !Number.isFinite(Number(value)) ? null : Number(value)}
+        value={
+          value.trim().length === 0 || !Number.isFinite(Number(value))
+            ? null
+            : Number(value)
+        }
         onValueChange={(next) => onChange(next === null ? "" : String(next))}
       />
     )
@@ -2334,13 +2425,17 @@ function ConditionValueInput({
     <Input
       className="w-full min-w-0"
       value={value}
-      placeholder={op === "in" || op === "not_in" ? "Comma-separated values" : "Value"}
+      placeholder={
+        op === "in" || op === "not_in" ? "Comma-separated values" : "Value"
+      }
       onChange={(event) => onChange(event.target.value)}
     />
   )
 }
 
-function ruleValueToInput(value: FormConditionGroup["rules"][number]["value"]): string {
+function ruleValueToInput(
+  value: FormConditionGroup["rules"][number]["value"]
+): string {
   if (value === undefined) return ""
   if (Array.isArray(value)) return value.join(", ")
   return String(value)
@@ -2396,7 +2491,13 @@ function OptionsEditor({
             className="shrink-0"
             aria-label="Remove option"
             disabled={options.length <= 1}
-            onClick={() => onChange(options.filter((_, optionIndex) => optionIndex !== index).join("\n"))}
+            onClick={() =>
+              onChange(
+                options
+                  .filter((_, optionIndex) => optionIndex !== index)
+                  .join("\n")
+              )
+            }
           >
             <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
           </Button>
@@ -2464,7 +2565,10 @@ function collectNodeMap(node: FormNode, map: Map<string, FormNode>): void {
   }
 }
 
-function newestNodeId(before: FormTemplate, after: FormTemplate): string | null {
+function newestNodeId(
+  before: FormTemplate,
+  after: FormTemplate
+): string | null {
   const previous = new Set<string>()
   for (const page of before.pages) collectIds(page.nodes, previous)
   for (const page of after.pages) {
@@ -2481,7 +2585,10 @@ function collectIds(nodes: readonly FormNode[], into: Set<string>): void {
   }
 }
 
-function firstNewId(nodes: readonly FormNode[], previous: Set<string>): string | null {
+function firstNewId(
+  nodes: readonly FormNode[],
+  previous: Set<string>
+): string | null {
   for (const node of nodes) {
     if (!previous.has(node.id)) return node.id
     if (isQuestion(node) && node.children) {

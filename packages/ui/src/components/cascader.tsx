@@ -115,7 +115,7 @@ export function Cascader({
             disabled={disabled}
             aria-invalid={ariaInvalid}
             className={cn(
-              "w-full min-w-0 shrink overflow-hidden justify-between font-normal",
+              "w-full min-w-0 shrink justify-between overflow-hidden font-normal",
               className
             )}
           />
@@ -135,7 +135,10 @@ export function Cascader({
           className="shrink-0 text-muted-foreground"
         />
       </PopoverTrigger>
-      <PopoverContent className="w-(--anchor-width) min-w-56 gap-0 p-0" align="start">
+      <PopoverContent
+        className="w-(--anchor-width) min-w-56 gap-0 p-0"
+        align="start"
+      >
         <div className="flex items-center gap-1 border-b p-1.5">
           <Button
             type="button"
@@ -192,9 +195,15 @@ export function Cascader({
                       setOpen(false)
                     }}
                   >
-                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {item.label}
+                    </span>
                     {selected && !branch ? (
-                      <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" />
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        strokeWidth={2}
+                        className="size-4"
+                      />
                     ) : null}
                     {branch ? (
                       <HugeiconsIcon

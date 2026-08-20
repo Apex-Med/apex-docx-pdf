@@ -30,7 +30,11 @@ export function bindingDiagnostics(
   }
 
   for (const tag of tags) {
-    if (tag.role === "value" && !documentSlugs.has(tag.slug) && !tag.parentKey) {
+    if (
+      tag.role === "value" &&
+      !documentSlugs.has(tag.slug) &&
+      !tag.parentKey
+    ) {
       diagnostics.push({
         code: "UNUSED_QUESTION",
         severity: "warning",

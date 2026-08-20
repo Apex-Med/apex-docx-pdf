@@ -1,9 +1,5 @@
 import { DATE_RANGE_SEPARATOR, normalizeStoredDateAnswer } from "./dates"
-import {
-  isKnownChoiceValue,
-  isOtherSentinel,
-  knownChoiceValues,
-} from "./other"
+import { isKnownChoiceValue, isOtherSentinel, knownChoiceValues } from "./other"
 import {
   DATE_DEFAULT_TODAY,
   type FormAnswerValue,
@@ -11,9 +7,7 @@ import {
   type FormQuestionKind,
 } from "./types"
 
-export function questionSupportsDefaultAnswer(
-  kind: FormQuestionKind
-): boolean {
+export function questionSupportsDefaultAnswer(kind: FormQuestionKind): boolean {
   switch (kind) {
     case "short_text":
     case "long_text":
@@ -43,10 +37,7 @@ export function isTodayDateDefault(
   return value === DATE_DEFAULT_TODAY
 }
 
-export function formatLocalDateInput(
-  now: Date,
-  includeTime: boolean
-): string {
+export function formatLocalDateInput(now: Date, includeTime: boolean): string {
   const year = String(now.getFullYear())
   const month = pad2(now.getMonth() + 1)
   const day = pad2(now.getDate())
@@ -61,7 +52,9 @@ export function resolveDefaultValue(
   const value = normalizeDefaultValue(question)
   if (question.kind === "date" && isTodayDateDefault(value)) {
     const day = formatLocalDateInput(now, question.includeTime === true)
-    return question.dateRange === true ? `${day}${DATE_RANGE_SEPARATOR}${day}` : day
+    return question.dateRange === true
+      ? `${day}${DATE_RANGE_SEPARATOR}${day}`
+      : day
   }
   return value
 }
@@ -73,7 +66,11 @@ export function coerceDefaultFromSource(
   if (!source || source.defaultValue === undefined) return undefined
   const value = source.defaultValue
   if (isTodayDateDefault(value) && kind !== "date") return undefined
-  if (kind === "multi_select" && typeof value === "string" && value.length > 0) {
+  if (
+    kind === "multi_select" &&
+    typeof value === "string" &&
+    value.length > 0
+  ) {
     return [value]
   }
   if (

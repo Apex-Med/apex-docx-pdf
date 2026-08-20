@@ -126,7 +126,11 @@ export function FileAcceptCombobox({
                   <ComboboxChip
                     aria-label={item.label}
                     key={item.value}
-                    title={item.value === item.label ? item.label : `${item.label} (${item.value})`}
+                    title={
+                      item.value === item.label
+                        ? item.label
+                        : `${item.label} (${item.value})`
+                    }
                   >
                     {item.label}
                   </ComboboxChip>
@@ -134,7 +138,9 @@ export function FileAcceptCombobox({
                 <ComboboxChipsInput
                   id={id}
                   aria-label="Accepted file types"
-                  placeholder={selectedValue.length > 0 ? undefined : placeholder}
+                  placeholder={
+                    selectedValue.length > 0 ? undefined : placeholder
+                  }
                 />
               </>
             )}

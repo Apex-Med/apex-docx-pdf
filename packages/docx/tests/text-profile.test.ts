@@ -77,9 +77,9 @@ describe("bounded Word text profile", () => {
     const paragraph = result.value.sections[0]?.blocks[0]
     expect(paragraph?.type).toBe("paragraph")
     if (paragraph?.type !== "paragraph") return
-    expect(paragraph.children.some((c) => c.type === "break" && c.kind === "column")).toBe(
-      true
-    )
+    expect(
+      paragraph.children.some((c) => c.type === "break" && c.kind === "column")
+    ).toBe(true)
   })
 
   test("rejects unknown highlight and vertical alignment values", () => {

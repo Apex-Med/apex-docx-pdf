@@ -34,21 +34,21 @@ describe("form tag binding", () => {
       },
     })
     const tags = tagsFromForm(form)
-    expect(tags.some((tag) => tag.slug === "name" && tag.role === "value")).toBe(
-      true
-    )
-    expect(tags.some((tag) => tag.slug === "age" && tag.kind === "number")).toBe(
-      true
-    )
+    expect(
+      tags.some((tag) => tag.slug === "name" && tag.role === "value")
+    ).toBe(true)
+    expect(
+      tags.some((tag) => tag.slug === "age" && tag.kind === "number")
+    ).toBe(true)
     expect(tags.some((tag) => tag.slug === "born" && tag.kind === "date")).toBe(
       true
     )
     expect(tags.some((tag) => tag.slug === "meds" && tag.role === "each")).toBe(
       true
     )
-    expect(tags.some((tag) => tag.slug === "scan" && tag.role === "image")).toBe(
-      true
-    )
+    expect(
+      tags.some((tag) => tag.slug === "scan" && tag.role === "image")
+    ).toBe(true)
     expect(tags.some((tag) => tag.slug === "patient.full_name")).toBe(true)
     expect(tags.some((tag) => tag.role === "if" && tag.slug === "name")).toBe(
       true

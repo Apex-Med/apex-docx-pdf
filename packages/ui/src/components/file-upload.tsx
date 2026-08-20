@@ -81,7 +81,11 @@ export function FileUpload({
         onDragOver={disabled ? undefined : handleDragOver}
         onDrop={disabled ? undefined : handleDrop}
       >
-        <input {...getInputProps({ disabled })} className="sr-only" aria-hidden />
+        <input
+          {...getInputProps({ disabled })}
+          className="sr-only"
+          aria-hidden
+        />
 
         <Button
           type="button"
@@ -90,7 +94,11 @@ export function FileUpload({
           disabled={disabled}
           className={cn("shrink-0", isDragging && "animate-bounce")}
         >
-          <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} data-icon="inline-start" />
+          <HugeiconsIcon
+            icon={PlusSignIcon}
+            strokeWidth={2}
+            data-icon="inline-start"
+          />
           Add files
         </Button>
 
@@ -132,7 +140,10 @@ export function FileUpload({
                       className="absolute -end-2 -top-2 rounded-full opacity-0 shadow-md transition-opacity group-hover/item:opacity-100"
                       aria-label={`Remove ${fileItem.file.name}`}
                     >
-                      <HugeiconsIcon icon={MultiplicationSignIcon} strokeWidth={2} />
+                      <HugeiconsIcon
+                        icon={MultiplicationSignIcon}
+                        strokeWidth={2}
+                      />
                     </Button>
                   ) : null}
                 </div>

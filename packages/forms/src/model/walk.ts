@@ -56,10 +56,7 @@ export function findNode(
   return found
 }
 
-export function findPage(
-  form: FormTemplate,
-  pageId: string
-): FormPage | null {
+export function findPage(form: FormTemplate, pageId: string): FormPage | null {
   return form.pages.find((page) => page.id === pageId) ?? null
 }
 

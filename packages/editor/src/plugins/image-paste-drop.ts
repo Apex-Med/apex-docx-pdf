@@ -36,7 +36,10 @@ export async function insertImageFile(
   view: EditorView,
   file: File
 ): Promise<boolean> {
-  if (!IMAGE_FILE_RE.test(file.type) && !/\.(png|jpe?g|gif|webp|avif|svg)$/iu.test(file.name))
+  if (
+    !IMAGE_FILE_RE.test(file.type) &&
+    !/\.(png|jpe?g|gif|webp|avif|svg)$/iu.test(file.name)
+  )
     return false
   const bytes = new Uint8Array(await file.arrayBuffer())
   const mimeType = normalizeMime(file, bytes)
@@ -46,7 +49,9 @@ export async function insertImageFile(
   let pixelHeight = 100
   let workingBytes = bytes
   let workingMime = mimeType
-  let rasterFallback: Parameters<typeof insertImageFromBytes>[0]["rasterFallback"]
+  let rasterFallback: Parameters<
+    typeof insertImageFromBytes
+  >[0]["rasterFallback"]
 
   if (mimeType === "image/svg+xml") {
     const { svgText } = sanitizeSvg(new TextDecoder().decode(bytes))

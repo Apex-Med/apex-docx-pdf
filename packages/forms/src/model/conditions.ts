@@ -59,12 +59,20 @@ export function isRuleSatisfied(
     case "gt": {
       const expected = Number(rule.value)
       const actual = Number(current)
-      return Number.isFinite(expected) && Number.isFinite(actual) && actual > expected
+      return (
+        Number.isFinite(expected) &&
+        Number.isFinite(actual) &&
+        actual > expected
+      )
     }
     case "lt": {
       const expected = Number(rule.value)
       const actual = Number(current)
-      return Number.isFinite(expected) && Number.isFinite(actual) && actual < expected
+      return (
+        Number.isFinite(expected) &&
+        Number.isFinite(actual) &&
+        actual < expected
+      )
     }
     default:
       return true
@@ -86,9 +94,7 @@ export function isNodeVisible(node: FormNode, answers: FormAnswers): boolean {
   return isConditionSatisfied(node.condition, answers)
 }
 
-export function visibilitySourceQuestions(
-  form: FormTemplate
-): FormQuestion[] {
+export function visibilitySourceQuestions(form: FormTemplate): FormQuestion[] {
   return flattenQuestions(form).filter(
     (question) =>
       question.kind === "select" ||

@@ -1,5 +1,7 @@
-## Design 
+## Design
+
 **IMPORTANT**
+
 - Ensure all ui implentations follow conventions in the interface-details skill. Use this skill when making changes to the ui or implementing new features.
 - Ensure that the ui is professional and clean -- without unecessary backend explanations in the ui.
 
@@ -28,6 +30,7 @@ Do not fetch or derive app state in `useEffect`. Reserve effects for real extern
 - Dropdown nav items: `<DropdownMenuItem asChild><Link to={…}>…</Link></DropdownMenuItem>` — do not nest `<Link>` inside a non-asChild menu item.
 
 ---
+
 description: Base UI Select must pass items so SelectValue shows labels, not raw values
 globs: **/*.{tsx,ts}
 alwaysApply: false

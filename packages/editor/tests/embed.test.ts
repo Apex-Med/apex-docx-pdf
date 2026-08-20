@@ -99,9 +99,11 @@ describe("embed controller helpers", () => {
   test("toUint8Array accepts ArrayBuffer and Uint8Array", () => {
     const raw = new Uint8Array([1, 2, 3])
     expect(toUint8Array(raw)).toEqual(raw)
-    expect(toUint8Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))).toEqual(
-      raw
-    )
+    expect(
+      toUint8Array(
+        raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+      )
+    ).toEqual(raw)
   })
 
   test("parseEmbedDocx + serializeEmbedDocx round-trips minimal fixture text", () => {
@@ -145,7 +147,8 @@ describe("embed controller helpers", () => {
         (block) =>
           block.type === "paragraph" &&
           block.children.some(
-            (child) => child.type === "text" && child.text.includes("Buffer path")
+            (child) =>
+              child.type === "text" && child.text.includes("Buffer path")
           )
       )
     ).toBe(true)
@@ -166,7 +169,13 @@ describe("embed controller helpers", () => {
   test("serializeEmbedPdf returns PDF bytes for a blank document", async () => {
     const pdf = await serializeEmbedPdf(createBlankDocument())
     expect(pdf.byteLength).toBeGreaterThan(50)
-    const header = String.fromCharCode(pdf[0]!, pdf[1]!, pdf[2]!, pdf[3]!, pdf[4]!)
+    const header = String.fromCharCode(
+      pdf[0]!,
+      pdf[1]!,
+      pdf[2]!,
+      pdf[3]!,
+      pdf[4]!
+    )
     expect(header).toBe("%PDF-")
   })
 

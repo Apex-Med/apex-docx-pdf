@@ -2755,10 +2755,7 @@ export function insertTemplateMarker(
   }
 }
 
-export function wrapTemplateRegion(
-  kind: "if" | "each",
-  path: string
-): Command {
+export function wrapTemplateRegion(kind: "if" | "each", path: string): Command {
   return (state, dispatch) => {
     const type = state.schema.nodes.template_marker
     if (!type) return false

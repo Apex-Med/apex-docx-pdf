@@ -248,9 +248,7 @@ describe("editor chrome components", () => {
     expect(source).toContain("actions.onApplyStyle(menu.id)")
     expect(source).toContain("alignItemWithTrigger={false}")
     expect(source).toContain("max-h-80!")
-    expect(source).toContain(
-      "if (event.button === 0) event.preventDefault()"
-    )
+    expect(source).toContain("if (event.button === 0) event.preventDefault()")
     expect(source).toContain("onMouseDown={(event) => {")
     expect(source).toContain("onContextMenu")
     expect(source).not.toContain("ContextMenuTrigger")
@@ -574,7 +572,7 @@ describe("editor chrome components", () => {
     expect(editor).toContain('workspaceTab === "document" ? (')
     expect(editor).toContain("<TagsSidebar")
     expect(editor).not.toContain(
-      "open={tagsSidebarOpen && workspaceTab === \"document\"}"
+      'open={tagsSidebarOpen && workspaceTab === "document"}'
     )
     const formPreview = readFileSync(
       join(import.meta.dir, "../src/ui/FormPreview.tsx"),

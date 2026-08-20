@@ -55,15 +55,13 @@ const exportRegistryCache = new WeakMap<
   Promise<ManagedFontRegistry | undefined>
 >()
 
-function faceKey(
-  family: string,
-  weight: FontWeight,
-  style: FontStyle
-): string {
+function faceKey(family: string, weight: FontWeight, style: FontStyle): string {
   return `${family.toLowerCase()}\u0000${weight}\u0000${style}`
 }
 
-async function readResolvedBytes(spec: string): Promise<Uint8Array | undefined> {
+async function readResolvedBytes(
+  spec: string
+): Promise<Uint8Array | undefined> {
   try {
     const resolved = import.meta.resolve(spec)
     const url = new URL(resolved, import.meta.url)
@@ -93,7 +91,9 @@ async function readPublicFont(file: string): Promise<Uint8Array | undefined> {
   return undefined
 }
 
-async function readBundledCatalogUrl(url: string): Promise<Uint8Array | undefined> {
+async function readBundledCatalogUrl(
+  url: string
+): Promise<Uint8Array | undefined> {
   // Bun resolves `?url` imports to absolute filesystem paths; Vite emits fetchable URLs.
   if (url.startsWith("/") && !url.startsWith("//")) {
     try {
@@ -113,13 +113,16 @@ async function readBundledCatalogUrl(url: string): Promise<Uint8Array | undefine
   }
 }
 
-async function readCatalogAssetBytes(asset: string): Promise<Uint8Array | undefined> {
+async function readCatalogAssetBytes(
+  asset: string
+): Promise<Uint8Array | undefined> {
   const fromPackage =
     (await readResolvedBytes(`@apexmed/fonts/assets/${asset}`)) ??
     (await readResolvedBytes(`../../../fonts/assets/${asset}`))
   if (fromPackage) return fromPackage
 
-  const bundledUrl = catalogFontAssetUrls[asset as keyof typeof catalogFontAssetUrls]
+  const bundledUrl =
+    catalogFontAssetUrls[asset as keyof typeof catalogFontAssetUrls]
   if (!bundledUrl) return undefined
   return readBundledCatalogUrl(bundledUrl)
 }
@@ -141,7 +144,9 @@ async function loadCatalogFaces(): Promise<readonly FontFaceRegistration[]> {
   return faces
 }
 
-async function loadBuiltinInterFaces(): Promise<readonly FontFaceRegistration[]> {
+async function loadBuiltinInterFaces(): Promise<
+  readonly FontFaceRegistration[]
+> {
   const faces: FontFaceRegistration[] = []
   for (const face of EDITOR_INTER_FACES) {
     const bytes =
@@ -211,7 +216,9 @@ function mergeFaces(
   return [...byKey.values()]
 }
 
-async function catalogOrBuiltinFaces(): Promise<readonly FontFaceRegistration[]> {
+async function catalogOrBuiltinFaces(): Promise<
+  readonly FontFaceRegistration[]
+> {
   catalogFacesPromise ??= loadCatalogFaces()
   const catalog = await catalogFacesPromise
   if (catalog.length > 0) return catalog
@@ -261,9 +268,7 @@ async function buildExportRegistry(
   ) {
     return undefined
   }
-  const aliases = OFFLINE_FONT_ALIASES.filter((alias) =>
-    families.has(alias.to)
-  )
+  const aliases = OFFLINE_FONT_ALIASES.filter((alias) => families.has(alias.to))
   return createFontRegistry({
     faces,
     aliases,

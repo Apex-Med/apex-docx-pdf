@@ -31,10 +31,9 @@ export function createTemplateTagNodeView(node: PMNode): NodeView {
       useTemplateTagStore.getState().values
     )
     const filled = value !== undefined
-    const keep = [
-      "apex-template-tag--in-selection",
-      "is-selected",
-    ].filter((name) => dom.classList.contains(name))
+    const keep = ["apex-template-tag--in-selection", "is-selected"].filter(
+      (name) => dom.classList.contains(name)
+    )
     dom.className = filled
       ? "apex-template-tag apex-template-tag--filled"
       : "apex-template-tag apex-template-tag--empty"

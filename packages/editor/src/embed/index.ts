@@ -2,10 +2,7 @@ import type { SemanticDocument } from "@apexmed/core"
 
 import { EDITOR_CSS } from "../styles/editor-css"
 import type { EditorController } from "../ui/Editor"
-import {
-  type EmbedChangeDetail,
-  type EmbedErrorDetail,
-} from "./helpers"
+import { type EmbedChangeDetail, type EmbedErrorDetail } from "./helpers"
 import {
   hoistPropertyRulesToDocument,
   transformCssForShadowDom,
@@ -47,8 +44,7 @@ type EditorElementInstance = {
 export type ApexDocxEditorElement = HTMLElement & EditorElementInstance
 
 function createEditorElementClass():
-  | (new () => ApexDocxEditorElement)
-  | undefined {
+  (new () => ApexDocxEditorElement) | undefined {
   if (typeof HTMLElement === "undefined") return undefined
 
   return class ApexDocxEditorElementImpl
@@ -163,9 +159,7 @@ function createEditorElementClass():
         this.#resolveReady = null
       } catch (error) {
         host.textContent = "Apex DOCX Editor"
-        this.#emitError(
-          error instanceof Error ? error.message : String(error)
-        )
+        this.#emitError(error instanceof Error ? error.message : String(error))
         this.#resolveReady?.()
         this.#resolveReady = null
       }
@@ -194,8 +188,7 @@ function createEditorElementClass():
         const controller = await this.#whenReady()
         await controller.loadDocx(bytes)
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error)
+        const message = error instanceof Error ? error.message : String(error)
         this.#emitError(message)
         throw error
       }
@@ -211,8 +204,7 @@ function createEditorElementClass():
         const controller = await this.#whenReady()
         return await controller.getPdf()
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error)
+        const message = error instanceof Error ? error.message : String(error)
         this.#emitError(message)
         throw error
       }

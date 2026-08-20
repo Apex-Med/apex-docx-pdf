@@ -28,13 +28,13 @@ export function isValidTemplatePath(path: string): boolean {
   if (!PATH.test(path)) return false
   return path
     .split(".")
-    .every((segment) => PATH_SEGMENT.test(segment) && !RESERVED_PATH_SEGMENTS.has(segment))
+    .every(
+      (segment) =>
+        PATH_SEGMENT.test(segment) && !RESERVED_PATH_SEGMENTS.has(segment)
+    )
 }
 
-export function uniqueSlug(
-  desired: string,
-  taken: Iterable<string>
-): string {
+export function uniqueSlug(desired: string, taken: Iterable<string>): string {
   const used = new Set(taken)
   const base = isValidTemplatePath(desired) ? desired : slugifyLabel(desired)
   if (!used.has(base)) return base

@@ -10,15 +10,15 @@ import {
 import { layoutDocument } from "@apexmed/layout"
 import { EditorState } from "prosemirror-state"
 
-import {
-  fromSemanticDocument,
-  toSemanticDocument,
-} from "../src/model/bridge"
+import { fromSemanticDocument, toSemanticDocument } from "../src/model/bridge"
 import {
   pageBreaksFromTrace,
   paginationSignature,
 } from "../src/pagination/breaks"
-import { createLayoutClient, getLayoutAsync } from "../src/pagination/layout-client"
+import {
+  createLayoutClient,
+  getLayoutAsync,
+} from "../src/pagination/layout-client"
 import { decorationsFromPlacements } from "../src/pagination/plugin"
 
 const style: TextStyle = {
@@ -32,35 +32,38 @@ const style: TextStyle = {
 
 function documentWithParagraphs(count: number): SemanticDocument {
   const blank = createBlankDocument()
-  const blocks: SemanticParagraph[] = Array.from({ length: count }, (_, index) => ({
-    type: "paragraph",
-    id: nodeId(`perf:p${index + 1}`),
-    source: blank.source,
-    properties: {
-      alignment: "left",
-      spacingBefore: twips(0),
-      spacingAfter: twips(120),
-      lineSpacing: null,
-      indentStart: twips(0),
-      indentEnd: twips(0),
-      firstLineIndent: twips(0),
-      keepWithNext: false,
-      keepLinesTogether: false,
-      widowControl: true,
-      pageBreakBefore: false,
-      numbering: null,
-      tabStops: [],
-    },
-    children: [
-      {
-        type: "text",
-        id: nodeId(`perf:t${index + 1}`),
-        source: blank.source,
-        text: `Paragraph ${index + 1}. Lorem ipsum dolor sit amet, consectetur adipiscing elit.`,
-        style,
+  const blocks: SemanticParagraph[] = Array.from(
+    { length: count },
+    (_, index) => ({
+      type: "paragraph",
+      id: nodeId(`perf:p${index + 1}`),
+      source: blank.source,
+      properties: {
+        alignment: "left",
+        spacingBefore: twips(0),
+        spacingAfter: twips(120),
+        lineSpacing: null,
+        indentStart: twips(0),
+        indentEnd: twips(0),
+        firstLineIndent: twips(0),
+        keepWithNext: false,
+        keepLinesTogether: false,
+        widowControl: true,
+        pageBreakBefore: false,
+        numbering: null,
+        tabStops: [],
       },
-    ],
-  }))
+      children: [
+        {
+          type: "text",
+          id: nodeId(`perf:t${index + 1}`),
+          source: blank.source,
+          text: `Paragraph ${index + 1}. Lorem ipsum dolor sit amet, consectetur adipiscing elit.`,
+          style,
+        },
+      ],
+    })
+  )
   return {
     ...blank,
     sections: [

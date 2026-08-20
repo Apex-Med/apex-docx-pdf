@@ -110,7 +110,9 @@ export function TagEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{mode === "edit" ? "Edit tag" : "Create tag"}</DialogTitle>
+          <DialogTitle>
+            {mode === "edit" ? "Edit tag" : "Create tag"}
+          </DialogTitle>
           <DialogDescription>
             {system
               ? "Built-in tags keep their placeholder id and type. You can rename them or change the date format."
@@ -142,7 +144,11 @@ export function TagEditorDialog({
               disabled={system}
               onValueChange={(value) => {
                 if (system) return
-                if (value === "string" || value === "number" || value === "date") {
+                if (
+                  value === "string" ||
+                  value === "number" ||
+                  value === "date"
+                ) {
                   setKind(value)
                 }
               }}
@@ -201,7 +207,7 @@ export function TagEditorDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-xs text-muted-foreground">
                   Example: {example}
                 </p>
               </div>
@@ -221,13 +227,13 @@ export function TagEditorDialog({
                 setSlug(event.target.value)
               }}
             />
-            <p className="text-muted-foreground font-mono text-xs">
+            <p className="font-mono text-xs text-muted-foreground">
               {kind === "date"
                 ? `{{${generated}:date | date:"${pattern}"}}`
                 : `{{${generated}:${kind}}}`}
             </p>
             {!slugValid ? (
-              <p className="text-destructive text-xs">
+              <p className="text-xs text-destructive">
                 Use a letter-leading dotted path such as author_name or
                 customer.name.
               </p>
@@ -235,7 +241,11 @@ export function TagEditorDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button
@@ -246,7 +256,8 @@ export function TagEditorDialog({
                 ...(initial?.id ? { id: initial.id } : {}),
                 ...(initial?.source ? { source: initial.source } : {}),
                 label: label.trim(),
-                slug: mode === "edit" ? (initial?.slug ?? generated) : generated,
+                slug:
+                  mode === "edit" ? (initial?.slug ?? generated) : generated,
                 kind,
                 ...(kind === "date" ? { date: { includeTime, pattern } } : {}),
               })

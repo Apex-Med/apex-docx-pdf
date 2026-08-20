@@ -65,9 +65,9 @@ describe("answer validation", () => {
     form = addNode(form, pageId, "cascader", { label: "Location" })
     const result = validateAnswers(form, { location: "group_1" })
     expect(result.errors.location).toContain("invalid option")
-    expect(
-      validateAnswers(form, { location: "group_1/option_1" }).ok
-    ).toBe(true)
+    expect(validateAnswers(form, { location: "group_1/option_1" }).ok).toBe(
+      true
+    )
   })
 
   test("repeater children validate with indexed paths", () => {
@@ -83,8 +83,8 @@ describe("answer validation", () => {
     const child = "children" in repeater ? repeater : form.pages[0]!.nodes[0]!
     const childId =
       child.kind === "repeater" && "children" in child
-        ? (form.pages[0]!.nodes[0] as { children?: { id: string }[] }).children?.[0]
-            ?.id
+        ? (form.pages[0]!.nodes[0] as { children?: { id: string }[] })
+            .children?.[0]?.id
         : undefined
     expect(childId).toBeDefined()
     form = updateNode(form, childId!, { required: true })
@@ -161,7 +161,9 @@ describe("answer validation", () => {
     const pageId = form.pages[0]!.id
     form = addNode(form, pageId, "boolean", { label: "Flag" })
     form = addNode(form, pageId, "number", { label: "Count" })
-    form = updateNode(form, form.pages[0]!.nodes[0]!.id, { defaultValue: false })
+    form = updateNode(form, form.pages[0]!.nodes[0]!.id, {
+      defaultValue: false,
+    })
     form = updateNode(form, form.pages[0]!.nodes[1]!.id, { defaultValue: 0 })
     const defaults = buildDefaultAnswers(form)
     expect(defaults.flag).toBe(false)
@@ -175,9 +177,9 @@ describe("answer validation", () => {
     const id = form.pages[0]!.nodes[0]!.id
     form = updateNode(form, id, { defaultValue: DATE_DEFAULT_TODAY })
     const dateNode = form.pages[0]!.nodes[0]
-    expect(dateNode && isQuestion(dateNode) ? dateNode.defaultValue : undefined).toBe(
-      DATE_DEFAULT_TODAY
-    )
+    expect(
+      dateNode && isQuestion(dateNode) ? dateNode.defaultValue : undefined
+    ).toBe(DATE_DEFAULT_TODAY)
 
     const now = new Date(2026, 7, 20, 15, 4)
     expect(buildDefaultAnswers(form, now).admitted).toBe("2026-08-20")
@@ -203,8 +205,8 @@ describe("answer validation", () => {
     expect(validateAnswers(form, { stay: "2026-08-20" }).errors.stay).toContain(
       "start and end"
     )
-    expect(
-      validateAnswers(form, { stay: "2026-08-20/2026-08-27" }).ok
-    ).toBe(true)
+    expect(validateAnswers(form, { stay: "2026-08-20/2026-08-27" }).ok).toBe(
+      true
+    )
   })
 })

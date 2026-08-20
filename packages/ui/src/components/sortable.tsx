@@ -84,7 +84,7 @@ const dropAnimationConfig: DropAnimation = {
   }),
 }
 
-const subscribeToNothing = () => () => { }
+const subscribeToNothing = () => () => {}
 const getIsMounted = () => true
 const getIsMountedOnServer = () => false
 
@@ -190,9 +190,14 @@ function Sortable<T>({
       setActiveId(null)
       onDragEnd?.(event)
       if (!over) return
-      const activeIndex = value.findIndex((item) => getItemValue(item) === active.id)
-      const overIndex = value.findIndex((item) => getItemValue(item) === over.id)
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return
+      const activeIndex = value.findIndex(
+        (item) => getItemValue(item) === active.id
+      )
+      const overIndex = value.findIndex(
+        (item) => getItemValue(item) === over.id
+      )
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex)
+        return
       if (onMove) {
         onMove({ event, activeIndex, overIndex })
         return
@@ -218,7 +223,10 @@ function Sortable<T>({
   )
 
   const itemIds = useMemo(() => value.map(getItemValue), [value, getItemValue])
-  const contextValue = useMemo(() => ({ activeId, modifiers }), [activeId, modifiers])
+  const contextValue = useMemo(
+    () => ({ activeId, modifiers }),
+    [activeId, modifiers]
+  )
   const overlayContent = useMemo(
     () => (activeId ? overlayChild(children, activeId) : null),
     [activeId, children]
@@ -248,17 +256,17 @@ function Sortable<T>({
         </SortableContext>
         {mounted
           ? createPortal(
-            <DragOverlay
-              dropAnimation={dropAnimationConfig}
-              modifiers={modifiers}
-              className={cn("z-50", activeId && "cursor-grabbing")}
-            >
-              <IsOverlayContext.Provider value={true}>
-                {overlayContent}
-              </IsOverlayContext.Provider>
-            </DragOverlay>,
-            document.body
-          )
+              <DragOverlay
+                dropAnimation={dropAnimationConfig}
+                modifiers={modifiers}
+                className={cn("z-50", activeId && "cursor-grabbing")}
+              >
+                <IsOverlayContext.Provider value={true}>
+                  {overlayContent}
+                </IsOverlayContext.Provider>
+              </DragOverlay>,
+              document.body
+            )
           : null}
       </DndContext>
     </SortableInternalContext.Provider>

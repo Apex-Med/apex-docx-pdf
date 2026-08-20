@@ -95,25 +95,28 @@ function manyParagraphDoc(): SemanticDocument {
   const blank = createBlankDocument()
   const base = blank.sections[0]?.blocks[0]
   if (!base || base.type !== "paragraph") return blank
-  const blocks: SemanticParagraph[] = Array.from({ length: 140 }, (_, index) => ({
-    ...base,
-    id: nodeId(`many:p:${index + 1}`),
-    source: {
-      ...base.source,
-      xmlPath: `/many/p[${index + 1}]`,
-    },
-    children: [
-      {
-        ...base.children[0]!,
-        id: nodeId(`many:t:${index + 1}`),
-        source: {
-          ...base.children[0]!.source,
-          xmlPath: `/many/p[${index + 1}]/r[1]/t[1]`,
-        },
-        text: `Paragraph ${index + 1}: The quick brown fox jumps over the lazy dog. This line exercises deterministic multi-page pagination and caret flow.`,
+  const blocks: SemanticParagraph[] = Array.from(
+    { length: 140 },
+    (_, index) => ({
+      ...base,
+      id: nodeId(`many:p:${index + 1}`),
+      source: {
+        ...base.source,
+        xmlPath: `/many/p[${index + 1}]`,
       },
-    ],
-  }))
+      children: [
+        {
+          ...base.children[0]!,
+          id: nodeId(`many:t:${index + 1}`),
+          source: {
+            ...base.children[0]!.source,
+            xmlPath: `/many/p[${index + 1}]/r[1]/t[1]`,
+          },
+          text: `Paragraph ${index + 1}: The quick brown fox jumps over the lazy dog. This line exercises deterministic multi-page pagination and caret flow.`,
+        },
+      ],
+    })
+  )
   return {
     ...blank,
     sections: [{ ...blank.sections[0]!, blocks }],
@@ -175,9 +178,9 @@ describe("Google Docs-style page sheets", () => {
 
     expect(layout.displayList.pages.length).toBeGreaterThan(2)
     expect(placements).toHaveLength(layout.displayList.pages.length - 1)
-    expect(new Set(placements.map((placement) => placement.pageNumber)).size).toBe(
-      placements.length
-    )
+    expect(
+      new Set(placements.map((placement) => placement.pageNumber)).size
+    ).toBe(placements.length)
   })
 
   test("maps consecutive manual breaks to their exact destination pages", () => {
@@ -249,7 +252,9 @@ describe("Google Docs-style page sheets", () => {
     expect(PAGE_GAP_TWIPS).toBe(32 * 15)
     expect(sectionStackHeightTwips(1, 15_840)).toBe(15_840)
     expect(sectionStackHeightTwips(2, 15_840)).toBe(2 * 15_840 + PAGE_GAP_TWIPS)
-    expect(sectionStackHeightTwips(3, 16_838)).toBe(3 * 16_838 + 2 * PAGE_GAP_TWIPS)
+    expect(sectionStackHeightTwips(3, 16_838)).toBe(
+      3 * 16_838 + 2 * PAGE_GAP_TWIPS
+    )
   })
 
   test("blank manual page break still fills a two-page section stack", () => {
@@ -276,8 +281,8 @@ describe("Google Docs-style page sheets", () => {
     )
     expect(counts).toHaveLength(1)
     expect(counts[0]?.pageCount).toBe(2)
-    expect(sectionStackHeightTwips(counts[0]!.pageCount, counts[0]!.pageHeightTwips)).toBe(
-      2 * counts[0]!.pageHeightTwips + PAGE_GAP_TWIPS
-    )
+    expect(
+      sectionStackHeightTwips(counts[0]!.pageCount, counts[0]!.pageHeightTwips)
+    ).toBe(2 * counts[0]!.pageHeightTwips + PAGE_GAP_TWIPS)
   })
 })

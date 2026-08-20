@@ -326,9 +326,8 @@ describe("pagination regressions", () => {
     expect(found).toHaveLength(1)
     expect(found[0]?.from).toBe(0)
     expect(found[0]?.to).toBe(doc.content.size)
-    const style = (
-      found[0] as { type?: { attrs?: { style?: string } } }
-    ).type?.attrs?.style
+    const style = (found[0] as { type?: { attrs?: { style?: string } } }).type
+      ?.attrs?.style
     expect(style).toBe("--apex-section-pages:3")
   })
 

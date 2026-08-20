@@ -68,7 +68,7 @@ export function useVirtualList(
       let start = 0
       while (
         start < count - 1 &&
-        (offsets.starts[start]! + sizeFor(start)) < scrollTop
+        offsets.starts[start]! + sizeFor(start) < scrollTop
       ) {
         start++
       }
@@ -86,7 +86,8 @@ export function useVirtualList(
 
     update()
     el.addEventListener("scroll", update, { passive: true })
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null
+    const ro =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null
     ro?.observe(el)
     return () => {
       el.removeEventListener("scroll", update)

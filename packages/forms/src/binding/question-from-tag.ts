@@ -1,11 +1,7 @@
 import { DEFAULT_ATTACHMENT_ACCEPT } from "../model/attachment"
 import { createFormId, prettifyKey, slugifyKey } from "../model/ids"
 import type { FormQuestion, FormQuestionKind } from "../model/types"
-import {
-  DEFAULT_DATE_PATTERN,
-  type BoundTag,
-  type BoundTagKind,
-} from "./types"
+import { DEFAULT_DATE_PATTERN, type BoundTag, type BoundTagKind } from "./types"
 
 export type TagSeed = Readonly<{
   slug: string

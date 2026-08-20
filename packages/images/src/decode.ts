@@ -79,7 +79,14 @@ export function isJpeg(bytes: Uint8Array): boolean {
 
 export function isGif(bytes: Uint8Array): boolean {
   if (bytes.length < 10) return false
-  const header = String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!, bytes[4]!, bytes[5]!)
+  const header = String.fromCharCode(
+    bytes[0]!,
+    bytes[1]!,
+    bytes[2]!,
+    bytes[3]!,
+    bytes[4]!,
+    bytes[5]!
+  )
   return header === "GIF87a" || header === "GIF89a"
 }
 
@@ -166,10 +173,8 @@ function webpSize(
     bytes[15]!
   )
   if (fourCC === "VP8X" && bytes.length >= 30) {
-    const width =
-      1 + (bytes[24]! | (bytes[25]! << 8) | (bytes[26]! << 16))
-    const height =
-      1 + (bytes[27]! | (bytes[28]! << 8) | (bytes[29]! << 16))
+    const width = 1 + (bytes[24]! | (bytes[25]! << 8) | (bytes[26]! << 16))
+    const height = 1 + (bytes[27]! | (bytes[28]! << 8) | (bytes[29]! << 16))
     return width > 0 && height > 0 ? { width, height } : undefined
   }
   if (fourCC === "VP8 " && bytes.length >= 30) {
@@ -190,10 +195,7 @@ function webpSize(
   }
   if (fourCC === "VP8L" && bytes.length >= 25) {
     const bits =
-      bytes[21]! |
-      (bytes[22]! << 8) |
-      (bytes[23]! << 16) |
-      (bytes[24]! << 24)
+      bytes[21]! | (bytes[22]! << 8) | (bytes[23]! << 16) | (bytes[24]! << 24)
     const width = (bits & 0x3fff) + 1
     const height = ((bits >> 14) & 0x3fff) + 1
     return { width, height }

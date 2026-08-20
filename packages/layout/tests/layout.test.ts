@@ -3016,7 +3016,8 @@ describe("Phase 6 images, sections, headers, footers, and page fields", () => {
     expect(
       authoredResult.displayList.pages[0]?.items.find(
         (item) =>
-          item.type === "glyph-run" && item.sourceNodeId === "after-header-text-0"
+          item.type === "glyph-run" &&
+          item.sourceNodeId === "after-header-text-0"
       )
     ).toMatchObject({ baselineY: twips(452) })
   })

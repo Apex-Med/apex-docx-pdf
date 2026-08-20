@@ -35,9 +35,7 @@ declare module "fontkit" {
     max: number
   }>
 
-  export type FontkitVariationSettings = Readonly<
-    Record<string, number>
-  >
+  export type FontkitVariationSettings = Readonly<Record<string, number>>
 
   export type FontkitFont = Readonly<{
     postscriptName: string | null

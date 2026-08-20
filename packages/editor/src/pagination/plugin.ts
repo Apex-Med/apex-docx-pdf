@@ -152,7 +152,10 @@ function headerFooterSourceNodeIds(
 ): ReadonlySet<string> {
   const ids = new Set<string>()
   const addParagraph = (
-    paragraph: Extract<SemanticHeaderFooter["blocks"][number], { type: "paragraph" }>
+    paragraph: Extract<
+      SemanticHeaderFooter["blocks"][number],
+      { type: "paragraph" }
+    >
   ): void => {
     ids.add(String(paragraph.id))
     for (const inline of paragraph.children) ids.add(String(inline.id))
@@ -586,7 +589,9 @@ function paintSectionSheets(
   // rest-height without tearing the page stack down.
   applySpacerGeometryToDom(view.dom, placements)
   applySectionPageCountsToDom(view.dom, sectionPages)
-  if (paginationPluginKey.getState(view.state)?.scrollAfterPagination !== true) {
+  if (
+    paginationPluginKey.getState(view.state)?.scrollAfterPagination !== true
+  ) {
     return
   }
   scrollCaretToSurfaceTop(view)

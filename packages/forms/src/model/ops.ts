@@ -33,7 +33,10 @@ import {
 } from "./walk"
 
 export function createEmptyForm(name = "Untitled form"): FormTemplate {
-  const page = createPage("Page 1", collectPageKeys({ id: "tmp", name, pages: [] }))
+  const page = createPage(
+    "Page 1",
+    collectPageKeys({ id: "tmp", name, pages: [] })
+  )
   return {
     id: createFormId("form"),
     name,
@@ -83,7 +86,12 @@ export function defaultNodeForKind(
     ...(kind === "cascader" ? { options: defaultCascaderOptions() } : {}),
     ...(kind === "repeater" ? { columns: 2, children: [] } : {}),
     ...(kind === "reference"
-      ? { reference: { source: "patient", fields: defaultReferenceFields("patient") } }
+      ? {
+          reference: {
+            source: "patient",
+            fields: defaultReferenceFields("patient"),
+          },
+        }
       : {}),
     ...(kind === "attachment"
       ? {
@@ -108,7 +116,9 @@ export function nodeWithKind(node: FormNode, kind: FormNodeKind): FormNode {
     id: node.id,
     key: node.key,
     label: node.label,
-    ...(node.description !== undefined ? { description: node.description } : {}),
+    ...(node.description !== undefined
+      ? { description: node.description }
+      : {}),
     ...(node.condition !== undefined ? { condition: node.condition } : {}),
   }
   if (isLayoutKind(kind)) {
@@ -152,21 +162,19 @@ export function nodeWithKind(node: FormNode, kind: FormNodeKind): FormNode {
     ...(kind === "number" ? numberFields(source) : {}),
     ...(kind === "reference"
       ? {
-          reference:
-            source?.reference ?? {
-              source: "patient",
-              fields: defaultReferenceFields("patient"),
-            },
+          reference: source?.reference ?? {
+            source: "patient",
+            fields: defaultReferenceFields("patient"),
+          },
         }
       : {}),
     ...(kind === "attachment"
       ? {
-          attachment:
-            source?.attachment ?? {
-              accept: [...DEFAULT_ATTACHMENT_ACCEPT],
-              maxFileSizeMb: 10,
-              maxCount: 1,
-            },
+          attachment: source?.attachment ?? {
+            accept: [...DEFAULT_ATTACHMENT_ACCEPT],
+            maxFileSizeMb: 10,
+            maxCount: 1,
+          },
         }
       : {}),
     ...(kind === "repeater"
@@ -432,8 +440,15 @@ export function updateNode(
           kind !== undefined && kind !== node.kind
             ? nodeWithKind(node, kind)
             : node
-        const merged = { ...converted, ...rest, id: node.id, key: nextKey } as FormNode
-        return isQuestion(merged) ? questionWithNormalizedDefault(merged) : merged
+        const merged = {
+          ...converted,
+          ...rest,
+          id: node.id,
+          key: nextKey,
+        } as FormNode
+        return isQuestion(merged)
+          ? questionWithNormalizedDefault(merged)
+          : merged
       }),
     })),
   }

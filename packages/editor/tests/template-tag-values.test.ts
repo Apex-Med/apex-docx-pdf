@@ -11,9 +11,7 @@ import {
 
 import { validatePdfStructure } from "../../testkit/src"
 import { serializeEmbedPdf } from "../src/embed"
-import {
-  applyTemplateTagValues,
-} from "../src/tags/apply-values"
+import { applyTemplateTagValues } from "../src/tags/apply-values"
 import {
   defaultTemplateTags,
   mergeDefaultTemplateTags,
@@ -66,7 +64,7 @@ function paragraphText(document: SemanticDocument): string {
 describe("applyTemplateTagValues", () => {
   test("substitutes assigned values and leaves unset tags as placeholders", () => {
     const document = documentWithText(
-      "By {{author_name:string}} on {{issued_at:date | date:\"dd-MM-yyyy\"}}",
+      'By {{author_name:string}} on {{issued_at:date | date:"dd-MM-yyyy"}}',
       {
         editorMetadata: {
           templateTags: [
@@ -145,7 +143,8 @@ describe("applyTemplateTagValues", () => {
     })
     expect(paragraphText(applyTemplateTagValues(document))).toBe("hello Craig")
     const children = (
-      applyTemplateTagValues(document).sections[0]!.blocks[0] as SemanticParagraph
+      applyTemplateTagValues(document).sections[0]!
+        .blocks[0] as SemanticParagraph
     ).children.filter((child): child is SemanticText => child.type === "text")
     expect(children[0]?.text).toBe("hello ")
     expect(children[0]?.preserveSpace).toBe(true)
@@ -159,7 +158,12 @@ describe("applyTemplateTagValues", () => {
       ...blank,
       editorMetadata: {
         templateTags: [
-          { id: "medium", label: "Medium", slug: "medium_name", kind: "string" },
+          {
+            id: "medium",
+            label: "Medium",
+            slug: "medium_name",
+            kind: "string",
+          },
           { id: "bold", label: "Bold", slug: "bold_name", kind: "string" },
         ],
         templateTagValues: {
@@ -269,37 +273,29 @@ describe("applyTemplateTagValues", () => {
     expect(today).toBeDefined()
     if (!today) return
     const stored = { kind: "date" as const, value: "2026-01-02T00:00:00.000Z" }
-    const document = documentWithText(
-      '{{today:date | date:"dd-MM-yyyy"}}',
-      {
-        editorMetadata: {
-          templateTags: [today],
-          templateTagValues: { [today.id]: stored },
-        },
-      }
-    )
+    const document = documentWithText('{{today:date | date:"dd-MM-yyyy"}}', {
+      editorMetadata: {
+        templateTags: [today],
+        templateTagValues: { [today.id]: stored },
+      },
+    })
     const printed = applyTemplateTagValues(
       document,
       new Date("2026-08-17T15:45:00.000Z")
     )
-    expect(paragraphText(printed)).toBe(
-      formatTemplateTagValue(today, stored)
-    )
+    expect(paragraphText(printed)).toBe(formatTemplateTagValue(today, stored))
   })
 
   test("unset today stays a placeholder at print", () => {
     const today = defaultTemplateTags().find((tag) => tag.slug === "today")
     expect(today).toBeDefined()
     if (!today) return
-    const document = documentWithText(
-      '{{today:date | date:"dd-MM-yyyy"}}',
-      {
-        editorMetadata: {
-          templateTags: [today],
-          templateTagValues: {},
-        },
-      }
-    )
+    const document = documentWithText('{{today:date | date:"dd-MM-yyyy"}}', {
+      editorMetadata: {
+        templateTags: [today],
+        templateTagValues: {},
+      },
+    })
     expect(
       paragraphText(
         applyTemplateTagValues(document, new Date("2026-08-17T15:45:00.000Z"))
@@ -344,10 +340,7 @@ describe("default template tags", () => {
 
   test("hydrate stamps today when it is missing", () => {
     const now = new Date("2026-08-17T15:45:00.000Z")
-    const hydrated = hydrateTemplateTagCatalog(
-      documentWithText("Hello"),
-      now
-    )
+    const hydrated = hydrateTemplateTagCatalog(documentWithText("Hello"), now)
     const meta = hydrated.editorMetadata as {
       templateTagValues: Record<string, { kind: string; value: string }>
     }
@@ -368,9 +361,7 @@ describe("default template tags", () => {
     const merged = mergeDefaultTemplateTags([custom], {})
     expect(merged.tags.find((tag) => tag.slug === "printed_at")).toEqual(custom)
     expect(
-      merged.tags.some(
-        (tag) => tag.slug === "today" && tag.source === "system"
-      )
+      merged.tags.some((tag) => tag.slug === "today" && tag.source === "system")
     ).toBe(true)
   })
 })
@@ -383,7 +374,12 @@ describe("PDF conversion of filled tags", () => {
       ...blank,
       editorMetadata: {
         templateTags: [
-          { id: "medium", label: "Medium", slug: "medium_name", kind: "string" },
+          {
+            id: "medium",
+            label: "Medium",
+            slug: "medium_name",
+            kind: "string",
+          },
           { id: "bold", label: "Bold", slug: "bold_name", kind: "string" },
         ],
         templateTagValues: {

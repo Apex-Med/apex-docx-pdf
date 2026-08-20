@@ -98,7 +98,7 @@ function NumberField({
     )
   }
   return (
-    <Group className={cn("w-full min-w-0 max-w-full", className)}>
+    <Group className={cn("w-full max-w-full min-w-0", className)}>
       <Input
         {...props}
         id={inputId}

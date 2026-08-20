@@ -131,14 +131,16 @@ describe("Apex adapter", () => {
       },
     })
     const result = toApexPages(form)
-    expect(result.diagnostics.some((item) => item.code === "UNREPRESENTABLE_LAYOUT")).toBe(
-      true
-    )
-    expect(result.diagnostics.some((item) => item.code === "NESTED_REPEATER")).toBe(
-      true
-    )
     expect(
-      result.diagnostics.some((item) => item.code === "UNREPRESENTABLE_CONDITION")
+      result.diagnostics.some((item) => item.code === "UNREPRESENTABLE_LAYOUT")
+    ).toBe(true)
+    expect(
+      result.diagnostics.some((item) => item.code === "NESTED_REPEATER")
+    ).toBe(true)
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "UNREPRESENTABLE_CONDITION"
+      )
     ).toBe(true)
   })
 
@@ -147,9 +149,11 @@ describe("Apex adapter", () => {
     const pageId = form.pages[0]!.id
     form = addNode(form, pageId, "cascader", { label: "Location" })
     const result = toApexPages(form)
-    expect(result.diagnostics.some((item) => item.code === "NESTED_OPTIONS_FLATTENED")).toBe(
-      true
-    )
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "NESTED_OPTIONS_FLATTENED"
+      )
+    ).toBe(true)
     expect(result.value[0]?.fields[0]?.type).toBe("select")
     expect(result.value[0]?.fields[0]?.options).toEqual(["Group 1 / Option 1"])
   })

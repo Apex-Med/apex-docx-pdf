@@ -42,7 +42,9 @@ export function encodeTemplateImage(path: string): string {
   return `{{@image ${path}}}`
 }
 
-export function parseStandaloneMarker(text: string): TemplateMarkerMatch | null {
+export function parseStandaloneMarker(
+  text: string
+): TemplateMarkerMatch | null {
   const trimmed = text.trim()
   if (!trimmed.startsWith("{{") || !trimmed.endsWith("}}")) return null
   const inner = trimmed.slice(2, -2).trim()
@@ -67,12 +69,15 @@ export function paragraphIsStandaloneMarker(
   return parseStandaloneMarker(text)
 }
 
-export function findImagePlaceholders(text: string): readonly TemplateImageMatch[] {
+export function findImagePlaceholders(
+  text: string
+): readonly TemplateImageMatch[] {
   const matches: TemplateImageMatch[] = []
   const pattern = /\{\{\s*@image\s+(?<path>[A-Za-z_$][A-Za-z0-9_$.]*)\s*\}\}/gu
   for (const match of text.matchAll(pattern)) {
     const path = match.groups?.path
-    if (!path || !isValidTemplatePath(path) || match.index === undefined) continue
+    if (!path || !isValidTemplatePath(path) || match.index === undefined)
+      continue
     matches.push({
       start: match.index,
       end: match.index + match[0].length,

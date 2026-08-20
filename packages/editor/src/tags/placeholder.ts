@@ -136,10 +136,9 @@ export function findValuePlaceholders(
   return matches
 }
 
-function parseValuePlaceholderBody(raw: string): Omit<
-  ValuePlaceholderMatch,
-  "start" | "end" | "raw"
-> | null {
+function parseValuePlaceholderBody(
+  raw: string
+): Omit<ValuePlaceholderMatch, "start" | "end" | "raw"> | null {
   const body = raw.trim()
   if (
     body.startsWith("#") ||
@@ -183,7 +182,9 @@ function parseValuePlaceholderBody(raw: string): Omit<
     includeTime = formatter.includeTime
   }
   const kind: TemplateTagKind =
-    datePattern !== null ? "date" : (kindToken as TemplateTagKind | undefined) ?? "string"
+    datePattern !== null
+      ? "date"
+      : ((kindToken as TemplateTagKind | undefined) ?? "string")
   if (kind !== "date" && datePattern !== null) return null
   if (kind === "date" && datePattern === null) {
     datePattern = DEFAULT_DATE_PATTERN

@@ -10,7 +10,7 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import { cn } from "@workspace/ui/lib/utils"
 
 const autocompleteInputVariants = cva(
-  "flex w-full rounded-lg border border-input bg-transparent text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+  "flex w-full rounded-lg border border-input bg-transparent text-sm text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
   {
     variants: {
       size: {
@@ -28,7 +28,9 @@ const autocompleteInputVariants = cva(
 const Autocomplete = AutocompletePrimitive.Root
 
 function AutocompleteValue({ ...props }: AutocompletePrimitive.Value.Props) {
-  return <AutocompletePrimitive.Value data-slot="autocomplete-value" {...props} />
+  return (
+    <AutocompletePrimitive.Value data-slot="autocomplete-value" {...props} />
+  )
 }
 
 function AutocompleteInput({
@@ -78,7 +80,9 @@ function AutocompleteStatus({
 }
 
 function AutocompletePortal({ ...props }: AutocompletePrimitive.Portal.Props) {
-  return <AutocompletePrimitive.Portal data-slot="autocomplete-portal" {...props} />
+  return (
+    <AutocompletePrimitive.Portal data-slot="autocomplete-portal" {...props} />
+  )
 }
 
 function AutocompletePositioner({
@@ -121,7 +125,10 @@ function AutocompleteCollection({
   ...props
 }: AutocompletePrimitive.Collection.Props) {
   return (
-    <AutocompletePrimitive.Collection data-slot="autocomplete-collection" {...props} />
+    <AutocompletePrimitive.Collection
+      data-slot="autocomplete-collection"
+      {...props}
+    />
   )
 }
 
@@ -133,7 +140,7 @@ function AutocompleteItem({
     <AutocompletePrimitive.Item
       data-slot="autocomplete-item"
       className={cn(
-        "relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+        "relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         className
       )}
       {...props}
@@ -181,7 +188,9 @@ function AutocompleteContent({
 }
 
 function AutocompleteGroup({ ...props }: AutocompletePrimitive.Group.Props) {
-  return <AutocompletePrimitive.Group data-slot="autocomplete-group" {...props} />
+  return (
+    <AutocompletePrimitive.Group data-slot="autocomplete-group" {...props} />
+  )
 }
 
 function AutocompleteGroupLabel({
@@ -191,7 +200,10 @@ function AutocompleteGroupLabel({
   return (
     <AutocompletePrimitive.GroupLabel
       data-slot="autocomplete-group-label"
-      className={cn("px-1.5 py-1 text-xs font-medium text-muted-foreground", className)}
+      className={cn(
+        "px-1.5 py-1 text-xs font-medium text-muted-foreground",
+        className
+      )}
       {...props}
     />
   )
@@ -221,7 +233,7 @@ function AutocompleteClear({
     <AutocompletePrimitive.Clear
       data-slot="autocomplete-clear"
       className={cn(
-        "absolute top-1/2 end-1.5 -translate-y-1/2 cursor-pointer opacity-70 transition-opacity hover:opacity-100",
+        "absolute end-1.5 top-1/2 -translate-y-1/2 cursor-pointer opacity-70 transition-opacity hover:opacity-100",
         className
       )}
       {...props}
@@ -239,7 +251,7 @@ function AutocompleteTrigger({
     <AutocompletePrimitive.Trigger
       data-slot="autocomplete-trigger"
       className={cn(
-        "absolute top-1/2 end-1.5 -translate-y-1/2 cursor-pointer text-muted-foreground opacity-70 transition-opacity hover:opacity-100 has-[+[data-slot=autocomplete-clear]]:end-7",
+        "absolute end-1.5 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground opacity-70 transition-opacity hover:opacity-100 has-[+[data-slot=autocomplete-clear]]:end-7",
         className
       )}
       {...props}
@@ -263,11 +275,16 @@ type AutocompleteGroupItems = Readonly<{
 
 function optionSearchText(option: AutocompleteOption): string {
   return [option.label, option.value, option.group, option.keywords]
-    .filter((part): part is string => typeof part === "string" && part.length > 0)
+    .filter(
+      (part): part is string => typeof part === "string" && part.length > 0
+    )
     .join("\n")
 }
 
-function optionMatchesQuery(option: AutocompleteOption, query: string): boolean {
+function optionMatchesQuery(
+  option: AutocompleteOption,
+  query: string
+): boolean {
   const needle = query.trim().toLowerCase()
   if (needle.length === 0) return true
   return optionSearchText(option).toLowerCase().includes(needle)
@@ -280,7 +297,8 @@ function findOption(
   const needle = query.trim().toLowerCase()
   return options.find(
     (option) =>
-      option.value.toLowerCase() === needle || option.label.toLowerCase() === needle
+      option.value.toLowerCase() === needle ||
+      option.label.toLowerCase() === needle
   )
 }
 
@@ -340,19 +358,21 @@ function AutocompleteField({
   const items =
     allowCustomValue && query.length > 0 && catalogMatch === undefined
       ? [
-        {
-          value: query,
-          label: query,
-          group: "Custom",
-        },
-        ...options,
-      ]
+          {
+            value: query,
+            label: query,
+            group: "Custom",
+          },
+          ...options,
+        ]
       : options
   const groups = groupedOptions(items)
   const useGroups = items.some((option) => option.group !== undefined)
   const resolvedEmptyText =
     emptyText ??
-    (allowCustomValue ? "No matches. Your text will be used as a custom value." : "No results")
+    (allowCustomValue
+      ? "No matches. Your text will be used as a custom value."
+      : "No results")
 
   const renderItem = (item: AutocompleteOption) => {
     const isCustom =
@@ -408,7 +428,10 @@ function AutocompleteField({
           <AutocompleteEmpty>{resolvedEmptyText}</AutocompleteEmpty>
           <AutocompleteList>
             {(group: AutocompleteGroupItems) => (
-              <AutocompleteGroup key={group.value || "options"} items={group.items}>
+              <AutocompleteGroup
+                key={group.value || "options"}
+                items={group.items}
+              >
                 {group.value ? (
                   <AutocompleteGroupLabel>{group.value}</AutocompleteGroupLabel>
                 ) : null}

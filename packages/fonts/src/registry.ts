@@ -372,10 +372,7 @@ class Registry implements ManagedFontRegistry {
         : stored.parsed
     for (const character of input.text) {
       const codePoint = character.codePointAt(0)
-      if (
-        codePoint === undefined ||
-        !parsed.hasGlyphForCodePoint(codePoint)
-      ) {
+      if (codePoint === undefined || !parsed.hasGlyphForCodePoint(codePoint)) {
         throw new FontShapingError(
           "fonts/missing-glyph",
           `Font '${stored.resource.postscriptName}' has no glyph for U+${(

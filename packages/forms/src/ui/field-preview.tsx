@@ -26,7 +26,9 @@ import {
   type FormQuestion,
 } from "../index"
 
-export function FieldPreview({ node }: Readonly<{ node: FormNode }>): ReactNode {
+export function FieldPreview({
+  node,
+}: Readonly<{ node: FormNode }>): ReactNode {
   if (isLayoutBlock(node)) {
     if (node.kind === "heading") {
       return <h3 className="text-base font-medium">{node.label}</h3>
@@ -169,7 +171,9 @@ function QuestionPreview({
       )
     case "multi_select": {
       const selected = Array.isArray(defaultValue)
-        ? defaultValue.filter((item): item is string => typeof item === "string")
+        ? defaultValue.filter(
+            (item): item is string => typeof item === "string"
+          )
         : []
       return (
         <div className="flex flex-col gap-2">
@@ -202,7 +206,9 @@ function QuestionPreview({
       return (
         <FileUpload
           disabled
-          accept={(question.attachment?.accept ?? DEFAULT_ATTACHMENT_ACCEPT).join(",")}
+          accept={(
+            question.attachment?.accept ?? DEFAULT_ATTACHMENT_ACCEPT
+          ).join(",")}
           maxFiles={maxCount}
           maxSize={(question.attachment?.maxFileSizeMb ?? 10) * 1024 * 1024}
           multiple={maxCount > 1}
@@ -214,9 +220,7 @@ function QuestionPreview({
       return (
         <Input
           disabled
-          value={
-            binding ? CONTEXT_BINDING_LABELS[binding] : "Context value"
-          }
+          value={binding ? CONTEXT_BINDING_LABELS[binding] : "Context value"}
         />
       )
     }

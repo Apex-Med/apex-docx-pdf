@@ -211,9 +211,7 @@ describe("header and footer authoring", () => {
           blocks: [
             {
               ...bodyParagraph,
-              children: [
-                { ...headerText, id: collidingId, text: "Body text" },
-              ],
+              children: [{ ...headerText, id: collidingId, text: "Body text" }],
             },
           ],
         },
@@ -227,9 +225,7 @@ describe("header and footer authoring", () => {
       [
         {
           ...headerParagraph,
-          children: [
-            { ...headerText, id: collidingId, text: "Header text" },
-          ],
+          children: [{ ...headerText, id: collidingId, text: "Header text" }],
         },
       ]
     )
@@ -242,8 +238,8 @@ describe("header and footer authoring", () => {
       updated,
       layout.displayList,
       layout.trace
-    )[0]?.pages[0]?.items
-      .filter((item) => item.type === "glyph-run")
+    )[0]
+      ?.pages[0]?.items.filter((item) => item.type === "glyph-run")
       .map((item) => item.text)
       .join("")
 
@@ -271,7 +267,12 @@ describe("header and footer authoring", () => {
       "default"
     )
     let state = createEditorStateFromDocument(editingDocument)
-    const inserted = insertTable(2, 2, 2880, false)(state, (transaction) => {
+    const inserted = insertTable(
+      2,
+      2,
+      2880,
+      false
+    )(state, (transaction) => {
       state = state.apply(transaction)
     })
     expect(inserted).toBe(true)
@@ -323,14 +324,14 @@ describe("header and footer authoring", () => {
     const headerTable = updated.headers[0]?.blocks.find(
       (block) => block.type === "table"
     )
-    expect(headerTable?.type === "table" ? headerTable.cellPadding : null).toEqual(
-      {
-        top: twips(0),
-        right: twips(108),
-        bottom: twips(0),
-        left: twips(108),
-      }
-    )
+    expect(
+      headerTable?.type === "table" ? headerTable.cellPadding : null
+    ).toEqual({
+      top: twips(0),
+      right: twips(108),
+      bottom: twips(0),
+      left: twips(108),
+    })
     const headerGlyph = overlayItems?.find(
       (item) => item.type === "glyph-run" && item.text.includes("Header cell")
     )
@@ -386,9 +387,7 @@ describe("header and footer authoring", () => {
     expect(css).toContain("opacity: 0.36")
     expect(headerFooterEditor).not.toContain("unscaledPageWidth")
     expect(headerFooterEditor).toContain("--apex-header-footer-margin-left")
-    expect(headerFooterEditor).toContain(
-      "marginLeft: toVisualPx(margins.left)"
-    )
+    expect(headerFooterEditor).toContain("marginLeft: toVisualPx(margins.left)")
     expect(headerFooterEditor).toContain("geometry.marginLeft")
     expect(headerFooterEditor).not.toContain("unscaledMarginLeft")
     expect(headerFooterEditor).toContain("onDoubleClick={onClose}")

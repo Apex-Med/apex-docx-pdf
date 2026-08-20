@@ -61,7 +61,7 @@ export function InsertTagDialog({
           </DialogDescription>
         </DialogHeader>
         {tags.length === 0 ? (
-          <div className="text-muted-foreground grid gap-3 text-sm">
+          <div className="grid gap-3 text-sm text-muted-foreground">
             <p>This document has no tags yet.</p>
             <Button
               type="button"
@@ -108,7 +108,7 @@ export function InsertTagDialog({
                       onMouseEnter={() => setActiveId(tag.id)}
                     >
                       <span>{tag.label}</span>
-                      <span className="text-muted-foreground font-mono text-xs">
+                      <span className="font-mono text-xs text-muted-foreground">
                         {tag.slug}:{tag.kind}
                       </span>
                     </button>
@@ -116,7 +116,7 @@ export function InsertTagDialog({
                 )
               })}
               {filtered.length === 0 ? (
-                <li className="text-muted-foreground px-3 py-4 text-sm">
+                <li className="px-3 py-4 text-sm text-muted-foreground">
                   No tags match “{query}”.
                 </li>
               ) : null}
@@ -124,7 +124,11 @@ export function InsertTagDialog({
           </div>
         )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
         </DialogFooter>
