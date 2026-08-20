@@ -108,7 +108,7 @@ try {
 }
 
 async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 450; attempt += 1) {
     if (serverProcess.exitCode !== null) {
       throw new Error(
         `Vite exited before the smoke started:\n${await serverOutput}`
@@ -120,9 +120,11 @@ async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
     } catch {
       // Vite is still starting.
     }
-    await Bun.sleep(100)
+    await Bun.sleep(200)
   }
-  throw new Error("Timed out waiting for the local Vite application")
+  throw new Error(
+    `Timed out waiting for the local Vite application:\n${await serverOutput}`
+  )
 }
 
 async function verifyLanding(page: Page): Promise<void> {
