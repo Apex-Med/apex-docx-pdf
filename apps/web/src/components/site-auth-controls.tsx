@@ -12,6 +12,10 @@ export function SiteAuthControls({
   className,
   onNavigate,
 }: SiteAuthControlsProps) {
+  if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim()) {
+    return null
+  }
+
   return (
     <ClientOnly fallback={<AuthControlsFallback className={className} />}>
       <div className={cn("flex items-center gap-2", className)}>
