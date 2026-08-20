@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bind Apex Form"
+  short_description: "Map form answers onto DOCX template tags"
+  default_prompt: "Use $bind-apex-form to bind @apexmed/forms answers to an Apex DOCX template."

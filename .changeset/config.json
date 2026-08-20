@@ -26,5 +26,5 @@
   "updateInternalDependencies": "patch",
   "bumpVersionsWithWorkspaceProtocolOnly": true,
   "privatePackages": { "version": true, "tag": false },
-  "ignore": ["@apexmed/docs", "@apexmed/testkit", "web"]
+  "ignore": ["@apexmed/docs", "@apexmed/editor", "@apexmed/testkit", "web"]
 }

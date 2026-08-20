@@ -12,6 +12,7 @@ Install: bun add apex-docx-pdf@next
 - Integration context: ./ai/CONTEXT.md
 - Integration skill: ./ai/skills/integrate-apex-docx-pdf/SKILL.md
 - Compatible-template skill: ./ai/skills/generate-compatible-docx-template/SKILL.md
+- Form-binding skill: ./ai/skills/bind-apex-form/SKILL.md
 - Template inspector: ./ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs
 
 ## Public entry points
@@ -19,6 +20,7 @@ Install: bun add apex-docx-pdf@next
 - Recommended facade: apex-docx-pdf
 - Browser client: @apexmed/browser
 - Browser worker: @apexmed/browser/worker
+- Headless form model: @apexmed/forms
 - Optional React developer UI: @apexmed/devtools
 
 The renderer uses a deliberately bounded DOCX profile. Always inspect and strictly compile the exact template, review every diagnostic, render with explicit locale and timeZone values, and validate representative and boundary data before deployment.

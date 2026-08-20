@@ -42,7 +42,7 @@ jobs:
         run: bun run release:validate
       - name: Publish approved prerelease artifacts with provenance
         run: |
-          for package in core docx fonts images layout template pdf engine browser devtools apex-docx-pdf; do
+          for package in core docx fonts images layout template pdf engine browser devtools forms apex-docx-pdf; do
             directory="packages/$package/dist"
             name="$(node -p "require('./$directory/package.json').name")"
             version="$(node -p "require('./$directory/package.json').version")"

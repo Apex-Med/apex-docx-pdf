@@ -40,7 +40,13 @@
       {
         "group": "Authoring",
         "icon": "file-pen-line",
-        "pages": ["authoring", "examples", "template-language", "font-handling"]
+        "pages": [
+          "authoring",
+          "examples",
+          "template-language",
+          "forms",
+          "font-handling"
+        ]
       },
       {
         "group": "Operating the renderer",

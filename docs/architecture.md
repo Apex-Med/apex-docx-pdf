@@ -40,14 +40,16 @@ Each arrow is an explicit typed boundary. OOXML vocabulary ends at `@apexmed/doc
 @apexmed/engine   -> core + docx + template + fonts + images + layout + pdf
 @apexmed/browser  -> core + engine
 @apexmed/devtools -> core + React peer
+@apexmed/forms    -> no renderer workspace packages; published headless model only
 apex-docx-pdf           -> core + engine
+@apexmed/editor   -> core + docx + fonts + forms + images + layout + pdf + template + workspace UI (private)
 @apexmed/testkit  -> core + fflate
 @workspace/ui           -> no workspace packages
-web                     -> browser + core + devtools + engine + ui + Convex/TanStack adapters
+web                     -> browser + core + devtools + editor + engine + forms + ui + Convex/TanStack adapters
 @apexmed/docs     -> no workspace packages
 ```
 
-These arrows list the important internal workspace and renderer-runtime dependencies in the current package manifests. `fonts`, `images`, and `testkit` are real packages. Third-party renderer runtime dependencies include exact-pinned `fontkit` 2.0.4 in `fonts`, `fflate` in `images`, plus the DOCX/test-fixture ZIP and XML dependencies. The application and UI packages have their own browser and React dependencies. Parser code does not import template, layout, PDF, React, Convex, or Vercel. Layout consumes a resolved document and emits a page display list. PDF consumes that display list, explicit metadata, and explicit font/image providers.
+These arrows list the important internal workspace and renderer-runtime dependencies in the current package manifests. `fonts`, `images`, `forms`, and `testkit` are real packages. The published `forms` tarball strips builder/runtime UI dependencies; React FormBuilder/FormRuntime remain workspace plus shadcn-registry sources. `editor` is a workspace authoring surface for the reference app and is not in the lockstep npm set. Third-party renderer runtime dependencies include exact-pinned `fontkit` 2.0.4 in `fonts`, `fflate` in `images`, plus the DOCX/test-fixture ZIP and XML dependencies. The application and UI packages have their own browser and React dependencies. Parser code does not import template, layout, PDF, React, Convex, or Vercel. Layout consumes a resolved document and emits a page display list. PDF consumes that display list, explicit metadata, and explicit font/image providers.
 
 ## Shared invariants
 

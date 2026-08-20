@@ -340,12 +340,13 @@ import * as devtools from "@apexmed/devtools"
 import * as docx from "@apexmed/docx"
 import * as enginePackage from "@apexmed/engine"
 import * as fonts from "@apexmed/fonts"
+import * as forms from "@apexmed/forms"
 import * as images from "@apexmed/images"
 import * as layout from "@apexmed/layout"
 import * as pdf from "@apexmed/pdf"
 import * as template from "@apexmed/template"
 
-const modules = { browser, core, devtools, docx, enginePackage, fonts, images, layout, pdf, template }
+const modules = { browser, core, devtools, docx, enginePackage, fonts, forms, images, layout, pdf, template }
 for (const [name, module] of Object.entries(modules)) {
   if (Object.keys(module).length === 0) throw new Error(name + " has no public exports")
 }
@@ -476,6 +477,7 @@ async function verifyInstalledAiSurface(
     manifest.ai?.llms,
     manifest.ai?.skills.integrate,
     manifest.ai?.skills.generateCompatibleDocxTemplate,
+    manifest.ai?.skills.bindApexForm,
     "./ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs",
   ]
   if (manifest.ai?.schemaVersion !== 1 || required.some((path) => !path)) {

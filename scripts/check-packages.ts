@@ -25,6 +25,7 @@ const UMBRELLA_AI_METADATA = {
     integrate: "./ai/skills/integrate-apex-docx-pdf/SKILL.md",
     generateCompatibleDocxTemplate:
       "./ai/skills/generate-compatible-docx-template/SKILL.md",
+    bindApexForm: "./ai/skills/bind-apex-form/SKILL.md",
   },
 } as const
 
@@ -41,6 +42,9 @@ const UMBRELLA_AI_FILES = [
   "ai/skills/generate-compatible-docx-template/references/template-language.md",
   "ai/skills/generate-compatible-docx-template/references/supported-docx-profile.md",
   "ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs",
+  "ai/skills/bind-apex-form/SKILL.md",
+  "ai/skills/bind-apex-form/agents/openai.yaml",
+  "ai/skills/bind-apex-form/references/form-binding.md",
 ] as const
 
 type PackResult = Readonly<{

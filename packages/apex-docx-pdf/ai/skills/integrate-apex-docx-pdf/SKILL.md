@@ -12,15 +12,16 @@ Build against the recommended facade and keep the package's bounded profile, eng
 - Read [references/integration-api.md](references/integration-api.md) for concrete Bun/Node and browser-worker code.
 - Read [references/security-and-determinism.md](references/security-and-determinism.md) when handling untrusted templates, persistence, caching, limits, diagnostics, or production review.
 - Use the sibling `generate-compatible-docx-template` skill when the task creates or changes a `.docx` template.
+- Use the sibling `bind-apex-form` skill when mapping `@apexmed/forms` answers onto template tags.
 
 ## Integration workflow
 
 1. Inspect the consumer's runtime, package manager, existing document boundary, and data source before editing.
-2. Install `apex-docx-pdf@next` with Bun. Add `@apexmed/browser@next` only for a Web Worker and `@apexmed/devtools@next` only for React diagnostics UI.
+2. Install `apex-docx-pdf@next` with Bun. Add `@apexmed/browser@next` only for a Web Worker, `@apexmed/forms@next` for a headless questionnaire model, and `@apexmed/devtools@next` only for React diagnostics UI.
 3. Create one engine per stable font/limit configuration. Supply immutable, application-owned static TrueType bytes when the template needs fonts outside the bounded Helvetica fallback.
 4. Inspect the exact DOCX bytes. Surface inspection diagnostics and required font tuples before accepting the template.
 5. Compile with `unsupportedFeatures: "strict"` unless the product explicitly accepts a documented fallback. Keep the returned compiled object in the same engine instance.
-6. Derive forms and validation from `compiled.manifest`, `compiled.jsonSchema`, and `compiled.starterData`; do not maintain a divergent schema by hand.
+6. Derive simple validation from `compiled.manifest`, `compiled.jsonSchema`, and `compiled.starterData`. For a hosted questionnaire, use `@apexmed/forms` and the `bind-apex-form` skill instead of maintaining a divergent schema by hand.
 7. Render with explicit `locale` and `timeZone`, immutable JSON-like data, and an `AbortSignal` when work must be cancellable.
 8. Return or persist only a successful `RenderResult`. Preserve `templateHash`, `documentHash`, `ENGINE_VERSION`, font-registry hash, options, resource usage, and redacted diagnostics as appropriate for the host application.
 9. Test repeat-identical output, missing/wrong data, unsupported content, cancellation, resource limits, long content, pagination, and every font/image family used by the application.

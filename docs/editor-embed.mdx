@@ -3,7 +3,7 @@ title: "Editor embed"
 description: "Embed the Apex DOCX editor with the apex-docx-editor custom element."
 ---
 
-`@apexmed/editor/embed` registers an `<apex-docx-editor>` custom element that hosts a shadow-DOM editor surface. Overlays (menus, dialogs, tooltips) portal into the shadow root via `PortalContainerProvider`.
+`@apexmed/editor/embed` registers an `<apex-docx-editor>` custom element that hosts a shadow-DOM editor surface. Overlays (menus, dialogs, tooltips) portal into the shadow root via `PortalContainerProvider`. The editor is a workspace package for the reference application and is not part of the lockstep npm set; consume it from this repository until a separately reviewed editor publication exists.
 
 ## Install and define
 
@@ -13,7 +13,10 @@ description: "Embed the Apex DOCX editor with the apex-docx-editor custom elemen
   loadEmbed()
 </script>
 
-<apex-docx-editor css-url="/editor.css" style="display:block;height:80vh"></apex-docx-editor>
+<apex-docx-editor
+  css-url="/editor.css"
+  style="display:block;height:80vh"
+></apex-docx-editor>
 ```
 
 Or from application code:
@@ -26,24 +29,27 @@ defineApexDocxEditorElement()
 
 ## Attributes
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `readonly` | boolean (presence) | When present, the ProseMirror surface is not editable (`editable: false`). |
-| `css-url` | string URL | Optional stylesheet fetched and transformed for shadow DOM (`:root` → `:host`, `@property` hoisted). Built-in editor CSS is always injected; `css-url` appends host/app styles. |
+| Attribute  | Type               | Description                                                                                                                                                                     |
+| ---------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `readonly` | boolean (presence) | When present, the ProseMirror surface is not editable (`editable: false`).                                                                                                      |
+| `css-url`  | string URL         | Optional stylesheet fetched and transformed for shadow DOM (`:root` → `:host`, `@property` hoisted). Built-in editor CSS is always injected; `css-url` appends host/app styles. |
 
 ```html
-<apex-docx-editor readonly css-url="/assets/editor-theme.css"></apex-docx-editor>
+<apex-docx-editor
+  readonly
+  css-url="/assets/editor-theme.css"
+></apex-docx-editor>
 ```
 
 ## Events
 
 Events bubble and are `composed` so listeners on light-DOM ancestors receive them.
 
-| Event | `detail` | When |
-| --- | --- | --- |
-| `ready` | none | Editor finished mounting inside the shadow root. |
+| Event    | `detail`               | When                                                            |
+| -------- | ---------------------- | --------------------------------------------------------------- |
+| `ready`  | none                   | Editor finished mounting inside the shadow root.                |
 | `change` | `{ revision: number }` | Document content changed (monotonic `revision` for this mount). |
-| `error` | `{ message: string }` | Mount, `css-url` fetch, `loadDocx`, or `getPdf` failed. |
+| `error`  | `{ message: string }`  | Mount, `css-url` fetch, `loadDocx`, or `getPdf` failed.         |
 
 ```ts
 const el = document.querySelector("apex-docx-editor")!
@@ -67,14 +73,14 @@ el.addEventListener("error", (event) => {
 
 Call these on the element instance (after `ready`, or await the methods — they wait for mount).
 
-| Method | Returns | Description |
-| --- | --- | --- |
-| `loadDocx(bytes)` | `Promise<void>` | Parse DOCX (`normaliseDocxBytes`) and replace the open document. |
-| `getDocx()` | `Promise<Uint8Array>` | Serialize the current document to DOCX (`serializeDocx`). |
-| `getPdf()` | `Promise<Uint8Array>` | Layout (`layoutDocument`) then serialize PDF (`serializePdf`). Assigned editor tags become their values; unset tags stay as `{{placeholders}}`. Built-in `printed_at` is always the current date-time at export. Built-in `today` keeps the date captured while editing. |
-| `setReadOnly(value)` | `void` | Toggle editability and sync the `readonly` attribute. |
-| `getDocument()` | `SemanticDocument \| null` | Current in-memory semantic document, or `null` before mount / after destroy. |
-| `getSelectionRoot()` | `Document \| ShadowRoot` | Shadow root for selection APIs (do not use `document.getSelection()` alone). |
+| Method               | Returns                    | Description                                                                                                                                                                                                                                                              |
+| -------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `loadDocx(bytes)`    | `Promise<void>`            | Parse DOCX (`normaliseDocxBytes`) and replace the open document.                                                                                                                                                                                                         |
+| `getDocx()`          | `Promise<Uint8Array>`      | Serialize the current document to DOCX (`serializeDocx`).                                                                                                                                                                                                                |
+| `getPdf()`           | `Promise<Uint8Array>`      | Layout (`layoutDocument`) then serialize PDF (`serializePdf`). Assigned editor tags become their values; unset tags stay as `{{placeholders}}`. Built-in `printed_at` is always the current date-time at export. Built-in `today` keeps the date captured while editing. |
+| `setReadOnly(value)` | `void`                     | Toggle editability and sync the `readonly` attribute.                                                                                                                                                                                                                    |
+| `getDocument()`      | `SemanticDocument \| null` | Current in-memory semantic document, or `null` before mount / after destroy.                                                                                                                                                                                             |
+| `getSelectionRoot()` | `Document \| ShadowRoot`   | Shadow root for selection APIs (do not use `document.getSelection()` alone).                                                                                                                                                                                             |
 
 ```ts
 const el = document.querySelector("apex-docx-editor")! as ApexDocxEditorElement

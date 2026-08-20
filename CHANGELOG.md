@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Public `@apexmed/forms` headless questionnaire model, tag binding, Apex adapter, and workspace/registry FormBuilder plus FormRuntime UI.
+- Package-shipped `bind-apex-form` agent skill for mapping form answers onto DOCX template tags.
+
 ### Fixed
 
 - Editor PDF export now loads the full offline six-family static catalog (via package assets or Vite-bundled `?url` imports) instead of falling back to Inter 400/500/600/700, so Thin–Black weights keep their own embedded faces.
