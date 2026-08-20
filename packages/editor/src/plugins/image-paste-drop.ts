@@ -48,7 +48,7 @@ export async function insertImageFile(
   let pixelWidth = 100
   let pixelHeight = 100
   let workingBytes = bytes
-  let workingMime = mimeType
+  const workingMime = mimeType
   let rasterFallback: Parameters<
     typeof insertImageFromBytes
   >[0]["rasterFallback"]

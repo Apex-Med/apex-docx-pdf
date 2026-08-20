@@ -27,7 +27,7 @@ export function findTextInDoc(
 ): FindMatch | null {
   if (!query) return null
   const needle = options.caseSensitive ? query : query.toLowerCase()
-  let pos = Math.max(0, options.from ?? 0)
+  const pos = Math.max(0, options.from ?? 0)
   let found: FindMatch | null = null
   doc.nodesBetween(pos, doc.content.size, (node, nodePos) => {
     if (found || !node.isText || !node.text) return

@@ -54,7 +54,7 @@ export function createImageNodeView(
     const onMove = (moveEvent: PointerEvent): void => {
       const deltaPx = moveEvent.clientX - startX
       const deltaTwips = Math.round(deltaPx * TWIPS_PER_PX)
-      let nextWidth = Math.max(240, startWidthTwips + deltaTwips)
+      const nextWidth = Math.max(240, startWidthTwips + deltaTwips)
       let nextHeight = startHeightTwips
       if (mode === "se" || preserve) {
         nextHeight = Math.max(240, Math.round(nextWidth / (ratio || 1)))

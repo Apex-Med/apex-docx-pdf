@@ -2,7 +2,7 @@ import type { SemanticDocument } from "@apexmed/core"
 
 import { EDITOR_CSS } from "../styles/editor-css"
 import type { EditorController } from "../ui/Editor"
-import { type EmbedChangeDetail, type EmbedErrorDetail } from "./helpers"
+import type { EmbedChangeDetail, EmbedErrorDetail } from "./helpers"
 import {
   hoistPropertyRulesToDocument,
   transformCssForShadowDom,

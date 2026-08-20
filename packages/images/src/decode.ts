@@ -221,8 +221,8 @@ function avifSize(
       bytes[offset + 6]!,
       bytes[offset + 7]!
     )
-    let header = 8
-    let boxEnd = size === 0 ? bytes.length : offset + size
+    const header = 8
+    const boxEnd = size === 0 ? bytes.length : offset + size
     if (size === 1 && offset + 16 <= bytes.length) {
       // 64-bit largesize — skip for safety on huge boxes.
       break
