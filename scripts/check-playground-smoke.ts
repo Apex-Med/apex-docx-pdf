@@ -25,7 +25,7 @@ const server = Bun.spawn({
     "--strictPort",
   ],
   cwd: webRoot,
-  // Never let a developer's shell turn this into a live Convex test.
+  // Never let a developer's shell turn this into a live Convex/Clerk test.
   env: {
     ...process.env,
     CONVEX_URL: "",
@@ -33,13 +33,9 @@ const server = Bun.spawn({
     VITE_CLERK_PUBLISHABLE_KEY: "",
     CLERK_SECRET_KEY: "",
   },
-  stdout: "pipe",
-  stderr: "pipe",
+  stdout: "inherit",
+  stderr: "inherit",
 })
-const serverOutput = Promise.all([
-  new Response(server.stdout).text(),
-  new Response(server.stderr).text(),
-]).then((chunks) => chunks.join("\n"))
 await waitForServer(server)
 const browser = await chromium.launch({ headless: true })
 
@@ -117,7 +113,7 @@ async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
   for (let attempt = 0; attempt < 450; attempt += 1) {
     if (serverProcess.exitCode !== null) {
       throw new Error(
-        `Vite exited before the smoke started:\n${await serverOutput}`
+        `Vite exited before the smoke started with code ${serverProcess.exitCode}`
       )
     }
     try {
@@ -130,9 +126,7 @@ async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
     }
     await Bun.sleep(200)
   }
-  throw new Error(
-    `Timed out waiting for the local Vite application:\n${await serverOutput}`
-  )
+  throw new Error("Timed out waiting for the local Vite application")
 }
 
 async function verifyLanding(page: Page): Promise<void> {
