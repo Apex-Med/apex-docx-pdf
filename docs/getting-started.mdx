@@ -38,7 +38,7 @@ Install the published prerelease facade:
 bun add apex-docx-pdf@next
 ```
 
-The current npm prerelease is `0.1.0-next.1`. Advanced packages are also
+The current npm prerelease is `0.1.0-next.2`. Advanced packages are also
 available at exact versions under the `@apexmed` scope, but the unscoped facade
 is the recommended application entrypoint.
 
@@ -94,7 +94,7 @@ For an image, embed a PNG or JPEG as an internal DOCX relationship and use inlin
 
 The zero-argument engine uses the historical built-in Helvetica fallback. For document fonts, create the engine with an explicit `fonts` configuration containing the exact TrueType `Uint8Array` programs. Formatting receives the render's explicit `locale` and `timeZone`; it never reads ambient defaults. See [font handling](/font-handling) and [template language](/template-language).
 
-In the current workspace, advanced consumers can import the fixed-version `@apexmed/*` packages directly. Those packages can also be installed from npm at `0.1.0-next.1`. Browser-worker bindings live in `@apexmed/browser`; the headless questionnaire model is `@apexmed/forms`; the React display-list preview is an opt-in `@apexmed/devtools` peer and is not pulled into the umbrella. See [forms](/forms) when a host questionnaire fills template tags.
+In the current workspace, advanced consumers can import the fixed-version `@apexmed/*` packages directly. Those packages can also be installed from npm at `0.1.0-next.2`. Browser-worker bindings live in `@apexmed/browser`; the headless questionnaire model is `@apexmed/forms`; the React display-list preview is an opt-in `@apexmed/devtools` peer and is not pulled into the umbrella. See [forms](/forms) when a host questionnaire fills template tags.
 
 ## 3. Inspect before rendering
 

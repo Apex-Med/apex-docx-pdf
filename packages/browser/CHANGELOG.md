@@ -1,5 +1,13 @@
 # @apexmed/browser
 
+## 0.1.0-next.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @apexmed/core@0.1.0-next.2
+  - @apexmed/engine@0.1.0-next.2
+
 ## 0.1.0-next.1
 
 ### Patch Changes

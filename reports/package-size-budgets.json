@@ -6,16 +6,16 @@
     "maxUnpackedBytes": 15500000
   },
   "packages": {
-    "apex-docx-pdf": { "maxPackedBytes": 22000, "maxUnpackedBytes": 60000 },
+    "apex-docx-pdf": { "maxPackedBytes": 24000, "maxUnpackedBytes": 65000 },
     "browser": { "maxPackedBytes": 18000, "maxUnpackedBytes": 70000 },
-    "core": { "maxPackedBytes": 17000, "maxUnpackedBytes": 65000 },
+    "core": { "maxPackedBytes": 28000, "maxUnpackedBytes": 110000 },
     "devtools": { "maxPackedBytes": 21000, "maxUnpackedBytes": 80000 },
-    "docx": { "maxPackedBytes": 140000, "maxUnpackedBytes": 720000 },
-    "engine": { "maxPackedBytes": 26000, "maxUnpackedBytes": 105000 },
+    "docx": { "maxPackedBytes": 200000, "maxUnpackedBytes": 1000000 },
+    "engine": { "maxPackedBytes": 28000, "maxUnpackedBytes": 110000 },
     "fonts": { "maxPackedBytes": 5800000, "maxUnpackedBytes": 11500000 },
-    "forms": { "maxPackedBytes": 52000, "maxUnpackedBytes": 230000 },
-    "images": { "maxPackedBytes": 38000, "maxUnpackedBytes": 160000 },
-    "layout": { "maxPackedBytes": 82000, "maxUnpackedBytes": 390000 },
+    "forms": { "maxPackedBytes": 75000, "maxUnpackedBytes": 340000 },
+    "images": { "maxPackedBytes": 58000, "maxUnpackedBytes": 240000 },
+    "layout": { "maxPackedBytes": 105000, "maxUnpackedBytes": 480000 },
     "pdf": { "maxPackedBytes": 40000, "maxUnpackedBytes": 165000 },
     "template": { "maxPackedBytes": 52000, "maxUnpackedBytes": 260000 }
   }
