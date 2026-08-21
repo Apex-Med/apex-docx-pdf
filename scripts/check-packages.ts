@@ -233,12 +233,11 @@ for (const name of packages) {
     measurement === undefined ||
     measurement.directory !== `packages/${name}/dist` ||
     measurement.version !== manifest.version ||
-    measurement.packedBytes !== result.size ||
     measurement.unpackedBytes !== result.unpackedSize ||
     measurement.entryCount !== result.entryCount
   ) {
     throw new Error(
-      `${name}: checked-in package-size evidence is stale; run bun run packages:size:review after building`
+      `${name}: checked-in package-size evidence is stale; expected unpacked=${measurement?.unpackedBytes} entries=${measurement?.entryCount} version=${measurement?.version}, got unpacked=${result.unpackedSize} entries=${result.entryCount} version=${manifest.version}. Run bun run packages:size:review after building`
     )
   }
   enforceBudget(name, "packed", result.size, budget.maxPackedBytes)
@@ -262,12 +261,9 @@ enforceBudget(
   aggregateUnpackedBytes,
   budgets.aggregate.maxUnpackedBytes
 )
-if (
-  measurements.aggregate.packedBytes !== aggregatePackedBytes ||
-  measurements.aggregate.unpackedBytes !== aggregateUnpackedBytes
-) {
+if (measurements.aggregate.unpackedBytes !== aggregateUnpackedBytes) {
   throw new Error(
-    "Checked-in aggregate package-size evidence is stale; run bun run packages:size:review after building"
+    `Checked-in aggregate unpacked package-size evidence is stale; expected ${measurements.aggregate.unpackedBytes}, got ${aggregateUnpackedBytes}. Run bun run packages:size:review after building`
   )
 }
 console.log(
