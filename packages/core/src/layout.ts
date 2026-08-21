@@ -28,6 +28,7 @@ export type StandardGlyphRun = Readonly<{
   x: Twip
   baselineY: Twip
   width: Twip
+  href?: string | null
 }>
 
 export type EmbeddedGlyphRun = Readonly<{
@@ -47,9 +48,19 @@ export type EmbeddedGlyphRun = Readonly<{
   x: Twip
   baselineY: Twip
   width: Twip
+  href?: string | null
 }>
 
 export type GlyphRun = StandardGlyphRun | EmbeddedGlyphRun
+
+export type LinkBox = Readonly<{
+  href: string
+  x: Twip
+  y: Twip
+  width: Twip
+  height: Twip
+  pageIndex: number
+}>
 
 export type LineCap = "butt" | "round" | "square"
 
@@ -105,8 +116,18 @@ type LayoutTraceEventBase = Readonly<{
 }>
 
 export type LayoutTraceEvent =
+  | (LayoutTraceEventBase & Readonly<{ kind: "block" | "table"; bounds: Rect }>)
   | (LayoutTraceEventBase &
-      Readonly<{ kind: "block" | "line" | "table"; bounds: Rect }>)
+      Readonly<{
+        kind: "line"
+        bounds: Rect
+        /**
+         * Character offset within the paragraph at which this line begins.
+         * Used by the editor pagination plugin for mid-paragraph break spacers.
+         */
+        charOffset: number
+        lineIndex: number
+      }>)
   | (LayoutTraceEventBase &
       Readonly<{ kind: "glyph-run"; bounds: Rect; baselineY: Twip }>)
   | (LayoutTraceEventBase &
@@ -144,5 +165,6 @@ export type LayoutTrace = Readonly<{
 export type LayoutDocument = Readonly<{
   displayList: PageDisplayList
   diagnostics: readonly Diagnostic[]
+  links?: readonly LinkBox[]
   trace?: LayoutTrace
 }>

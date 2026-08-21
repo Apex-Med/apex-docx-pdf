@@ -262,7 +262,7 @@ describe("installRendererWorker", () => {
     const sourceBytes = Uint8Array.of(1, 2, 3, 4)
     const responseAssets = clonePreviewAssetsForResponse([
       { id: "first", mimeType: "image/png", bytes: sourceBytes },
-      { id: "second", mimeType: "image/png", bytes: sourceBytes },
+      { id: "second", mimeType: "image/webp", bytes: sourceBytes },
     ])
     const sharedBytes = responseAssets[0]?.bytes
     if (!sharedBytes) throw new Error("Expected cloned preview bytes")

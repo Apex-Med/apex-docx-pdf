@@ -43,7 +43,7 @@ Default limits are 100 distinct image parts, 20,000,000 total bytes, 100,000 pix
 
 ## A section, header, or footer is rejected
 
-Use `nextPage` only, keep page width/height positive, and make explicit orientation agree with geometry. The body-level `sectPr` must be the final body child. Header/footer references must be internal `default` references; first/even variants are unsupported. Default references inherit across sections until replaced. Header content must fit between its edge distance and top body margin; footer content must fit between its edge distance and bottom body margin. Distances default to 720 twips.
+Use `nextPage` only, keep page width/height positive, and make explicit orientation agree with geometry. The body-level `sectPr` must be the final body child. Header/footer references must be internal `default` or `first` references; even-page variants are unsupported. Default and first-page references inherit across sections until replaced, and `w:titlePg` activates the first-page pair. Header content must fit between its edge distance and top body margin; footer content must fit between its edge distance and bottom body margin. Distances default to 720 twips.
 
 ## Page numbers are missing or formatted differently
 

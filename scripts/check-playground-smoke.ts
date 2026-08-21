@@ -25,15 +25,17 @@ const server = Bun.spawn({
     "--strictPort",
   ],
   cwd: webRoot,
-  // Never let a developer's shell turn this into a live Convex test.
-  env: { ...process.env, CONVEX_URL: "", VITE_CONVEX_URL: "" },
-  stdout: "pipe",
-  stderr: "pipe",
+  // Never let a developer's shell turn this into a live Convex/Clerk test.
+  env: {
+    ...process.env,
+    CONVEX_URL: "",
+    VITE_CONVEX_URL: "",
+    VITE_CLERK_PUBLISHABLE_KEY: "",
+    CLERK_SECRET_KEY: "",
+  },
+  stdout: "inherit",
+  stderr: "inherit",
 })
-const serverOutput = Promise.all([
-  new Response(server.stdout).text(),
-  new Response(server.stderr).text(),
-]).then((chunks) => chunks.join("\n"))
 await waitForServer(server)
 const browser = await chromium.launch({ headless: true })
 
@@ -108,19 +110,21 @@ try {
 }
 
 async function waitForServer(serverProcess: Bun.Subprocess): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 450; attempt += 1) {
     if (serverProcess.exitCode !== null) {
       throw new Error(
-        `Vite exited before the smoke started:\n${await serverOutput}`
+        `Vite exited before the smoke started with code ${serverProcess.exitCode}`
       )
     }
     try {
-      const response = await fetch(baseUrl)
+      const response = await fetch(baseUrl, {
+        signal: AbortSignal.timeout(2_000),
+      })
       if (response.ok) return
     } catch {
-      // Vite is still starting.
+      // Vite is still starting or the first accepted connection hung.
     }
-    await Bun.sleep(100)
+    await Bun.sleep(200)
   }
   throw new Error("Timed out waiting for the local Vite application")
 }

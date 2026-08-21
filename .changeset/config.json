@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/@changesets/config@2.3.1/schema.json",
+  "$schema": "https://unpkg.com/@changesets/config@4.0.0/schema.json",
   "changelog": [
     "@changesets/changelog-github",
     { "repo": "craig-bredenkamp/apex-docx-pdf" }
@@ -14,6 +14,7 @@
       "@apexmed/docx",
       "@apexmed/engine",
       "@apexmed/fonts",
+      "@apexmed/forms",
       "@apexmed/images",
       "@apexmed/layout",
       "@apexmed/pdf",
@@ -24,5 +25,6 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "bumpVersionsWithWorkspaceProtocolOnly": true,
-  "ignore": ["@apexmed/docs", "@apexmed/testkit", "@workspace/ui", "web"]
+  "privatePackages": { "version": true, "tag": false },
+  "ignore": ["@apexmed/docs", "@apexmed/editor", "@apexmed/testkit", "web"]
 }

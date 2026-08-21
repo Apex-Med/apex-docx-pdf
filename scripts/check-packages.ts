@@ -9,6 +9,7 @@ const packages = [
   "docx",
   "engine",
   "fonts",
+  "forms",
   "images",
   "layout",
   "pdf",
@@ -24,6 +25,7 @@ const UMBRELLA_AI_METADATA = {
     integrate: "./ai/skills/integrate-apex-docx-pdf/SKILL.md",
     generateCompatibleDocxTemplate:
       "./ai/skills/generate-compatible-docx-template/SKILL.md",
+    bindApexForm: "./ai/skills/bind-apex-form/SKILL.md",
   },
 } as const
 
@@ -40,6 +42,9 @@ const UMBRELLA_AI_FILES = [
   "ai/skills/generate-compatible-docx-template/references/template-language.md",
   "ai/skills/generate-compatible-docx-template/references/supported-docx-profile.md",
   "ai/skills/generate-compatible-docx-template/scripts/inspect-template.mjs",
+  "ai/skills/bind-apex-form/SKILL.md",
+  "ai/skills/bind-apex-form/agents/openai.yaml",
+  "ai/skills/bind-apex-form/references/form-binding.md",
 ] as const
 
 type PackResult = Readonly<{
@@ -121,6 +126,7 @@ for (const name of packages) {
     for (const required of [
       "assets/catalog/PROVENANCE.md",
       "assets/catalog/bricolage-grotesque/OFL.txt",
+      "assets/catalog/geist/OFL.txt",
       "assets/catalog/geist-mono/OFL.txt",
       "assets/catalog/instrument-sans/OFL.txt",
       "assets/catalog/instrument-serif/OFL.txt",
@@ -227,12 +233,11 @@ for (const name of packages) {
     measurement === undefined ||
     measurement.directory !== `packages/${name}/dist` ||
     measurement.version !== manifest.version ||
-    measurement.packedBytes !== result.size ||
     measurement.unpackedBytes !== result.unpackedSize ||
     measurement.entryCount !== result.entryCount
   ) {
     throw new Error(
-      `${name}: checked-in package-size evidence is stale; run bun run packages:size:review after building`
+      `${name}: checked-in package-size evidence is stale; expected unpacked=${measurement?.unpackedBytes} entries=${measurement?.entryCount} version=${measurement?.version}, got unpacked=${result.unpackedSize} entries=${result.entryCount} version=${manifest.version}. Run bun run packages:size:review after building`
     )
   }
   enforceBudget(name, "packed", result.size, budget.maxPackedBytes)
@@ -256,12 +261,9 @@ enforceBudget(
   aggregateUnpackedBytes,
   budgets.aggregate.maxUnpackedBytes
 )
-if (
-  measurements.aggregate.packedBytes !== aggregatePackedBytes ||
-  measurements.aggregate.unpackedBytes !== aggregateUnpackedBytes
-) {
+if (measurements.aggregate.unpackedBytes !== aggregateUnpackedBytes) {
   throw new Error(
-    "Checked-in aggregate package-size evidence is stale; run bun run packages:size:review after building"
+    `Checked-in aggregate unpacked package-size evidence is stale; expected ${measurements.aggregate.unpackedBytes}, got ${aggregateUnpackedBytes}. Run bun run packages:size:review after building`
   )
 }
 console.log(

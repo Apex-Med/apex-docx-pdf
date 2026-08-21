@@ -1,7 +1,7 @@
 {
   "name": "@apexmed/images",
-  "version": "0.1.0-next.1",
-  "description": "Bounded PNG and JPEG preparation for Apex DOCX PDF.",
+  "version": "0.1.0-next.2",
+  "description": "Bounded image preparation (PNG/JPEG/GIF/WebP/AVIF/SVG) for Apex DOCX PDF.",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -17,6 +17,10 @@
   "keywords": [
     "png",
     "jpeg",
+    "svg",
+    "webp",
+    "gif",
+    "avif",
     "pdf",
     "typescript"
   ],

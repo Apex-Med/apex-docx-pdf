@@ -32,13 +32,13 @@ Static image relationships must be internal and owner-relative. Every static pla
 
 Image preparation accepts `AbortSignal` and checks it throughout hashing, chunk/marker parsing, row/sample processing, and around decompression. PNG inflate uses a bounded caller-owned output buffer, but the underlying inflate call is synchronous: cancellation cannot interrupt it mid-inflate and is observed immediately before or after that call.
 
-Only deterministic `nextPage` sections are accepted. Page geometry must use positive integer twips and agree with portrait/landscape orientation. Header/footer relationships must be internal defaults; references inherit across sections until replaced. Distances must be non-negative and header/footer content may not collide with body margins. First/even header variants, continuous/odd/even breaks, automatic numbering in headers/footers, and non-decimal/arbitrary fields are rejected. `PAGE`/`NUMPAGES` reserve bounded width before pagination and materialize only after the global page count is known.
+Only deterministic `nextPage` sections are accepted. Page geometry must use positive integer twips and agree with portrait/landscape orientation. Default and first-page header/footer relationships must be internal; references inherit across sections until replaced, and `w:titlePg` activates the first-page variants. Distances must be non-negative and header/footer content may not collide with body margins. Even-page header variants, continuous/odd/even breaks, automatic numbering in headers/footers, and non-decimal/arbitrary fields are rejected. `PAGE`/`NUMPAGES` reserve bounded width before pagination and materialize only after the global page count is known.
 
 Template paths cannot address prototype-related fields, inherited properties are not traversed, and values are resolved without executing code. The safe formatter set is closed. Currency and date formatting accept only the engine-owned canonical `en-US` and `en-ZA` profiles; date formatting additionally requires an explicit time zone and offset-bearing ISO date-time. No formatter reads ambient locale data, time zone, or clock state.
 
 The low-level library font configuration accepts explicit `Uint8Array` programs only. The adapter performs no filesystem access, system-font discovery, network fetch, or `Buffer`-specific processing. Font licensing and redistribution rights remain the caller's responsibility.
 
-The reference playground is stricter: it does not register uploaded DOCX embedded-font programs. It resolves only five application-owned, hash-pinned OFL TrueType families shipped with the app. System-family names are aliases to catalog faces rather than OS lookups, and unavailable families stay visible in diagnostics. This keeps uploaded font programs outside the browser rendering trust boundary and prevents output from varying with the host machine.
+The reference playground is stricter: it does not register uploaded DOCX embedded-font programs. It resolves only six application-owned, hash-pinned OFL TrueType families shipped with the app. System-family names are aliases to catalog faces rather than OS lookups, and unavailable families stay visible in diagnostics. This keeps uploaded font programs outside the browser rendering trust boundary and prevents output from varying with the host machine.
 
 ## Application responsibilities
 
@@ -49,7 +49,7 @@ The reference playground is stricter: it does not register uploaded DOCX embedde
 - Use `AbortSignal` to stop abandoned work.
 - Do not add network fetches, system-font lookup, executable helpers, or ambient locale/time/clock dependencies inside rendering stages.
 - Preserve source-located image, section, field, header/footer, and table diagnostics; review warnings such as oversized `cantSplit` rows or table headers too tall to repeat. Do not equate a produced PDF with full Word fidelity.
-- Treat dynamic/external/floating/cropped/rotated/SVG images, unsupported image profiles/colors, percentage/nested/styled/themed tables, non-`nextPage` sections, first/even headers, and header/footer numbering as unavailable until later phases establish explicit boundaries.
+- Treat dynamic/external/floating/cropped/rotated/SVG images, unsupported image profiles/colors, percentage/nested/styled/themed tables, non-`nextPage` sections, even-page headers, and header/footer numbering as unavailable until later phases establish explicit boundaries.
 
 ## Convex reference boundary
 

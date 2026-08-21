@@ -58,10 +58,19 @@ Catch `EngineOperationError` at the application boundary and retain its structur
 - Dynamic images use only `{{@image path}}` and caller-owned PNG/JPEG bytes plus pixel and twip dimensions. URLs are never resolved.
 - Compilation exposes `manifest`, deterministic JSON Schema Draft 2020-12, `starterData`, source locations, and diagnostics. Use those outputs rather than maintaining a second hand-written schema.
 
+## Forms
+
+- Install `@apexmed/forms@next` when the host owns a questionnaire that fills template tags.
+- The npm package is headless: `FormTemplate`, validation, `tagsFromForm`, `questionFromTag`, `bindingDiagnostics`, and `answersToTemplateData`.
+- Map answers with `answersToTemplateData` before `engine.render`. Do not maintain a second handwritten schema beside the form keys and the compiled manifest.
+- React `FormBuilder` / `FormRuntime` are workspace plus shadcn-registry UI. They are not exported from the published tarball.
+- Read `ai/skills/bind-apex-form/SKILL.md` before wiring form answers into a render.
+
 ## Runtime selection
 
 - Bun/Node: use `createDocxPdfEngine()` from `apex-docx-pdf`.
 - Browser: run `installRendererWorker()` from `@apexmed/browser/worker` inside a module worker and control it with `BrowserRendererClient` from `@apexmed/browser`.
+- Questionnaires: use `@apexmed/forms` for the headless model; copy registry UI into the host app.
 - React debugging UI: use `@apexmed/devtools` only when a source-linked display-list or layout-trace view is useful.
 - Low-level packages such as `@apexmed/docx`, `@apexmed/layout`, and `@apexmed/pdf` are advanced prerelease surfaces. They can bypass high-level safety orchestration.
 
@@ -83,3 +92,4 @@ Diagnostics have a stable structural shape (`code`, `severity`, `message`, and o
 
 - Read `ai/skills/integrate-apex-docx-pdf/SKILL.md` for an integration workflow, browser split, error handling, and verification.
 - Read `ai/skills/generate-compatible-docx-template/SKILL.md` for the authoring grammar, supported Word layout profile, and template validation workflow.
+- Read `ai/skills/bind-apex-form/SKILL.md` for mapping `@apexmed/forms` questions onto tags and converting answers into render data.

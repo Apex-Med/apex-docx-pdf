@@ -1,13 +1,27 @@
-import { DEFAULT_RESOURCE_LIMITS, throwIfAborted } from "@apexmed/core"
+import {
+  DEFAULT_PARAGRAPH_PROPERTIES,
+  DEFAULT_RESOURCE_LIMITS,
+  DEFAULT_TEXT_STYLE,
+  throwIfAborted,
+  twips,
+  type DocumentStyles,
+  type ParagraphProperties,
+  type SemanticImageMimeType,
+  type StyleDefinition,
+  type TextStyle,
+} from "@apexmed/core"
 import { XMLParser, XMLValidator } from "fast-xml-parser"
 import { unzlibSync } from "fflate"
+import { encodeRgbaPng } from "@apexmed/images"
 
 import { diagnostic, source } from "./diagnostics"
 import type {
   DocxParseOptions,
   ParsedDocxDocument,
   ParsedDocxHeaderFooter,
+  ParsedDocxImage,
   ParsedDocxImageAsset,
+  ParsedDocxFontAsset,
   ParsedDocxHorizontalRule,
   ParsedDocxInline,
   ParsedDocxNumberingDefinition,
@@ -53,7 +67,13 @@ const DEFAULT_SECTION: ParsedDocxSectionProperties = Object.freeze({
   orientation: "portrait",
   headerDistance: 720,
   footerDistance: 720,
+  differentFirstPage: false,
+  columns: null,
 })
+
+/** OOXML caps column count; beyond this we reject as non-deterministic. */
+const MAX_SECTION_COLUMNS = 12
+const DEFAULT_COLUMN_SPACE = 720
 
 type OwnerRelationship = Readonly<{
   id: string
@@ -103,10 +123,23 @@ const DEFAULT_RUN: ParsedDocxRunProperties = Object.freeze({
   fontWeight: 400,
   fontStyle: "normal",
   underline: false,
+  strikethrough: false,
   color: "000000",
   highlightColor: null,
   verticalAlignment: "baseline",
 })
+
+const HYPERLINK_RELATIONSHIPS = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink",
+])
+
+function isAllowedExternalHyperlink(type: string, target: string): boolean {
+  return (
+    HYPERLINK_RELATIONSHIPS.has(type) &&
+    /^https?:\/\/[^\s<>"']+$/iu.test(target)
+  )
+}
 
 function localName(name: string): string {
   const separator = name.indexOf(":")
@@ -215,6 +248,8 @@ function textContent(element: OrderedElement): string {
     if (node !== null && typeof node === "object" && !Array.isArray(node)) {
       const value = (node as Record<string, unknown>)[XML_TEXT]
       if (typeof value === "string") return decodeXmlReferences(value)
+      if (typeof value === "number" && Number.isFinite(value))
+        return String(value)
     }
   }
   return ""
@@ -638,7 +673,7 @@ function buildOwnerRelationships(
 
 function imageDimensions(
   bytes: Uint8Array,
-  mimeType: "image/png" | "image/jpeg",
+  mimeType: SemanticImageMimeType,
   signal?: AbortSignal
 ): Readonly<{ width: number; height: number }> | undefined {
   throwIfAborted(signal)
@@ -659,35 +694,180 @@ function imageDimensions(
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     return { width: view.getUint32(16), height: view.getUint32(20) }
   }
-  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8)
+  if (mimeType === "image/jpeg") {
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8)
+      return undefined
+    let offset = 2
+    while (offset + 9 < bytes.length) {
+      throwIfAborted(signal)
+      if (bytes[offset] !== 0xff) {
+        offset += 1
+        continue
+      }
+      const marker = bytes[offset + 1]
+      if (marker === undefined) return undefined
+      if (marker === 0xd8 || marker === 0xd9) {
+        offset += 2
+        continue
+      }
+      const length = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0)
+      if (length < 2 || offset + 2 + length > bytes.length) return undefined
+      if (
+        [
+          0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd,
+          0xce, 0xcf,
+        ].includes(marker)
+      ) {
+        return {
+          height: ((bytes[offset + 5] ?? 0) << 8) | (bytes[offset + 6] ?? 0),
+          width: ((bytes[offset + 7] ?? 0) << 8) | (bytes[offset + 8] ?? 0),
+        }
+      }
+      offset += 2 + length
+    }
     return undefined
-  let offset = 2
-  while (offset + 9 < bytes.length) {
-    throwIfAborted(signal)
-    if (bytes[offset] !== 0xff) {
-      offset += 1
-      continue
+  }
+  if (mimeType === "image/gif") {
+    if (bytes.length < 10) return undefined
+    const header = String.fromCharCode(
+      bytes[0]!,
+      bytes[1]!,
+      bytes[2]!,
+      bytes[3]!,
+      bytes[4]!,
+      bytes[5]!
+    )
+    if (header !== "GIF87a" && header !== "GIF89a") return undefined
+    return {
+      width: bytes[6]! | (bytes[7]! << 8),
+      height: bytes[8]! | (bytes[9]! << 8),
     }
-    const marker = bytes[offset + 1]
-    if (marker === undefined) return undefined
-    if (marker === 0xd8 || marker === 0xd9) {
-      offset += 2
-      continue
-    }
-    const length = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0)
-    if (length < 2 || offset + 2 + length > bytes.length) return undefined
+  }
+  if (mimeType === "image/webp") {
     if (
-      [
-        0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce,
-        0xcf,
-      ].includes(marker)
-    ) {
+      bytes.length < 30 ||
+      bytes[0] !== 0x52 ||
+      bytes[1] !== 0x49 ||
+      bytes[2] !== 0x46 ||
+      bytes[3] !== 0x46 ||
+      bytes[8] !== 0x57 ||
+      bytes[9] !== 0x45 ||
+      bytes[10] !== 0x42 ||
+      bytes[11] !== 0x50
+    )
+      return undefined
+    const fourCC = String.fromCharCode(
+      bytes[12]!,
+      bytes[13]!,
+      bytes[14]!,
+      bytes[15]!
+    )
+    if (fourCC === "VP8X") {
       return {
-        height: ((bytes[offset + 5] ?? 0) << 8) | (bytes[offset + 6] ?? 0),
-        width: ((bytes[offset + 7] ?? 0) << 8) | (bytes[offset + 8] ?? 0),
+        width: 1 + (bytes[24]! | (bytes[25]! << 8) | (bytes[26]! << 16)),
+        height: 1 + (bytes[27]! | (bytes[28]! << 8) | (bytes[29]! << 16)),
       }
     }
-    offset += 2 + length
+    if (fourCC === "VP8L" && bytes.length >= 25) {
+      const bits =
+        bytes[21]! | (bytes[22]! << 8) | (bytes[23]! << 16) | (bytes[24]! << 24)
+      return {
+        width: (bits & 0x3fff) + 1,
+        height: ((bits >> 14) & 0x3fff) + 1,
+      }
+    }
+    return undefined
+  }
+  if (mimeType === "image/avif") {
+    // Best-effort: walk BMFF for ispe; otherwise accept declared size later.
+    let offset = 0
+    while (offset + 8 <= bytes.length) {
+      throwIfAborted(signal)
+      const size =
+        ((bytes[offset]! << 24) |
+          (bytes[offset + 1]! << 16) |
+          (bytes[offset + 2]! << 8) |
+          bytes[offset + 3]!) >>>
+        0
+      const type = String.fromCharCode(
+        bytes[offset + 4]!,
+        bytes[offset + 5]!,
+        bytes[offset + 6]!,
+        bytes[offset + 7]!
+      )
+      const boxEnd = size === 0 ? bytes.length : offset + size
+      if (boxEnd > bytes.length || boxEnd <= offset) break
+      if (type === "ispe" && offset + 20 <= boxEnd) {
+        return {
+          width:
+            ((bytes[offset + 12]! << 24) |
+              (bytes[offset + 13]! << 16) |
+              (bytes[offset + 14]! << 8) |
+              bytes[offset + 15]!) >>>
+            0,
+          height:
+            ((bytes[offset + 16]! << 24) |
+              (bytes[offset + 17]! << 16) |
+              (bytes[offset + 18]! << 8) |
+              bytes[offset + 19]!) >>>
+            0,
+        }
+      }
+      offset = boxEnd
+    }
+    return undefined
+  }
+  if (mimeType === "image/svg+xml") {
+    const text = new TextDecoder().decode(bytes)
+    if (!/<svg[\s>]/iu.test(text)) return undefined
+    const root = text.match(/<svg\b[^>]*>/iu)?.[0] ?? ""
+    const viewBox =
+      root.match(/\bviewBox\s*=\s*(["'])(.*?)\1/iu)?.[2] ??
+      root.match(/\bviewbox\s*=\s*(["'])(.*?)\1/iu)?.[2]
+    if (viewBox) {
+      const parts = viewBox
+        .trim()
+        .split(/[\s,]+/u)
+        .map(Number)
+      if (parts.length >= 4 && (parts[2] ?? 0) > 0 && (parts[3] ?? 0) > 0) {
+        return { width: Math.round(parts[2]!), height: Math.round(parts[3]!) }
+      }
+    }
+    const width = root.match(/\bwidth\s*=\s*(["'])([\d.]+)\1/iu)?.[2]
+    const height = root.match(/\bheight\s*=\s*(["'])([\d.]+)\1/iu)?.[2]
+    if (width && height) {
+      const w = Number(width)
+      const h = Number(height)
+      if (w > 0 && h > 0) return { width: Math.round(w), height: Math.round(h) }
+    }
+    return { width: 300, height: 150 }
+  }
+  return undefined
+}
+
+const SUPPORTED_DOCX_IMAGE_MIMES = new Set<SemanticImageMimeType>([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/svg+xml",
+])
+
+const SVG_BLIP_EXT_URI = "{96DAC541-7B7A-43D3-8B79-37D633B846F1}"
+
+function findSvgBlipEmbed(
+  blip: OrderedElement | undefined
+): string | undefined {
+  if (!blip) return undefined
+  const extLst = child(blip, "extLst")?.element
+  if (!extLst) return undefined
+  for (const ext of children(extLst, "ext")) {
+    const uri = attr(ext.element, "uri")
+    if (uri !== SVG_BLIP_EXT_URI) continue
+    const svgBlip = child(ext.element, "svgBlip")?.element
+    const embed = attr(svgBlip, "embed")
+    if (embed) return embed
   }
   return undefined
 }
@@ -730,12 +910,27 @@ function readImageU32(bytes: Uint8Array, offset: number): number {
 }
 
 function imageProfileError(
-  mimeType: "image/png" | "image/jpeg",
+  mimeType: SemanticImageMimeType,
   bytes: Uint8Array,
   dimensions: Readonly<{ width: number; height: number }>,
   maxBytes: number,
   signal?: AbortSignal
 ): string | undefined {
+  if (
+    mimeType === "image/gif" ||
+    mimeType === "image/webp" ||
+    mimeType === "image/avif"
+  ) {
+    // Bounded header sniff already ran; full decode happens at image preparation.
+    return undefined
+  }
+  if (mimeType === "image/svg+xml") {
+    if (bytes.byteLength > maxBytes) return "SVG exceeds the image byte limit"
+    const text = new TextDecoder().decode(bytes)
+    if (/<script\b/iu.test(text) || /<foreignObject\b/iu.test(text))
+      return "SVG contains forbidden script or foreignObject content"
+    return undefined
+  }
   if (mimeType === "image/png") {
     if (bytes.length < 33)
       return "PNG is shorter than the supported image profile"
@@ -1037,6 +1232,173 @@ function mediaProblem(
   )
 }
 
+/**
+ * Bounded DrawingML compatibility profile for an empty outlined rectangle.
+ * Google Docs emits these as a wpg/wps Choice with a transparent one-pixel
+ * bitmap fallback, so selecting the fallback would preserve spacing but lose
+ * the authored border. Materializing the simple vector as SVG keeps the shape
+ * editable as an inline image without pretending to support general text boxes.
+ */
+function parseEmptyRectangleDrawing(
+  element: OrderedElement,
+  part: string,
+  xmlPath: string,
+  context: MediaContext,
+  options: DocxParseOptions
+): ParsedDocxImage | undefined {
+  const inlineElements = children(element, "inline")
+  if (inlineElements.length !== 1 || children(element, "anchor").length > 0)
+    return undefined
+  const inlineElement = inlineElements[0]
+  if (inlineElement === undefined) return undefined
+  const frame = inlineElement.element
+  const extent = child(frame, "extent")?.element
+  const cx = integer(attr(extent, "cx"))
+  const cy = integer(attr(extent, "cy"))
+  if (cx === undefined || cy === undefined || cx <= 0 || cy <= 0)
+    return undefined
+  const graphic = child(frame, "graphic")?.element
+  const graphicData =
+    graphic === undefined ? undefined : child(graphic, "graphicData")?.element
+  const shape =
+    graphicData === undefined ? undefined : child(graphicData, "wsp")?.element
+  if (shape === undefined) return undefined
+  const shapeProperties = child(shape, "spPr")?.element
+  const geometry =
+    shapeProperties === undefined
+      ? undefined
+      : child(shapeProperties, "prstGeom")?.element
+  if (attr(geometry, "prst") !== "rect") return undefined
+  const textBox = child(shape, "txbx")?.element
+  if (textBox === undefined || descendantText(textBox, "t").trim().length > 0)
+    return undefined
+  const fill =
+    shapeProperties === undefined
+      ? undefined
+      : child(
+          child(shapeProperties, "solidFill")?.element ?? shapeProperties,
+          "srgbClr"
+        )?.element
+  const line =
+    shapeProperties === undefined
+      ? undefined
+      : child(shapeProperties, "ln")?.element
+  const lineFill =
+    line === undefined
+      ? undefined
+      : child(child(line, "solidFill")?.element ?? line, "srgbClr")?.element
+  const dash = line === undefined ? undefined : child(line, "prstDash")?.element
+  const fillColor = attr(fill, "val")
+  const strokeColor = attr(lineFill, "val")
+  const strokeEmu = integer(attr(line, "w"))
+  if (
+    fillColor === undefined ||
+    strokeColor === undefined ||
+    !/^[0-9a-f]{6}$/iu.test(fillColor) ||
+    !/^[0-9a-f]{6}$/iu.test(strokeColor) ||
+    strokeEmu === undefined ||
+    strokeEmu <= 0 ||
+    attr(dash, "val") !== "solid"
+  )
+    return undefined
+
+  const widthTwips = Math.max(1, Math.round(cx / 635))
+  const heightTwips = Math.max(1, Math.round(cy / 635))
+  const strokeTwips = Math.max(1, Math.round(strokeEmu / 635))
+  const inset = strokeTwips / 2
+  const rectangleWidth = Math.max(0, widthTwips - strokeTwips)
+  const rectangleHeight = Math.max(0, heightTwips - strokeTwips)
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${widthTwips}" height="${heightTwips}" viewBox="0 0 ${widthTwips} ${heightTwips}">` +
+    `<rect fill="#${fillColor.toUpperCase()}" stroke="#${strokeColor.toUpperCase()}" stroke-width="${strokeTwips}" stroke-linejoin="round" x="${inset}" y="${inset}" width="${rectangleWidth}" height="${rectangleHeight}"/>` +
+    `</svg>`
+  const bytes = new TextEncoder().encode(svg)
+  const rasterWidth = Math.max(1, Math.round((widthTwips * 2) / 15))
+  const rasterHeight = Math.max(1, Math.round((heightTwips * 2) / 15))
+  const rasterStroke = Math.max(1, Math.round((strokeTwips * 2) / 15))
+  const fillRgb = [
+    Number.parseInt(fillColor.slice(0, 2), 16),
+    Number.parseInt(fillColor.slice(2, 4), 16),
+    Number.parseInt(fillColor.slice(4, 6), 16),
+  ] as const
+  const strokeRgb = [
+    Number.parseInt(strokeColor.slice(0, 2), 16),
+    Number.parseInt(strokeColor.slice(2, 4), 16),
+    Number.parseInt(strokeColor.slice(4, 6), 16),
+  ] as const
+  const rgba = new Uint8Array(rasterWidth * rasterHeight * 4)
+  for (let y = 0; y < rasterHeight; y += 1) {
+    for (let x = 0; x < rasterWidth; x += 1) {
+      const border =
+        x < rasterStroke ||
+        y < rasterStroke ||
+        x >= rasterWidth - rasterStroke ||
+        y >= rasterHeight - rasterStroke
+      const color = border ? strokeRgb : fillRgb
+      const offset = (y * rasterWidth + x) * 4
+      rgba[offset] = color[0]
+      rgba[offset + 1] = color[1]
+      rgba[offset + 2] = color[2]
+      rgba[offset + 3] = 255
+    }
+  }
+  const rasterBytes = encodeRgbaPng(rasterWidth, rasterHeight, rgba)
+  const maxCount =
+    options.limits?.maxImageCount ?? DEFAULT_RESOURCE_LIMITS.maxImageCount
+  const maxBytes =
+    options.limits?.maxImageBytes ?? DEFAULT_RESOURCE_LIMITS.maxImageBytes
+  const maxDimension =
+    options.limits?.maxImageDimensionPixels ??
+    DEFAULT_RESOURCE_LIMITS.maxImageDimensionPixels
+  const maxPixels =
+    options.limits?.maxImagePixels ?? DEFAULT_RESOURCE_LIMITS.maxImagePixels
+  if (
+    widthTwips > maxDimension ||
+    heightTwips > maxDimension ||
+    widthTwips > Math.floor(maxPixels / heightTwips) ||
+    context.assets.size + 1 > maxCount ||
+    context.imageBytes + bytes.byteLength + rasterBytes.byteLength > maxBytes
+  )
+    return undefined
+
+  const key = `shape:${part}:${xmlPath}`
+  let asset = context.assets.get(key)
+  if (asset === undefined) {
+    const index = context.assets.size + 1
+    const packagePath = `word/media/apex-shape-${index}.svg`
+    context.imageBytes += bytes.byteLength + rasterBytes.byteLength
+    asset = Object.freeze({
+      type: "docx-image-asset" as const,
+      id: `docx:asset:${key}`,
+      source: source(part, xmlPath),
+      packagePath,
+      mimeType: "image/svg+xml" as const,
+      bytes: frozenImageBytes(bytes, options.signal),
+      pixelWidth: widthTwips,
+      pixelHeight: heightTwips,
+      rasterFallback: Object.freeze({
+        bytes: frozenImageBytes(rasterBytes, options.signal),
+        pixelWidth: rasterWidth,
+        pixelHeight: rasterHeight,
+        packagePath: packagePath.replace(/\.svg$/u, ".png"),
+      }),
+    })
+    context.assets.set(key, asset)
+  }
+  return {
+    type: "docx-image",
+    source: source(part, xmlPath),
+    assetId: asset.id,
+    widthTwips,
+    heightTwips,
+    pixelWidth: widthTwips,
+    pixelHeight: heightTwips,
+    intrinsicRatio: widthTwips / heightTwips,
+    preserveAspect: true,
+    placement: { type: "inline" },
+  }
+}
+
 function parseDrawing(
   element: OrderedElement,
   part: string,
@@ -1046,30 +1408,83 @@ function parseDrawing(
   diagnostics: ReturnType<typeof diagnostic>[]
 ): ParsedDocxInline | undefined {
   const inlineElements = children(element, "inline")
-  if (children(element, "anchor").length > 0) {
-    mediaProblem(
-      diagnostics,
-      "DOCX_UNSUPPORTED_FLOATING_IMAGE",
-      "Floating or anchored DrawingML images are not supported.",
-      source(part, xmlPath)
-    )
-    return undefined
-  }
-  if (inlineElements.length !== 1) {
+  const anchorElements = children(element, "anchor")
+  if (inlineElements.length + anchorElements.length !== 1) {
     mediaProblem(
       diagnostics,
       "DOCX_MALFORMED_DRAWING",
-      "DrawingML must contain exactly one inline drawing.",
+      "DrawingML must contain exactly one inline or anchored drawing.",
       source(part, xmlPath)
     )
     return undefined
   }
-  const inline = inlineElements[0]?.element
-  if (inline === undefined) return undefined
-  const extent = child(inline, "extent")?.element
+  const drawingFrame = inlineElements[0]?.element ?? anchorElements[0]?.element
+  if (drawingFrame === undefined) return undefined
+  if (anchorElements.length === 1) {
+    const layoutInCell = attr(drawingFrame, "layoutInCell")?.toLowerCase()
+    const behindDoc = attr(drawingFrame, "behindDoc")?.toLowerCase()
+    if (
+      layoutInCell === "0" ||
+      layoutInCell === "false" ||
+      layoutInCell === "off" ||
+      behindDoc === "1" ||
+      behindDoc === "true" ||
+      behindDoc === "on"
+    ) {
+      mediaProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_FLOATING_IMAGE",
+        "Anchored images behind text or outside their containing cell are not supported.",
+        source(part, xmlPath)
+      )
+      return undefined
+    }
+  }
+  let placement: ParsedDocxImage["placement"] = { type: "inline" }
+  if (anchorElements.length === 1) {
+    const positionH = child(drawingFrame, "positionH")?.element
+    const positionV = child(drawingFrame, "positionV")?.element
+    const horizontalRelative = attr(positionH, "relativeFrom")
+    const verticalRelative = attr(positionV, "relativeFrom")
+    const offsetXEmu = integer(
+      textContent(
+        child(positionH ?? drawingFrame, "posOffset")?.element ?? drawingFrame
+      ).trim()
+    )
+    const offsetYEmu = integer(
+      textContent(
+        child(positionV ?? drawingFrame, "posOffset")?.element ?? drawingFrame
+      ).trim()
+    )
+    const wrapSquare = child(drawingFrame, "wrapSquare")?.element
+    if (
+      horizontalRelative !== "column" ||
+      verticalRelative !== "paragraph" ||
+      offsetXEmu === undefined ||
+      offsetYEmu === undefined ||
+      wrapSquare === undefined
+    ) {
+      mediaProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_FLOATING_IMAGE",
+        "Anchored images require column/paragraph offsets and square wrapping.",
+        source(part, xmlPath)
+      )
+      return undefined
+    }
+    placement = {
+      type: "anchor",
+      offsetXTwips: Math.round(offsetXEmu / 635),
+      offsetYTwips: Math.round(offsetYEmu / 635),
+      horizontalRelative: "column",
+      verticalRelative: "paragraph",
+      wrap: "square",
+    }
+  }
+  const extent = child(drawingFrame, "extent")?.element
   const cx = integer(attr(extent, "cx"))
   const cy = integer(attr(extent, "cy"))
-  const graphic = child(inline, "graphic")?.element
+  const graphic = child(drawingFrame, "graphic")?.element
   const graphicData =
     graphic === undefined ? undefined : child(graphic, "graphicData")?.element
   const picture =
@@ -1129,16 +1544,77 @@ function parseDrawing(
     return undefined
   }
   const declaredMime = contentTypeFor(context.contentTypes, target)
-  if (declaredMime !== "image/png" && declaredMime !== "image/jpeg") {
+  if (
+    declaredMime === undefined ||
+    !SUPPORTED_DOCX_IMAGE_MIMES.has(declaredMime as SemanticImageMimeType)
+  ) {
     mediaProblem(
       diagnostics,
       "DOCX_UNSUPPORTED_IMAGE_TYPE",
-      `Image part '${target}' does not declare PNG or JPEG content.`,
+      `Image part '${target}' does not declare a supported image content type.`,
       source(target, "/")
     )
     return undefined
   }
-  const dimensions = imageDimensions(bytes, declaredMime, options.signal)
+  const blipMime = declaredMime as SemanticImageMimeType
+
+  // Prefer asvg:svgBlip when present (Word dual-part SVG).
+  const svgEmbedId = findSvgBlipEmbed(blip)
+  let preferredTarget = target
+  let preferredBytes = bytes
+  let preferredMime: SemanticImageMimeType = blipMime
+  let rasterFallback:
+    | Readonly<{
+        bytes: readonly number[]
+        pixelWidth: number
+        pixelHeight: number
+        packagePath?: string
+      }>
+    | undefined
+
+  if (svgEmbedId) {
+    const svgRelationship = context.relationships.get(part)?.get(svgEmbedId)
+    if (
+      svgRelationship &&
+      !svgRelationship.external &&
+      imageTypes.has(svgRelationship.type)
+    ) {
+      const svgTarget = resolveTarget(part, svgRelationship.target)
+      const svgBytes =
+        svgTarget === undefined ? undefined : context.pkg.parts.get(svgTarget)
+      const svgMime =
+        svgTarget === undefined
+          ? undefined
+          : contentTypeFor(context.contentTypes, svgTarget)
+      if (
+        svgTarget !== undefined &&
+        svgBytes !== undefined &&
+        (svgMime === "image/svg+xml" ||
+          new TextDecoder()
+            .decode(svgBytes.subarray(0, Math.min(svgBytes.length, 256)))
+            .includes("<svg"))
+      ) {
+        preferredTarget = svgTarget
+        preferredBytes = svgBytes
+        preferredMime = "image/svg+xml"
+        const pngDims = imageDimensions(bytes, blipMime, options.signal)
+        if (blipMime === "image/png" && pngDims) {
+          rasterFallback = Object.freeze({
+            bytes: frozenImageBytes(bytes, options.signal),
+            pixelWidth: pngDims.width,
+            pixelHeight: pngDims.height,
+            packagePath: target,
+          })
+        }
+      }
+    }
+  }
+
+  const dimensions = imageDimensions(
+    preferredBytes,
+    preferredMime,
+    options.signal
+  )
   if (
     dimensions === undefined ||
     dimensions.width <= 0 ||
@@ -1147,8 +1623,8 @@ function parseDrawing(
     mediaProblem(
       diagnostics,
       "DOCX_INVALID_IMAGE_SIGNATURE",
-      `Image part '${target}' does not match its declared ${declaredMime} signature.`,
-      source(target, "/")
+      `Image part '${preferredTarget}' does not match its declared ${preferredMime} signature.`,
+      source(preferredTarget, "/")
     )
     return undefined
   }
@@ -1170,13 +1646,13 @@ function parseDrawing(
       diagnostics,
       "DOCX_IMAGE_DIMENSION_LIMIT",
       `Image dimensions ${dimensions.width}x${dimensions.height} exceed the ${maxDimension}-pixel side or ${maxPixels}-pixel area limit.`,
-      source(target, "/")
+      source(preferredTarget, "/")
     )
     return undefined
   }
   const profileError = imageProfileError(
-    declaredMime,
-    bytes,
+    preferredMime,
+    preferredBytes,
     dimensions,
     maxBytes,
     options.signal
@@ -1185,39 +1661,64 @@ function parseDrawing(
     mediaProblem(
       diagnostics,
       "DOCX_UNSUPPORTED_IMAGE_PROFILE",
-      `Image part '${target}' is rejected by the bounded PDF image profile: ${profileError}.`,
-      source(target, "/")
+      `Image part '${preferredTarget}' is rejected by the bounded PDF image profile: ${profileError}.`,
+      source(preferredTarget, "/")
     )
     return undefined
   }
-  let asset = context.assets.get(target)
+  // Also bound the PNG fallback when present.
+  if (rasterFallback) {
+    const fallbackError = imageProfileError(
+      "image/png",
+      Uint8Array.from(rasterFallback.bytes),
+      {
+        width: rasterFallback.pixelWidth,
+        height: rasterFallback.pixelHeight,
+      },
+      maxBytes,
+      options.signal
+    )
+    if (fallbackError !== undefined) {
+      mediaProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_IMAGE_PROFILE",
+        `SVG PNG fallback '${target}' is rejected: ${fallbackError}.`,
+        source(target, "/")
+      )
+      return undefined
+    }
+  }
+  let asset = context.assets.get(preferredTarget)
   if (asset === undefined) {
+    const totalBytes =
+      preferredBytes.byteLength + (rasterFallback?.bytes.length ?? 0)
     if (
       context.assets.size + 1 > maxCount ||
-      context.imageBytes + bytes.byteLength > maxBytes
+      context.imageBytes + totalBytes > maxBytes
     ) {
       mediaProblem(
         diagnostics,
         "DOCX_IMAGE_RESOURCE_LIMIT",
         `Embedded images exceed the configured count (${maxCount}) or byte (${maxBytes}) limit.`,
-        source(target, "/")
+        source(preferredTarget, "/")
       )
       return undefined
     }
-    context.imageBytes += bytes.byteLength
+    context.imageBytes += totalBytes
     asset = Object.freeze({
       type: "docx-image-asset" as const,
-      id: `docx:asset:${target}`,
-      source: source(target, "/"),
-      packagePath: target,
-      mimeType: declaredMime,
-      bytes: frozenImageBytes(bytes, options.signal),
+      id: `docx:asset:${preferredTarget}`,
+      source: source(preferredTarget, "/"),
+      packagePath: preferredTarget,
+      mimeType: preferredMime,
+      bytes: frozenImageBytes(preferredBytes, options.signal),
       pixelWidth: dimensions.width,
       pixelHeight: dimensions.height,
+      ...(rasterFallback ? { rasterFallback } : {}),
     })
-    context.assets.set(target, asset)
+    context.assets.set(preferredTarget, asset)
   }
-  const frameProperties = child(inline, "cNvGraphicFramePr")?.element
+  const frameProperties = child(drawingFrame, "cNvGraphicFramePr")?.element
   const aspectLocks =
     frameProperties === undefined
       ? undefined
@@ -1265,6 +1766,7 @@ function parseDrawing(
     pixelHeight: dimensions.height,
     intrinsicRatio,
     preserveAspect,
+    placement,
   }
 }
 
@@ -1316,14 +1818,16 @@ function resolveOfficeDocumentPart(
     }
     for (const relation of relationships) {
       if (relation.external) {
-        diagnostics.push(
-          diagnostic(
-            "DOCX_EXTERNAL_RELATIONSHIP",
-            `Relationship part '${part}' contains an external target.`,
-            "error",
-            source(part, `/Relationships/Relationship[${relation.index}]`)
+        if (!isAllowedExternalHyperlink(relation.type, relation.target)) {
+          diagnostics.push(
+            diagnostic(
+              "DOCX_EXTERNAL_RELATIONSHIP",
+              `Relationship part '${part}' contains an external target.`,
+              "error",
+              source(part, `/Relationships/Relationship[${relation.index}]`)
+            )
           )
-        )
+        }
         continue
       }
       const resolved = resolveTarget(ownerPart, relation.target)
@@ -1611,6 +2115,7 @@ type PartialRunProperties = Readonly<{
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strikethrough?: boolean
   color?: string
   highlightColor?: string | null
   verticalAlignment?: "baseline" | "superscript" | "subscript"
@@ -1636,7 +2141,9 @@ type PartialParagraphProperties = Readonly<{
 type ParsedStyle = Readonly<{
   id: string
   type: "paragraph" | "character"
+  name?: string
   basedOn?: string
+  next?: string
   paragraph: PartialParagraphProperties
   run: PartialRunProperties
   source: ReturnType<typeof source>
@@ -1837,6 +2344,7 @@ const RUN_PROPERTY_NAMES = new Set([
   "i",
   "iCs",
   "u",
+  "strike",
   "color",
   "sz",
   "szCs",
@@ -2169,15 +2677,6 @@ function parseParagraphProperties(
     }
     tabStops.sort((left, right) => left.position - right.position)
   }
-  // w:pPr/w:rPr formats Word's paragraph mark, not the paragraph's rendered
-  // glyph runs. Validate it using the same bounded profile, but do not merge it
-  // into paragraph text styling.
-  parseRunProperties(
-    child(element, "rPr")?.element,
-    part,
-    `${xmlPath}/w:rPr[1]`,
-    diagnostics
-  )
   const rawNumberingId = attr(
     child(numbering ?? element, "numId")?.element,
     "val"
@@ -2279,6 +2778,7 @@ function parseRunProperties(
       i: new Set(["val"]),
       iCs: new Set(["val"]),
       u: new Set(["val"]),
+      strike: new Set(["val"]),
       color: new Set(["val"]),
       sz: new Set(["val"]),
       szCs: new Set(["val"]),
@@ -2426,6 +2926,8 @@ function parseRunProperties(
   }
   const underlineElement = child(element, "u")?.element
   const underlineValue = attr(underlineElement, "val")
+  const strikeElement = child(element, "strike")?.element
+  const strikeValue = attr(strikeElement, "val")
   return {
     styleId: attr(child(element, "rStyle")?.element, "val"),
     formatting: {
@@ -2438,6 +2940,13 @@ function parseRunProperties(
         : {
             underline: !["none", "0", "false", "off"].includes(
               underlineValue?.toLowerCase() ?? "single"
+            ),
+          }),
+      ...(strikeElement === undefined
+        ? {}
+        : {
+            strikethrough: !["none", "0", "false", "off"].includes(
+              strikeValue?.toLowerCase() ?? "single"
             ),
           }),
       ...(color !== undefined && /^[0-9a-f]{6}$/iu.test(color)
@@ -3171,10 +3680,13 @@ function parseStyleSheet(
       continue
     }
     const basedOnElement = child(current.element, "basedOn")?.element
+    const nextElement = child(current.element, "next")?.element
     const style: ParsedStyle = {
       id,
       type,
+      name: attr(child(current.element, "name")?.element, "val") ?? id,
       basedOn: attr(basedOnElement, "val"),
+      next: attr(nextElement, "val"),
       basedOnSource:
         basedOnElement === undefined
           ? undefined
@@ -3510,14 +4022,19 @@ function parseRun(
         type === "textWrapping" && (clear === undefined || clear === "none")
       const supportedPage =
         type === "page" && clear === undefined && pageBreaksAllowed
+      const supportedColumn =
+        type === "column" && clear === undefined && pageBreaksAllowed
       const simpleElement =
         unknownAttribute === undefined &&
         childElements(current.element).length === 0
-      if ((supportedLine || supportedPage) && simpleElement) {
+      if (
+        (supportedLine || supportedPage || supportedColumn) &&
+        simpleElement
+      ) {
         inlines.push({
           type: "docx-break",
           source: source(part, breakPath),
-          kind: supportedPage ? "page" : "line",
+          kind: supportedPage ? "page" : supportedColumn ? "column" : "line",
         })
       } else {
         reportUnsupported(
@@ -3529,7 +4046,9 @@ function parseRun(
               ? "Break elements cannot contain child elements."
               : type === "page" && !pageBreaksAllowed
                 ? "Manual page breaks are supported only in main-document body paragraphs."
-                : `Break type '${type}' with clear '${clear ?? "<absent>"}' is outside the supported line/page-break profile.`,
+                : type === "column" && !pageBreaksAllowed
+                  ? "Manual column breaks are supported only in main-document body paragraphs."
+                  : `Break type '${type}' with clear '${clear ?? "<absent>"}' is outside the supported line/page/column-break profile.`,
           source(part, breakPath),
           options
         )
@@ -3718,6 +4237,76 @@ function parseRun(
     ) {
       // The paragraph owner materializes this isolated safe profile as a
       // semantic full-width block. It is intentionally not an inline glyph.
+    } else if (name === "AlternateContent") {
+      const alternatePath = `${xmlPath}/${current.name}[${count}]`
+      const choices = children(current.element, "Choice")
+      const fallbacks = children(current.element, "Fallback")
+      let choiceImage: ParsedDocxImage | undefined
+      for (const [choiceIndex, choice] of choices.entries()) {
+        const required = (attr(choice.element, "Requires") ?? "")
+          .trim()
+          .split(/\s+/u)
+          .filter(Boolean)
+        const choiceChildren = childElements(choice.element)
+        const choiceChild = choiceChildren[0]
+        if (
+          required.length === 0 ||
+          !required.every((prefix) => prefix === "wpg" || prefix === "wps") ||
+          choiceChildren.length !== 1 ||
+          choiceChild === undefined ||
+          localName(choiceChild.name) !== "drawing"
+        )
+          continue
+        const choicePath = `${alternatePath}/${choice.name}[${choiceIndex + 1}]/${choiceChild.name}[1]`
+        choiceImage = parseEmptyRectangleDrawing(
+          choiceChild.element,
+          part,
+          choicePath,
+          media,
+          options
+        )
+        if (choiceImage !== undefined) break
+      }
+      if (choiceImage !== undefined) {
+        inlines.push(choiceImage)
+      } else if (fallbacks.length !== 1) {
+        reportUnsupported(
+          diagnostics,
+          "DOCX_UNSUPPORTED_INLINE",
+          "Markup-compatibility AlternateContent requires exactly one supported fallback branch.",
+          source(part, alternatePath),
+          options,
+          unsupportedContentFeature(current.element)
+        )
+      } else {
+        // Choice branches are legal only when the consumer implements every
+        // namespace named by mc:Choice/@Requires. The importer deliberately
+        // advertises no extension namespace support, so the authored fallback
+        // is the deterministic representation for shapes, diagrams, and other
+        // producer-specific alternatives.
+        const fallbackPath = `${alternatePath}/${fallbacks[0]?.name}[1]`
+        const fallbackRun = parseRun(
+          {
+            name: "w:r",
+            children: fallbacks[0]?.element.children ?? [],
+            attributes: Object.freeze({}),
+          },
+          part,
+          fallbackPath,
+          options,
+          diagnostics,
+          sheet,
+          paragraphRunProperties,
+          media,
+          fieldState,
+          tabStopsAvailable,
+          pageBreaksAllowed,
+          allowedHorizontalRulePictPath
+        )
+        texts.push(...fallbackRun.texts)
+        inlines.push(...fallbackRun.inlines)
+        allRunText += fallbackRun.texts.map((text) => text.text).join("")
+      }
     } else if (name !== "rPr") {
       const feature = unsupportedContentFeature(current.element)
       reportUnsupported(
@@ -3768,6 +4357,10 @@ function parseRun(
     type: "docx-run",
     source: source(part, xmlPath),
     properties: completeRunProperties(effective),
+    styleId: direct.styleId ?? null,
+    directProperties: Object.keys(direct.formatting).length
+      ? completeRunProperties(direct.formatting)
+      : null,
     inlines,
     texts,
   }
@@ -3791,6 +4384,63 @@ function parsePageFieldInstruction(
     }
   }
   return command
+}
+
+function withHyperlinkOnTextInlines(
+  run: ParsedDocxRun,
+  href?: string,
+  anchor?: string
+): ParsedDocxRun {
+  if (!href && !anchor) return run
+  return {
+    ...run,
+    inlines: run.inlines.map((inline) =>
+      inline.type === "docx-text"
+        ? {
+            ...inline,
+            ...(href ? { href } : {}),
+            ...(anchor ? { anchor } : {}),
+          }
+        : inline
+    ),
+    texts: run.texts.map((text) => ({
+      ...text,
+      ...(href ? { href } : {}),
+      ...(anchor ? { anchor } : {}),
+    })),
+  }
+}
+
+function resolveHyperlinkTarget(
+  element: OrderedElement,
+  part: string,
+  media: MediaContext,
+  xmlPath: string,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): Readonly<{ href?: string; anchor?: string }> {
+  const anchor = attr(element, "anchor")
+  const relationshipId = attr(element, "id")
+  if (relationshipId !== undefined) {
+    const relationship = media.relationships.get(part)?.get(relationshipId)
+    if (
+      relationship !== undefined &&
+      HYPERLINK_RELATIONSHIPS.has(relationship.type) &&
+      relationship.external &&
+      isAllowedExternalHyperlink(relationship.type, relationship.target)
+    ) {
+      return { href: relationship.target, ...(anchor ? { anchor } : {}) }
+    }
+    reportUnsupported(
+      diagnostics,
+      "DOCX_UNSUPPORTED_INLINE",
+      `Hyperlink relationship '${relationshipId}' does not resolve to a supported external URL.`,
+      source(part, xmlPath),
+      options
+    )
+    return anchor ? { anchor } : {}
+  }
+  return anchor ? { anchor } : {}
 }
 
 function parseParagraph(
@@ -3845,6 +4495,31 @@ function parseParagraph(
     sheet.runDefaults,
     paragraphStyleChain
   )
+  const directParagraphMark = parseRunProperties(
+    paragraphPropertiesElement === undefined
+      ? undefined
+      : child(paragraphPropertiesElement, "rPr")?.element,
+    part,
+    `${paragraphPropertiesPath}/w:rPr[1]`,
+    diagnostics
+  )
+  let paragraphMarkProperties = paragraphRunProperties
+  if (directParagraphMark.styleId !== undefined) {
+    paragraphMarkProperties = mergeRunStyles(
+      paragraphMarkProperties,
+      styleChain(
+        directParagraphMark.styleId,
+        "character",
+        sheet,
+        source(part, `${paragraphPropertiesPath}/w:rPr[1]/w:rStyle[1]`),
+        diagnostics
+      )
+    )
+  }
+  paragraphMarkProperties = {
+    ...paragraphMarkProperties,
+    ...directParagraphMark.formatting,
+  }
   const runs: ParsedDocxRun[] = []
   const fieldState: { current?: ComplexFieldState } = {}
   const paragraphCounts = new Map<string, number>()
@@ -3870,6 +4545,60 @@ function parseParagraph(
           allowedHorizontalRulePictPath
         )
       )
+    } else if (childName === "hyperlink") {
+      const hyperlinkPath = `${xmlPath}/${paragraphChild.name}[${childCount}]`
+      const target = resolveHyperlinkTarget(
+        paragraphChild.element,
+        part,
+        media,
+        hyperlinkPath,
+        options,
+        diagnostics
+      )
+      const hyperlinkCounts = new Map<string, number>()
+      for (const hyperlinkChild of childElements(paragraphChild.element)) {
+        const hyperlinkChildName = localName(hyperlinkChild.name)
+        const hyperlinkChildCount =
+          (hyperlinkCounts.get(hyperlinkChildName) ?? 0) + 1
+        hyperlinkCounts.set(hyperlinkChildName, hyperlinkChildCount)
+        if (hyperlinkChildName === "r") {
+          runs.push(
+            withHyperlinkOnTextInlines(
+              parseRun(
+                hyperlinkChild.element,
+                part,
+                `${hyperlinkPath}/${hyperlinkChild.name}[${hyperlinkChildCount}]`,
+                options,
+                diagnostics,
+                sheet,
+                paragraphRunProperties,
+                media,
+                fieldState,
+                effectiveParagraphProperties.tabStops.length > 0,
+                pageBreaksAllowed,
+                allowedHorizontalRulePictPath
+              ),
+              target.href,
+              target.anchor
+            )
+          )
+        } else {
+          const feature = unsupportedContentFeature(hyperlinkChild.element)
+          reportUnsupported(
+            diagnostics,
+            "DOCX_UNSUPPORTED_INLINE",
+            feature === undefined
+              ? `Hyperlink child '${hyperlinkChild.name}' is not supported.`
+              : `Hyperlink child '${hyperlinkChild.name}' contains unsupported ${feature}.`,
+            source(
+              part,
+              `${hyperlinkPath}/${hyperlinkChild.name}[${hyperlinkChildCount}]`
+            ),
+            options,
+            feature
+          )
+        }
+      }
     } else if (childName === "fldSimple") {
       const kind = parsePageFieldInstruction(
         attr(paragraphChild.element, "instr")
@@ -3939,6 +4668,17 @@ function parseParagraph(
     type: "docx-paragraph",
     source: source(part, xmlPath),
     properties: effectiveParagraphProperties,
+    styleId: paragraphStyleId ?? null,
+    directProperties: Object.keys(directParagraphProperties).length
+      ? completeParagraphProperties(
+          directParagraphProperties,
+          numberingDefinitions,
+          hasNumberingPart,
+          source(part, paragraphPropertiesPath),
+          diagnostics
+        )
+      : null,
+    paragraphMarkProperties: completeRunProperties(paragraphMarkProperties),
     runs,
   }
 }
@@ -4372,11 +5112,13 @@ function reportConflictingDirectCellBorders(
   ): void => {
     if (first === null || second === null || tableBordersEqual(first, second))
       return
-    reportTableProblem(
-      diagnostics,
-      "DOCX_AMBIGUOUS_TABLE",
-      "Adjacent direct cell borders conflict on one shared table edge.",
-      location
+    diagnostics.push(
+      diagnostic(
+        "DOCX_TABLE_BORDER_CONFLICT_RESOLVED",
+        "Adjacent direct cell borders conflict; the renderer will apply deterministic shared-edge precedence.",
+        "warning",
+        location
+      )
     )
   }
   for (const [rowIndex, row] of rows.entries()) {
@@ -4494,7 +5236,7 @@ function parseDirectCellPadding(
     reportTableProblem(
       diagnostics,
       "DOCX_UNSUPPORTED_TABLE_PROPERTY",
-      "Direct cell margins must specify all four sides because the semantic table model has one uniform padding value.",
+      "Direct cell margins must specify all four sides to form a complete per-cell padding override.",
       source(part, xmlPath)
     )
     return undefined
@@ -4699,6 +5441,7 @@ function parseTable(
         "tblStyle",
         "tblW",
         "jc",
+        "tblInd",
         "tblLayout",
         "tblLook",
         "tblBorders",
@@ -4754,19 +5497,38 @@ function parseTable(
     `${propertiesPath}/w:jc[1]`,
     diagnostics
   )
-  const alignment = attr(alignmentElement, "val")
-  if (
-    alignmentElement !== undefined &&
-    alignment !== "left" &&
-    alignment !== "start"
-  ) {
-    reportTableProblem(
-      diagnostics,
-      "DOCX_UNSUPPORTED_TABLE_PROPERTY",
-      `Table alignment '${alignment ?? "<missing>"}' is not supported by the semantic table model; only the default left/start alignment is a no-op.`,
-      source(part, `${propertiesPath}/w:jc[1]`)
-    )
+  const rawAlignment = attr(alignmentElement, "val")
+  let alignment: ParsedDocxTable["alignment"] = "left"
+  if (alignmentElement !== undefined) {
+    if (rawAlignment === "start" || rawAlignment === "left") {
+      alignment = "left"
+    } else if (rawAlignment === "center") {
+      alignment = "center"
+    } else if (rawAlignment === "end" || rawAlignment === "right") {
+      alignment = "right"
+    } else {
+      reportTableProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
+        `Table alignment '${rawAlignment ?? "<missing>"}' is not supported by the semantic table model; use left, start, center, right, or end.`,
+        source(part, `${propertiesPath}/w:jc[1]`)
+      )
+    }
   }
+  const indentStart =
+    parseTableWidth(
+      singularTableChild(
+        tableProperties,
+        "tblInd",
+        part,
+        propertiesPath,
+        diagnostics
+      ),
+      part,
+      `${propertiesPath}/w:tblInd[1]`,
+      diagnostics,
+      false
+    ) ?? 0
   const lookElement = singularTableChild(
     tableProperties,
     "tblLook",
@@ -4949,7 +5711,7 @@ function parseTable(
     `${propertiesPath}/w:tblBorders[1]`,
     diagnostics
   )
-  let cellPadding = parseCellPadding(
+  const cellPadding = parseCellPadding(
     singularTableChild(
       tableProperties,
       "tblCellMar",
@@ -4963,10 +5725,7 @@ function parseTable(
   )
 
   const rows: ParsedDocxTable["rows"][number][] = []
-  const directCellPaddings: Readonly<{
-    value: { top: number; right: number; bottom: number; left: number }
-    path: string
-  }>[] = []
+  let directCellPaddingCount = 0
   let cellCount = 0
   const tableCounts = new Map<string, number>()
   let sawNonHeader = false
@@ -5121,10 +5880,7 @@ function parseTable(
         diagnostics
       )
       if (directPadding !== undefined) {
-        directCellPaddings.push({
-          value: directPadding,
-          path: directPaddingPath,
-        })
+        directCellPaddingCount += 1
       }
       const directBordersPath = `${cellPath}/w:tcPr[1]/w:tcBorders[1]`
       const directBordersElement = singularTableChild(
@@ -5338,6 +6094,7 @@ function parseTable(
         verticalAlignment,
         fillColor,
         borders: directBorders,
+        cellPadding: directPadding ?? null,
         paragraphs,
       })
       columnIndex += columnSpan
@@ -5383,33 +6140,9 @@ function parseTable(
     return undefined
   }
   reportConflictingDirectCellBorders(rows, diagnostics)
-  if (directCellPaddings.length > 0) {
-    const first = directCellPaddings[0]?.value
-    const uniform = directCellPaddings.every(
-      ({ value }) =>
-        value.top === first?.top &&
-        value.right === first.right &&
-        value.bottom === first.bottom &&
-        value.left === first.left
-    )
-    if (
-      first === undefined ||
-      directCellPaddings.length !== cellCount ||
-      !uniform
-    ) {
-      reportTableProblem(
-        diagnostics,
-        "DOCX_UNSUPPORTED_TABLE_PROPERTY",
-        "Direct cell margins can be mapped only when every cell specifies the same complete four-side padding.",
-        source(part, directCellPaddings[0]?.path ?? xmlPath)
-      )
-    } else {
-      cellPadding = first
-    }
-  }
   if (
     tableStyle.requiresDirectCellPadding &&
-    directCellPaddings.length !== cellCount
+    directCellPaddingCount !== cellCount
   ) {
     reportTableProblem(
       diagnostics,
@@ -5423,6 +6156,8 @@ function parseTable(
     source: source(part, xmlPath),
     width: preferredWidth ?? gridWidth,
     preferredWidth: preferredWidth ?? null,
+    indentStart,
+    alignment,
     layout,
     columnWidths,
     borders,
@@ -5432,6 +6167,84 @@ function parseTable(
         ? rows.length
         : rows.findIndex((row) => !row.repeatAsHeader),
     rows,
+  }
+}
+
+function onOffAttribute(
+  element: OrderedElement | undefined,
+  name: string
+): boolean | undefined {
+  if (element === undefined) return undefined
+  const value = attr(element, name)?.toLowerCase()
+  if (value === undefined) return undefined
+  if (value === "0" || value === "false" || value === "off") return false
+  if (value === "1" || value === "true" || value === "on") return true
+  return undefined
+}
+
+function parseSectionColumns(
+  columns: OrderedElement | undefined,
+  part: string,
+  xmlPath: string,
+  diagnostics: ReturnType<typeof diagnostic>[],
+  options: DocxParseOptions
+): ParsedDocxSectionProperties["columns"] {
+  if (columns === undefined) return null
+  const colChildren = children(columns, "col")
+  const declaredNum = integer(attr(columns, "num"))
+  const equalWidthAttr = onOffAttribute(columns, "equalWidth")
+  const separator = onOffAttribute(columns, "sep") === true
+  const space = nonNegativeInteger(attr(columns, "space"), DEFAULT_COLUMN_SPACE)
+
+  const widths: number[] = []
+  for (const { element: col } of colChildren) {
+    const width = integer(attr(col, "w"))
+    if (width === undefined || width <= 0) {
+      reportFormattingProblem(
+        diagnostics,
+        "DOCX_INVALID_STYLE_VALUE",
+        "Section column width must be a positive integer twip value.",
+        source(part, `${xmlPath}/w:cols[1]`)
+      )
+      continue
+    }
+    widths.push(width)
+  }
+
+  const equalWidth = equalWidthAttr ?? widths.length === 0
+  const count =
+    declaredNum !== undefined && declaredNum > 0
+      ? declaredNum
+      : widths.length > 0
+        ? widths.length
+        : 1
+
+  if (count > MAX_SECTION_COLUMNS) {
+    reportUnsupported(
+      diagnostics,
+      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+      `Section column count ${count} exceeds the supported maximum of ${MAX_SECTION_COLUMNS}.`,
+      source(part, `${xmlPath}/w:cols[1]`),
+      options,
+      "multiColumnSections"
+    )
+  }
+
+  if (!equalWidth && widths.length > 0 && widths.length !== count) {
+    reportFormattingProblem(
+      diagnostics,
+      "DOCX_INVALID_STYLE_VALUE",
+      `Section declares ${count} columns but provides ${widths.length} explicit column widths.`,
+      source(part, `${xmlPath}/w:cols[1]`)
+    )
+  }
+
+  return {
+    count: Math.max(1, Math.min(count, MAX_SECTION_COLUMNS)),
+    equalWidth,
+    space,
+    separator,
+    widths: equalWidth || widths.length === 0 ? null : Object.freeze(widths),
   }
 }
 
@@ -5453,24 +6266,13 @@ function parseSectionProperties(
       source(part, `${xmlPath}/w:type[1]`)
     )
   }
-  const columns = child(element, "cols")?.element
-  const explicitColumnCount =
-    columns === undefined ? 0 : children(columns, "col").length
-  const declaredColumnCount = integer(attr(columns, "num"))
-  if (
-    columns !== undefined &&
-    ((declaredColumnCount !== undefined && declaredColumnCount > 1) ||
-      explicitColumnCount > 1)
-  ) {
-    reportUnsupported(
-      diagnostics,
-      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
-      "Multi-column sections are outside the supported single-column section profile.",
-      source(part, `${xmlPath}/w:cols[1]`),
-      options,
-      "multiColumnSections"
-    )
-  }
+  const columns = parseSectionColumns(
+    child(element, "cols")?.element,
+    part,
+    xmlPath,
+    diagnostics,
+    options
+  )
   const width = integer(attr(pageSize, "w"))
   const height = integer(attr(pageSize, "h"))
   if (
@@ -5546,44 +6348,50 @@ function parseSectionProperties(
       attr(margins, "footer"),
       DEFAULT_SECTION.footerDistance
     ),
+    differentFirstPage:
+      booleanProperty(child(element, "titlePg")?.element) ?? false,
+    columns,
   }
 }
 
 function sectionReference(
   element: OrderedElement,
   kind: "header" | "footer",
+  referenceType: "default" | "first",
   ownerPart: string,
   context: MediaContext,
   xmlPath: string,
   diagnostics: ReturnType<typeof diagnostic>[]
 ): string | null | undefined {
   const references = children(element, `${kind}Reference`)
-  const defaults = references.filter(
+  const matches = references.filter(
     ({ element: reference }) =>
-      (attr(reference, "type") ?? "default") === "default"
+      (attr(reference, "type") ?? "default") === referenceType
   )
   const unsupported = references.filter(
     ({ element: reference }) =>
-      (attr(reference, "type") ?? "default") !== "default"
+      !["default", "first"].includes(attr(reference, "type") ?? "default")
   )
-  for (const _reference of unsupported) {
-    reportFormattingProblem(
-      diagnostics,
-      "DOCX_UNSUPPORTED_STYLE_PROPERTY",
-      `Only default ${kind} references are supported.`,
-      source(ownerPart, xmlPath)
-    )
+  if (referenceType === "default") {
+    for (const _reference of unsupported) {
+      reportFormattingProblem(
+        diagnostics,
+        "DOCX_UNSUPPORTED_STYLE_PROPERTY",
+        `Only default and first-page ${kind} references are supported.`,
+        source(ownerPart, xmlPath)
+      )
+    }
   }
-  if (defaults.length > 1) {
+  if (matches.length > 1) {
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      `A section has duplicate default ${kind} references.`,
+      `A section has duplicate ${referenceType} ${kind} references.`,
       source(ownerPart, xmlPath)
     )
     return null
   }
-  const reference = defaults[0]?.element
+  const reference = matches[0]?.element
   if (reference === undefined) return undefined
   const relationshipId = attr(reference, "id")
   const relationship =
@@ -5602,7 +6410,7 @@ function sectionReference(
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      `Default ${kind} reference does not resolve through an internal owner-relative ${kind} relationship.`,
+      `${referenceType === "first" ? "First-page" : "Default"} ${kind} reference does not resolve through an internal owner-relative ${kind} relationship.`,
       source(ownerPart, xmlPath)
     )
     return null
@@ -5612,7 +6420,7 @@ function sectionReference(
     reportFormattingProblem(
       diagnostics,
       "DOCX_INVALID_STYLE_VALUE",
-      `Default ${kind} relationship targets a missing or unsafe package part.`,
+      `${referenceType === "first" ? "First-page" : "Default"} ${kind} relationship targets a missing or unsafe package part.`,
       source(ownerPart, xmlPath)
     )
     return null
@@ -5653,7 +6461,7 @@ function parseHeaderFooterPart(
     )
     return undefined
   }
-  const paragraphs: ParsedDocxParagraph[] = []
+  const blocks: ParsedDocxHeaderFooter["blocks"][number][] = []
   const counts = new Map<string, number>()
   for (const current of childElements(root)) {
     const name = localName(current.name)
@@ -5661,7 +6469,7 @@ function parseHeaderFooterPart(
     counts.set(name, count)
     const path = `/${root.name}[1]/${current.name}[${count}]`
     if (name === "p") {
-      paragraphs.push(
+      blocks.push(
         parseParagraph(
           current.element,
           part,
@@ -5675,6 +6483,19 @@ function parseHeaderFooterPart(
           false
         )
       )
+    } else if (name === "tbl") {
+      const table = parseTable(
+        current.element,
+        part,
+        path,
+        options,
+        diagnostics,
+        sheet,
+        numberingDefinitions,
+        hasNumberingPart,
+        context
+      )
+      if (table !== undefined) blocks.push(table)
     } else {
       reportUnsupported(
         diagnostics,
@@ -5690,7 +6511,7 @@ function parseHeaderFooterPart(
     id,
     source: source(part, `/${root.name}[1]`),
     part,
-    paragraphs,
+    blocks,
   }
 }
 
@@ -5828,6 +6649,8 @@ export function parseValidatedDocx(
   let sectionBlocks: ParsedDocxDocument["blocks"][number][] = []
   let inheritedHeaderId: string | null = null
   let inheritedFooterId: string | null = null
+  let inheritedFirstPageHeaderId: string | null = null
+  let inheritedFirstPageFooterId: string | null = null
   let sectionProperties = DEFAULT_SECTION
   const bodyPath = `/${root.name}[1]/${body.name}[1]`
   const counts = new Map<string, number>()
@@ -5889,6 +6712,7 @@ export function parseValidatedDocx(
         const headerReference = sectionReference(
           paragraphSectionProperties,
           "header",
+          "default",
           officeDocumentPart.value,
           media,
           `${currentPath}/w:pPr[1]/w:sectPr[1]`,
@@ -5897,6 +6721,25 @@ export function parseValidatedDocx(
         const footerReference = sectionReference(
           paragraphSectionProperties,
           "footer",
+          "default",
+          officeDocumentPart.value,
+          media,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        const firstPageHeaderReference = sectionReference(
+          paragraphSectionProperties,
+          "header",
+          "first",
+          officeDocumentPart.value,
+          media,
+          `${currentPath}/w:pPr[1]/w:sectPr[1]`,
+          diagnostics
+        )
+        const firstPageFooterReference = sectionReference(
+          paragraphSectionProperties,
+          "footer",
+          "first",
           officeDocumentPart.value,
           media,
           `${currentPath}/w:pPr[1]/w:sectPr[1]`,
@@ -5904,6 +6747,10 @@ export function parseValidatedDocx(
         )
         if (headerReference !== undefined) inheritedHeaderId = headerReference
         if (footerReference !== undefined) inheritedFooterId = footerReference
+        if (firstPageHeaderReference !== undefined)
+          inheritedFirstPageHeaderId = firstPageHeaderReference
+        if (firstPageFooterReference !== undefined)
+          inheritedFirstPageFooterId = firstPageFooterReference
         sectionProperties = parseSectionProperties(
           paragraphSectionProperties,
           officeDocumentPart.value,
@@ -5920,6 +6767,8 @@ export function parseValidatedDocx(
           properties: sectionProperties,
           defaultHeaderId: inheritedHeaderId,
           defaultFooterId: inheritedFooterId,
+          firstPageHeaderId: inheritedFirstPageHeaderId,
+          firstPageFooterId: inheritedFirstPageFooterId,
           blocks: sectionBlocks,
         })
         sectionBlocks = []
@@ -5945,6 +6794,7 @@ export function parseValidatedDocx(
       const headerReference = sectionReference(
         current.element,
         "header",
+        "default",
         officeDocumentPart.value,
         media,
         currentPath,
@@ -5953,6 +6803,25 @@ export function parseValidatedDocx(
       const footerReference = sectionReference(
         current.element,
         "footer",
+        "default",
+        officeDocumentPart.value,
+        media,
+        currentPath,
+        diagnostics
+      )
+      const firstPageHeaderReference = sectionReference(
+        current.element,
+        "header",
+        "first",
+        officeDocumentPart.value,
+        media,
+        currentPath,
+        diagnostics
+      )
+      const firstPageFooterReference = sectionReference(
+        current.element,
+        "footer",
+        "first",
         officeDocumentPart.value,
         media,
         currentPath,
@@ -5960,6 +6829,10 @@ export function parseValidatedDocx(
       )
       if (headerReference !== undefined) inheritedHeaderId = headerReference
       if (footerReference !== undefined) inheritedFooterId = footerReference
+      if (firstPageHeaderReference !== undefined)
+        inheritedFirstPageHeaderId = firstPageHeaderReference
+      if (firstPageFooterReference !== undefined)
+        inheritedFirstPageFooterId = firstPageFooterReference
       sectionProperties = parseSectionProperties(
         current.element,
         officeDocumentPart.value,
@@ -5973,6 +6846,8 @@ export function parseValidatedDocx(
         properties: sectionProperties,
         defaultHeaderId: inheritedHeaderId,
         defaultFooterId: inheritedFooterId,
+        firstPageHeaderId: inheritedFirstPageHeaderId,
+        firstPageFooterId: inheritedFirstPageFooterId,
         blocks: sectionBlocks,
       })
       sectionBlocks = []
@@ -5997,20 +6872,26 @@ export function parseValidatedDocx(
       properties: sectionProperties,
       defaultHeaderId: inheritedHeaderId,
       defaultFooterId: inheritedFooterId,
+      firstPageHeaderId: inheritedFirstPageHeaderId,
+      firstPageFooterId: inheritedFirstPageFooterId,
       blocks: sectionBlocks,
     })
   }
   const referencedHeaderIds = [
     ...new Set(
       sections.flatMap((section) =>
-        section.defaultHeaderId === null ? [] : [section.defaultHeaderId]
+        [section.defaultHeaderId, section.firstPageHeaderId].filter(
+          (id): id is string => id !== null
+        )
       )
     ),
   ]
   const referencedFooterIds = [
     ...new Set(
       sections.flatMap((section) =>
-        section.defaultFooterId === null ? [] : [section.defaultFooterId]
+        [section.defaultFooterId, section.firstPageFooterId].filter(
+          (id): id is string => id !== null
+        )
       )
     ),
   ]
@@ -6038,12 +6919,20 @@ export function parseValidatedDocx(
     )
     return parsed === undefined ? [] : [parsed]
   })
+  const fontAssets = parseEmbeddedFontAssets(
+    pkg,
+    officeDocumentPart.value,
+    media,
+    options,
+    diagnostics
+  )
 
   const document: ParsedDocxDocument = {
     type: "docx-document",
     source: source(officeDocumentPart.value, `/${root.name}[1]`),
     documentPart: officeDocumentPart.value,
     assets: [...media.assets.values()],
+    fontAssets,
     headers,
     footers,
     numberingDefinitions,
@@ -6051,6 +6940,300 @@ export function parseValidatedDocx(
     blocks,
     paragraphs,
     sectionProperties,
+    styles: toDocumentStyles(sheet),
+    editorMetadata: parseEditorMetadata(pkg),
   }
   return { ok: true, value: document, diagnostics }
+}
+
+function toDocumentStyles(sheet: StyleSheet): DocumentStyles {
+  const definitions: StyleDefinition[] = []
+  for (const style of sheet.styles.values()) {
+    definitions.push({
+      id: style.id,
+      name: style.name ?? style.id,
+      type: style.type,
+      basedOn: style.basedOn ?? null,
+      next: style.next ?? null,
+      paragraph:
+        style.type === "paragraph"
+          ? partialParagraphToSemantic(style.paragraph)
+          : null,
+      text: partialRunToTextStyle(style.run),
+    })
+  }
+  return {
+    defaults: {
+      text: {
+        ...DEFAULT_TEXT_STYLE,
+        fontFamily: DEFAULT_RUN.fontFamily,
+        ...partialRunToTextStyle(sheet.runDefaults),
+      },
+      paragraph: {
+        ...DEFAULT_PARAGRAPH_PROPERTIES,
+        ...partialParagraphToSemantic(sheet.paragraphDefaults),
+      },
+    },
+    definitions,
+    defaultParagraphStyleId: sheet.defaultParagraphStyleId ?? null,
+    defaultCharacterStyleId: sheet.defaultCharacterStyleId ?? null,
+  }
+}
+
+function partialParagraphToSemantic(
+  properties: PartialParagraphProperties
+): Partial<ParagraphProperties> {
+  const result: {
+    -readonly [K in keyof ParagraphProperties]?: ParagraphProperties[K]
+  } = {}
+  if (properties.alignment !== undefined)
+    result.alignment = properties.alignment
+  if (properties.spacingBefore !== undefined)
+    result.spacingBefore = twips(properties.spacingBefore)
+  if (properties.spacingAfter !== undefined)
+    result.spacingAfter = twips(properties.spacingAfter)
+  if (properties.lineSpacing !== undefined) {
+    result.lineSpacing =
+      properties.lineSpacing === null
+        ? null
+        : properties.lineSpacing.rule === "auto"
+          ? {
+              rule: "auto",
+              value240ths: properties.lineSpacing.value240ths,
+            }
+          : {
+              rule: properties.lineSpacing.rule,
+              value: twips(properties.lineSpacing.valueTwips),
+            }
+  }
+  if (properties.indentStart !== undefined)
+    result.indentStart = twips(properties.indentStart)
+  if (properties.indentEnd !== undefined)
+    result.indentEnd = twips(properties.indentEnd)
+  if (properties.firstLineIndent !== undefined)
+    result.firstLineIndent = twips(properties.firstLineIndent)
+  if (properties.keepWithNext !== undefined)
+    result.keepWithNext = properties.keepWithNext
+  if (properties.keepLinesTogether !== undefined)
+    result.keepLinesTogether = properties.keepLinesTogether
+  if (properties.widowControl !== undefined)
+    result.widowControl = properties.widowControl
+  if (properties.pageBreakBefore !== undefined)
+    result.pageBreakBefore = properties.pageBreakBefore
+  if (properties.tabStops !== undefined) {
+    result.tabStops = properties.tabStops.map((stop) => ({
+      position: twips(stop.position),
+      alignment: stop.alignment,
+    }))
+  }
+  return result
+}
+
+function partialRunToTextStyle(
+  properties: PartialRunProperties
+): Partial<TextStyle> {
+  const result: {
+    -readonly [K in keyof TextStyle]?: TextStyle[K]
+  } = {}
+  if (properties.fontFamily !== undefined)
+    result.fontFamily = properties.fontFamily
+  if (properties.fontSizeHalfPoints !== undefined)
+    result.fontSize = twips(properties.fontSizeHalfPoints * 10)
+  if (properties.bold !== undefined)
+    result.fontWeight = properties.bold ? 700 : 400
+  if (properties.italic !== undefined)
+    result.fontStyle = properties.italic ? "italic" : "normal"
+  if (properties.underline !== undefined)
+    result.underline = properties.underline
+  if (properties.color !== undefined) {
+    result.color = properties.color.startsWith("#")
+      ? properties.color
+      : `#${properties.color}`
+  }
+  if (properties.highlightColor !== undefined) {
+    result.highlightColor =
+      properties.highlightColor === null
+        ? null
+        : properties.highlightColor.startsWith("#")
+          ? properties.highlightColor
+          : `#${properties.highlightColor}`
+  }
+  if (properties.verticalAlignment !== undefined)
+    result.verticalAlignment = properties.verticalAlignment
+  return result
+}
+
+function parseEditorMetadata(
+  pkg: ValidatedDocxPackage
+): Readonly<Record<string, unknown>> | undefined {
+  const bytes = pkg.parts.get("word/apexEditor.json")
+  if (bytes === undefined) return undefined
+  try {
+    const text = new TextDecoder().decode(bytes)
+    const value = JSON.parse(text) as unknown
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      return value as Readonly<Record<string, unknown>>
+    }
+  } catch {
+    // Harmless custom part; ignore malformed payloads.
+  }
+  return undefined
+}
+
+const FONT_TABLE_RELATIONSHIPS = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/fontTable",
+])
+
+const FONT_RELATIONSHIPS = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/font",
+])
+
+function deobfuscateEmbeddedFont(
+  bytes: Uint8Array,
+  fontKey: string | undefined
+): Uint8Array | undefined {
+  if (fontKey === undefined) return bytes.slice()
+  const hex = fontKey.replace(/[{}-]/gu, "")
+  if (!/^[\da-f]{32}$/iu.test(hex)) return undefined
+  const key = Array.from({ length: 16 }, (_, index) =>
+    Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
+  ).reverse()
+  const result = bytes.slice()
+  for (let index = 0; index < Math.min(32, result.length); index += 1) {
+    result[index] = (result[index] ?? 0) ^ (key[index % key.length] ?? 0)
+  }
+  return result
+}
+
+function parseEmbeddedFontAssets(
+  pkg: ValidatedDocxPackage,
+  documentPart: string,
+  context: MediaContext,
+  options: DocxParseOptions,
+  diagnostics: ReturnType<typeof diagnostic>[]
+): readonly ParsedDocxFontAsset[] {
+  const tableRelationships = [
+    ...(context.relationships.get(documentPart)?.values() ?? []),
+  ].filter((relationship) => FONT_TABLE_RELATIONSHIPS.has(relationship.type))
+  if (tableRelationships.length === 0) return []
+  if (tableRelationships.length !== 1) {
+    diagnostics.push(
+      diagnostic(
+        "DOCX_DUPLICATE_FONT_TABLE_RELATIONSHIP",
+        "The main document must not have more than one font-table relationship.",
+        "error",
+        source(relationshipsPartForOwner(documentPart), "/Relationships")
+      )
+    )
+    return []
+  }
+  const fontTableRelationship = tableRelationships[0]
+  const fontTablePart = fontTableRelationship
+    ? resolveTarget(documentPart, fontTableRelationship.target)
+    : undefined
+  const fontTableBytes =
+    fontTablePart === undefined ? undefined : pkg.parts.get(fontTablePart)
+  const fontTableXml =
+    fontTableBytes === undefined ? undefined : decodeXml(fontTableBytes)
+  const root =
+    fontTableXml === undefined
+      ? undefined
+      : parseXml(
+          fontTableXml,
+          options.limits?.maxXmlDepth ?? DEFAULT_RESOURCE_LIMITS.maxXmlDepth
+        )
+  if (
+    fontTablePart === undefined ||
+    fontTableBytes === undefined ||
+    root === undefined ||
+    localName(root.name) !== "fonts"
+  ) {
+    diagnostics.push(
+      diagnostic(
+        "DOCX_INVALID_FONT_TABLE",
+        "The font-table relationship must resolve to a valid fonts part.",
+        "error",
+        source(fontTablePart ?? documentPart, "/")
+      )
+    )
+    return []
+  }
+
+  const result: ParsedDocxFontAsset[] = []
+  const seenFaces = new Set<string>()
+  const faceProperties: Readonly<
+    Record<string, Readonly<{ weight: 400 | 700; style: "normal" | "italic" }>>
+  > = {
+    embedRegular: { weight: 400, style: "normal" },
+    embedBold: { weight: 700, style: "normal" },
+    embedItalic: { weight: 400, style: "italic" },
+    embedBoldItalic: { weight: 700, style: "italic" },
+  }
+  for (const [fontIndex, font] of children(root, "font").entries()) {
+    const family = attr(font.element, "name")?.trim() ?? ""
+    if (!family) continue
+    for (const embedded of childElements(font.element)) {
+      const face = faceProperties[localName(embedded.name)]
+      if (face === undefined) continue
+      const relationshipId = attr(embedded.element, "id")
+      const relationship =
+        relationshipId === undefined
+          ? undefined
+          : context.relationships.get(fontTablePart)?.get(relationshipId)
+      const packagePath =
+        relationship === undefined ||
+        relationship.external ||
+        !FONT_RELATIONSHIPS.has(relationship.type)
+          ? undefined
+          : resolveTarget(fontTablePart, relationship.target)
+      const bytes =
+        packagePath === undefined ? undefined : pkg.parts.get(packagePath)
+      const decoded =
+        bytes === undefined
+          ? undefined
+          : deobfuscateEmbeddedFont(bytes, attr(embedded.element, "fontKey"))
+      const xmlPath = `/${root.name}[1]/${font.name}[${fontIndex + 1}]/${embedded.name}[1]`
+      if (
+        packagePath === undefined ||
+        bytes === undefined ||
+        decoded === undefined
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "DOCX_INVALID_EMBEDDED_FONT",
+            `Embedded font face '${family}' does not resolve to a valid package font program.`,
+            "error",
+            source(fontTablePart, xmlPath)
+          )
+        )
+        continue
+      }
+      const faceKey = `${family.toLowerCase()}\u0000${face.weight}\u0000${face.style}`
+      if (seenFaces.has(faceKey)) {
+        diagnostics.push(
+          diagnostic(
+            "DOCX_DUPLICATE_EMBEDDED_FONT_FACE",
+            `Embedded font face '${family}' ${face.weight} ${face.style} is duplicated.`,
+            "error",
+            source(fontTablePart, xmlPath)
+          )
+        )
+        continue
+      }
+      seenFaces.add(faceKey)
+      result.push({
+        type: "docx-font-asset",
+        id: `docx:font:${packagePath}`,
+        source: source(fontTablePart, xmlPath),
+        packagePath,
+        family,
+        weight: face.weight,
+        style: face.style,
+        bytes: Object.freeze(Array.from(decoded)),
+      })
+    }
+  }
+  return Object.freeze(result)
 }

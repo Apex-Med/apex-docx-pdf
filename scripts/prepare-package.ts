@@ -28,6 +28,7 @@ for (const directory of [
   "docx",
   "engine",
   "fonts",
+  "forms",
   "images",
   "layout",
   "pdf",
@@ -54,12 +55,28 @@ const dependencies = Object.fromEntries(
 )
 const browser = basename(packageDirectory) === "browser"
 const fonts = basename(packageDirectory) === "fonts"
+const forms = basename(packageDirectory) === "forms"
 const umbrella = basename(packageDirectory) === "apex-docx-pdf"
+const formsUiDependencies = new Set([
+  "@dnd-kit/core",
+  "@dnd-kit/sortable",
+  "@dnd-kit/utilities",
+  "@hugeicons/core-free-icons",
+  "@hugeicons/react",
+  "@tanstack/react-form",
+  "@workspace/ui",
+])
 const entry = (file: string) => ({
   types: `./${file}.d.ts`,
   import: `./${file}.js`,
   default: `./${file}.js`,
 })
+
+if (forms) {
+  for (const name of formsUiDependencies) {
+    delete dependencies[name]
+  }
+}
 
 const published = {
   name: source.name,
@@ -81,8 +98,8 @@ const published = {
       : { ".": entry("index") },
   main: "./index.js",
   types: "./index.d.ts",
-  dependencies,
-  ...(source.peerDependencies
+  ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
+  ...(source.peerDependencies && !forms
     ? { peerDependencies: source.peerDependencies }
     : {}),
   publishConfig: source.publishConfig,

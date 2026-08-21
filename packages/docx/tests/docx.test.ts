@@ -7,7 +7,12 @@ import type {
   SemanticText,
 } from "@apexmed/core"
 
-import { inspectDocx, normaliseDocxBytes, parseDocx } from "../src"
+import {
+  inspectDocx,
+  normaliseDocxBytes,
+  parseDocx,
+  serializeDocx,
+} from "../src"
 import { buildOneParagraphDocx } from "./helpers/docx-fixture"
 
 function errorCodes(result: {
@@ -406,7 +411,7 @@ describe("DOCX Phase 3 style resolution", () => {
   test("fails rather than dropping meaningful unsupported style properties", () => {
     const result = parseDocx(
       buildOneParagraphDocx({
-        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>x</w:t></w:r></w:p></w:body></w:document>`,
+        documentXml: `<w:document xmlns:w="urn:test"><w:body><w:p><w:r><w:rPr><w:smallCaps/></w:rPr><w:t>x</w:t></w:r></w:p></w:body></w:document>`,
       })
     )
     expect(errorCodes(result)).toContain("DOCX_UNSUPPORTED_STYLE_PROPERTY")
@@ -834,6 +839,74 @@ const PHASE6_CONTENT_TYPES = `<Types xmlns="http://schemas.openxmlformats.org/pa
 </Types>`
 
 describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () => {
+  test("selects a supported AlternateContent fallback instead of rejecting an unsupported choice", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic" xmlns:mc="urn:mc" xmlns:wpg="urn:wpg" xmlns:wps="urn:wps"><w:body><w:p><w:r>
+        <mc:AlternateContent>
+          <mc:Choice Requires="wpg"><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><a:graphic><a:graphicData><wpg:wgp><wps:wsp><wps:txbx><w:txbxContent><w:p/></w:txbxContent></wps:txbx></wps:wsp></wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>
+          <mc:Fallback><w:drawing><wp:inline><wp:extent cx="1905" cy="1270"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="imgPng"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Fallback>
+        </mc:AlternateContent>
+      </w:r></w:p><w:sectPr/></w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="imgPng" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`,
+        "word/media/picture.png": PNG_3X2,
+      },
+    })
+
+    const result = normaliseDocxBytes(bytes)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
+    const images =
+      paragraph?.children.filter((inline) => inline.type === "image") ?? []
+    expect(images).toHaveLength(1)
+    expect(result.value.assets[0]?.packagePath).toBe("word/media/picture.png")
+    expect(images[0]?.source.xmlPath).toContain(
+      "mc:AlternateContent[1]/mc:Fallback[1]/w:drawing[1]"
+    )
+  })
+
+  test("materializes a bounded empty rectangle Choice as an SVG image", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic" xmlns:mc="urn:mc" xmlns:wpg="urn:wpg" xmlns:wps="urn:wps"><w:body><w:p><w:r>
+        <mc:AlternateContent>
+          <mc:Choice Requires="wpg"><w:drawing><wp:inline><wp:extent cx="127000" cy="63500"/><a:graphic><a:graphicData><wps:wsp><wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="6350"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/></a:ln></wps:spPr><wps:txbx><w:txbxContent><w:p/></w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>
+          <mc:Fallback><w:drawing><wp:inline><wp:extent cx="127000" cy="63500"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="imgPng"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Fallback>
+        </mc:AlternateContent>
+      </w:r></w:p><w:sectPr/></w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="imgPng" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>`,
+        "word/media/picture.png": PNG_3X2,
+      },
+    })
+
+    const result = normaliseDocxBytes(bytes)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.assets).toHaveLength(1)
+    expect(result.value.assets[0]).toMatchObject({
+      mimeType: "image/svg+xml",
+      pixelWidth: 200,
+      pixelHeight: 100,
+      rasterFallback: {
+        pixelWidth: 27,
+        pixelHeight: 13,
+      },
+    })
+    const svg = new TextDecoder().decode(
+      Uint8Array.from(result.value.assets[0]?.bytes ?? [])
+    )
+    expect(svg).toContain('<rect fill="#FFFFFF" stroke="#000000"')
+    const paragraph = paragraphBlock(result.value.sections[0]?.blocks[0])
+    const image = paragraph?.children.find((inline) => inline.type === "image")
+    expect(image).toMatchObject({ width: 200, height: 100 })
+    expect(image?.source.xmlPath).toContain(
+      "mc:AlternateContent[1]/mc:Choice[1]/w:drawing[1]"
+    )
+  })
+
   test("normalises relationship-owned PNG and JPEG inline images with stable assets, dimensions, and aspect metadata", () => {
     const bytes = buildOneParagraphDocx({
       documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r" xmlns:wp="urn:wp" xmlns:a="urn:a" xmlns:pic="urn:pic"><w:body><w:p>
@@ -904,8 +977,8 @@ describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () 
         section.blocks.length,
       ])
     ).toEqual([
-      ["portrait", 11907, 1],
-      ["landscape", 16839, 1],
+      ["portrait", 11920, 1],
+      ["landscape", 16840, 1],
     ])
     expect([
       Number(result.value.sections[0]?.properties.headerDistance),
@@ -923,15 +996,101 @@ describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () 
       ["docx:header:word/header1.xml", "docx:footer:word/footer1.xml"],
     ])
     expect(result.value.headers[0]?.source.part).toBe("word/header1.xml")
+    const footerBlock = result.value.footers[0]?.blocks[0]
     expect(
-      result.value.footers[0]?.blocks[0]?.children.map((inline) =>
-        inline.type === "pageField"
-          ? inline.field
-          : inline.type === "text"
-            ? inline.text
-            : "image"
-      )
+      footerBlock?.type === "paragraph"
+        ? footerBlock.children.map((inline) =>
+            inline.type === "pageField"
+              ? inline.field
+              : inline.type === "text"
+                ? inline.text
+                : "image"
+          )
+        : []
     ).toEqual(["Page ", "PAGE", " of ", "NUMPAGES"])
+  })
+
+  test("imports and round-trips different first-page headers and footers", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r"><w:body>
+        <w:p><w:r><w:t>Body</w:t></w:r></w:p>
+        <w:sectPr><w:headerReference w:type="default" r:id="head"/><w:headerReference w:type="first" r:id="firstHead"/><w:footerReference w:type="default" r:id="foot"/><w:footerReference w:type="first" r:id="firstFoot"/><w:titlePg/></w:sectPr>
+      </w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="head" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="firstHead" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/><Relationship Id="foot" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/><Relationship Id="firstFoot" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer2.xml"/></Relationships>`,
+        "word/header1.xml": `<w:hdr xmlns:w="urn:w"><w:p><w:r><w:t>Default header</w:t></w:r></w:p></w:hdr>`,
+        "word/header2.xml": `<w:hdr xmlns:w="urn:w"><w:p><w:r><w:t>First header</w:t></w:r></w:p></w:hdr>`,
+        "word/footer1.xml": `<w:ftr xmlns:w="urn:w"><w:p><w:r><w:t>Default footer</w:t></w:r></w:p></w:ftr>`,
+        "word/footer2.xml": `<w:ftr xmlns:w="urn:w"><w:p><w:r><w:t>First footer</w:t></w:r></w:p></w:ftr>`,
+      },
+    })
+    const imported = normaliseDocxBytes(bytes)
+    expect(imported.ok).toBe(true)
+    if (!imported.ok) return
+    const section = imported.value.sections[0]
+    expect(section?.properties.differentFirstPage).toBe(true)
+    expect(section?.firstPageHeaderId).toBe("docx:header:word/header2.xml")
+    expect(section?.firstPageFooterId).toBe("docx:footer:word/footer2.xml")
+
+    const roundTripped = normaliseDocxBytes(serializeDocx(imported.value))
+    expect(roundTripped.ok).toBe(true)
+    if (!roundTripped.ok) return
+    expect(roundTripped.value.sections[0]?.properties.differentFirstPage).toBe(
+      true
+    )
+    expect(
+      roundTripped.value.headers.map((entry) => {
+        const block = entry.blocks[0]
+        return block?.type === "paragraph"
+          ? block.children
+              .filter((inline) => inline.type === "text")
+              .map((inline) => (inline.type === "text" ? inline.text : ""))
+              .join("")
+          : ""
+      })
+    ).toEqual(["Default header", "First header"])
+    expect(
+      roundTripped.value.footers.map((entry) => {
+        const block = entry.blocks[0]
+        return block?.type === "paragraph"
+          ? block.children
+              .filter((inline) => inline.type === "text")
+              .map((inline) => (inline.type === "text" ? inline.text : ""))
+              .join("")
+          : ""
+      })
+    ).toEqual(["Default footer", "First footer"])
+  })
+
+  test("imports and round-trips tables in headers", () => {
+    const bytes = buildOneParagraphDocx({
+      documentXml: `<w:document xmlns:w="urn:w" xmlns:r="urn:r"><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p><w:sectPr><w:headerReference w:type="default" r:id="head"/></w:sectPr></w:body></w:document>`,
+      extraParts: {
+        "[Content_Types].xml": PHASE6_CONTENT_TYPES,
+        "word/_rels/document.xml.rels": `<Relationships xmlns="urn:rels"><Relationship Id="head" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>`,
+        "word/header1.xml": `<w:hdr xmlns:w="urn:w"><w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Right</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:hdr>`,
+      },
+    })
+    const imported = normaliseDocxBytes(bytes)
+    expect(imported.ok).toBe(true)
+    if (!imported.ok) return
+    const importedTable = imported.value.headers[0]?.blocks[0]
+    expect(importedTable?.type).toBe("table")
+    if (importedTable?.type !== "table") return
+    expect(
+      importedTable.rows[0]?.cells.map((cell) =>
+        cell.blocks[0]?.children
+          .filter((inline) => inline.type === "text")
+          .map((inline) => (inline.type === "text" ? inline.text : ""))
+          .join("")
+      )
+    ).toEqual(["Left", "Right"])
+
+    const roundTripped = normaliseDocxBytes(serializeDocx(imported.value))
+    expect(roundTripped.ok).toBe(true)
+    if (!roundTripped.ok) return
+    expect(roundTripped.value.headers[0]?.blocks[0]?.type).toBe("table")
   })
 
   test("parses PAGE and NUMPAGES complex fields and rejects malformed, external, missing, and anchored drawings without silent loss", () => {
@@ -950,7 +1109,7 @@ describe("DOCX Phase 6 images, sections, headers, footers, and page fields", () 
               ? inline.text
               : "image"
         )
-      ).toEqual(["PAGE:", " / ", "NUMPAGES:"])
+      ).toEqual(["PAGE:7", " / ", "NUMPAGES:9"])
     }
 
     const anchored = inspectDocx(

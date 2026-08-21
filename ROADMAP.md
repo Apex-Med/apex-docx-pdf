@@ -13,7 +13,7 @@ Apex DOCX PDF is prerelease software built in narrow, testable slices. This road
 - **Phase 7 — Convex integration: implemented; hardening ongoing.** Engine version `0.0.0-phase.7` partitions render caches by engine/template/font/data/options hashes, while the optional app adapter adds anonymous session isolation, direct DOCX/PDF uploads, metadata, realtime render history, and bounded storage cleanup.
 - **Phase 8 — Landing page and documentation: implemented and browser-verified locally.** The landing page, Mintlify docs, responsive support matrix, interactive examples, community links, and SEO/PWA metadata are present.
 - **Phase 9 — Hardening: local evidence implemented; external proof pending.** Seeded fast-check properties and hostile-input corpora, resource-limit coverage, Bun benchmarks, package-size measurements, public API review, zero-violation automated axe scans for covered browser states, pull-request dependency review, exact Bun/Node 24/Chromium golden parity, and a Nitro production preview are complete. Broader licensed Microsoft Word and Google Docs-exported fixtures and live Vercel verification remain open.
-- **Phase 10 — Release preparation: implemented; publication pending.** Changesets, lockstep prerelease versions, publishable ESM artifacts, package validation, provenance workflow skeletons, and release documentation are ready. The first npm `next` publication remains approval-gated.
+- **Phase 10 — Release preparation: implemented; next publication pending.** Changesets, lockstep prerelease versions, publishable ESM artifacts, package validation, provenance workflow skeletons, and release documentation are ready. `@apexmed/forms` joins the public set; the `next.2` publication remains approval-gated.
 
 ## Phase status and planned phases
 
@@ -53,7 +53,7 @@ Local hardening evidence is implemented: security fixtures, seeded fast-check pr
 
 ### Phase 10 — Release preparation
 
-Preparation is implemented: Changesets, publishable ESM package builds, prerelease versioning, trusted-publishing provenance configuration, release documentation, contribution materials, and a reconciled roadmap. The initial npm prerelease and post-publication verification remain credential- and approval-gated.
+Preparation is implemented: Changesets, publishable ESM package builds, prerelease versioning, trusted-publishing provenance configuration, release documentation, contribution materials, and a reconciled roadmap. `@apexmed/forms` is included in the lockstep public set; the next `next` publication remains approval-gated.
 
 ## Principles across every phase
 

@@ -25,6 +25,7 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { PDFViewer } from "@workspace/ui/components/pdf-viewer"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import {
   Tabs,
@@ -37,7 +38,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { ConvexPersistence } from "@/components/convex-persistence"
 import { EngineTemplatePreview } from "@/components/engine-template-preview"
-import { PDFViewer } from "@/components/extend/pdf-viewer"
 import { FontCatalogSpecimens } from "@/components/font-catalog-specimens"
 import { JsonEditor } from "@/components/json-editor"
 import { SiteHeader } from "@/components/site-header"

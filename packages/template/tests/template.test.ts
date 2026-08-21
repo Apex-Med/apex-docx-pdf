@@ -315,7 +315,7 @@ describe("template compilation", () => {
     expect(compiled.starterData).toEqual({ patient: { fullName: "" } })
   })
 
-  test("uses the style and source location of the tag's first character for replacement", async () => {
+  test("uses the style and source location of the tag's first content character for replacement", async () => {
     const source = documentWithRuns([
       "Hello {{pat",
       "ient.full",
@@ -340,6 +340,28 @@ describe("template compilation", () => {
         ? source.sections[0].blocks[0].children[0]?.source
         : undefined
     )
+  })
+
+  test("uses the field body's font weight when the braces sit in a lighter run", async () => {
+    const source = documentWithRuns([
+      "Hello {{",
+      "patient.fullName:string",
+      "}}.",
+    ])
+    const compiled = await compileTemplate(source)
+    const result = resolveTemplate(compiled, {
+      patient: { fullName: "Ada Lovelace" },
+    })
+
+    expect(resolvedText(result)).toBe("Hello Ada Lovelace.")
+    if (!result.ok) throw new Error("Expected resolution to succeed")
+    const firstBlock = result.value.sections[0]?.blocks[0]
+    const children = firstBlock?.type === "paragraph" ? firstBlock.children : []
+    const value = children.find(
+      (child): child is SemanticText =>
+        child.type === "text" && child.text === "Ada Lovelace"
+    )
+    expect(value?.style.fontWeight).toBe(700)
   })
 
   test("produces a sorted nested schema and deterministic starter data", async () => {
@@ -1508,11 +1530,16 @@ describe("Phase 6 static inlines and header/footer templates", () => {
     expect(result.value.headers).toHaveLength(1)
     expect(
       result.value.headers[0]?.blocks.map((block) =>
-        block.children.map(inlineText).join("")
+        block.type === "paragraph"
+          ? block.children.map(inlineText).join("")
+          : ""
       )
     ).toEqual(["Patient ADA"])
+    const footerBlock = result.value.footers[0]?.blocks[0]
     expect(
-      result.value.footers[0]?.blocks[0]?.children.map((child) => child.type)
+      footerBlock?.type === "paragraph"
+        ? footerBlock.children.map((child) => child.type)
+        : []
     ).toEqual(["text", "pageField"])
     expect(result.value.sections.map((item) => item.defaultHeaderId)).toEqual([
       "header-1",

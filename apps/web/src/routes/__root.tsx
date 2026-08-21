@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/tanstack-react-start"
 import {
   HeadContent,
   Scripts,
@@ -128,6 +129,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim()
+  const app = (
+    <ThemeProvider defaultTheme="system" storageKey="apex-ui-theme">
+      {children}
+    </ThemeProvider>
+  )
+
   return (
     <html lang="en" className="overscroll-none" suppressHydrationWarning>
       <head>
@@ -136,10 +144,26 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="overscroll-none">
-        <ThemeProvider defaultTheme="system" storageKey="apex-ui-theme">
-          {children}
-        </ThemeProvider>
-        <Scripts />
+        {clerkPublishableKey ? (
+          <ClerkProvider
+            publishableKey={clerkPublishableKey}
+            signInFallbackRedirectUrl="/app"
+            signInUrl="/sign-in"
+            signUpFallbackRedirectUrl="/app"
+            signUpUrl="/sign-in"
+            taskUrls={{
+              "choose-organization": "/session-tasks/choose-organization",
+            }}
+          >
+            {app}
+            <Scripts />
+          </ClerkProvider>
+        ) : (
+          <>
+            {app}
+            <Scripts />
+          </>
+        )}
       </body>
     </html>
   )

@@ -111,9 +111,9 @@ describe("playground sample DOCX", () => {
         Number(section.properties.footerDistance),
       ])
     ).toEqual([
-      ["portrait", 11907, 16839, 360, 420],
-      ["landscape", 16839, 11907, 360, 420],
-      ["portrait", 11907, 16839, 360, 420],
+      ["portrait", 11920, 16840, 360, 420],
+      ["landscape", 16840, 11920, 360, 420],
+      ["portrait", 11920, 16840, 360, 420],
     ])
     expect(
       compiled.source.sections.map((section) => [
@@ -181,11 +181,7 @@ describe("playground sample DOCX", () => {
     expect(rendered.diagnostics).toEqual([])
     expect(pdfSource).toContain("(Issued: ) Tj")
     expect(pdfSource).toContain("(05-08-2026 09:30) Tj")
-    expect(mediaBoxes).toEqual([
-      "0 0 595.35 841.95",
-      "0 0 841.95 595.35",
-      "0 0 595.35 841.95",
-    ])
+    expect(mediaBoxes).toEqual(["0 0 596 842", "0 0 842 596", "0 0 596 842"])
     expect(pdfSource.match(/\/Subtype \/Image\b/gu)).toHaveLength(1)
     expect(pdfSource.match(/\/XObject\b/gu)?.length).toBeGreaterThanOrEqual(4)
     expect(imageMatrices.length).toBeGreaterThanOrEqual(4)

@@ -1,6 +1,6 @@
 {
   "name": "@apexmed/fonts",
-  "version": "0.1.0-next.1",
+  "version": "0.1.0-next.2",
   "description": "Explicit font registration and shaping adapters for Apex DOCX PDF.",
   "type": "module",
   "sideEffects": false,
@@ -37,6 +37,7 @@
   },
   "scripts": {
     "build": "tsup --config ../../tsup.config.ts && bun ../../scripts/prepare-package.ts",
+    "catalog:generate": "bun scripts/build-catalog-faces.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

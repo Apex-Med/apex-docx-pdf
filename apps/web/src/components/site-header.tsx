@@ -10,6 +10,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { useEffect, useId, useRef, useState } from "react"
 
 import { ApexLogo } from "@/components/apex-logo"
+import { SiteAuthControls } from "@/components/site-auth-controls"
 import { ModeToggle } from "@/components/mode-toggle"
 import { DOCS_URL, GITHUB_URL } from "@/lib/site"
 
@@ -212,6 +213,12 @@ export function SiteHeader({ compact = false }: SiteHeaderProps) {
                       Open playground
                     </Link>
                   </div>
+                  <div className="border-t p-2 sm:hidden">
+                    <SiteAuthControls
+                      className="w-full [&>a]:w-full"
+                      onNavigate={() => setMenuOpen(false)}
+                    />
+                  </div>
                 </div>
               </nav>
             ) : null}
@@ -238,6 +245,7 @@ export function SiteHeader({ compact = false }: SiteHeaderProps) {
           >
             Open playground
           </Link>
+          <SiteAuthControls className="hidden sm:flex" />
         </div>
       </div>
       {menuOpen ? (

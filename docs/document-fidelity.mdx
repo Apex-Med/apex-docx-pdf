@@ -1,0 +1,108 @@
+---
+title: Document fidelity suite
+description: Compare DOCX import, the live editor, and generated PDFs against Google Docs reference exports.
+---
+
+The document fidelity suite turns a DOCX and a PDF exported from Google Docs into repeatable evidence for both rendering surfaces:
+
+- the PDF produced by the Apex engine;
+- the document imported and painted by the live Apex editor.
+
+The reference PDF is immutable and remains the visual oracle. Thresholded and alignment-adjusted metrics help diagnose differences but never redefine an exact match.
+
+## Run one pair
+
+```bash
+bun run fidelity -- \
+  --docx /absolute/path/source.docx \
+  --reference /absolute/path/google-docs.pdf \
+  --out /tmp/apex-fidelity/source
+```
+
+Use an editor server that is already running:
+
+```bash
+bun run fidelity -- \
+  --docx /absolute/path/source.docx \
+  --reference /absolute/path/google-docs.pdf \
+  --editor-url http://127.0.0.1:3002/editor \
+  --out /tmp/apex-fidelity/source
+```
+
+Exit code `0` means every enabled surface is exact. Exit code `1` means the suite completed and found differences. Exit code `2` means an input, tool, engine, server, or browser stage was blocked.
+
+## Run a corpus
+
+Create a JSON manifest. Paths are resolved relative to the manifest file.
+
+```json
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "complex-table",
+      "docx": "fixtures/complex-table.docx",
+      "referencePdf": "references/complex-table.google.pdf",
+      "tags": ["tables", "rowspans", "cell-borders"]
+    },
+    {
+      "id": "multi-section-columns",
+      "docx": "fixtures/multi-section-columns.docx",
+      "referencePdf": "references/multi-section-columns.google.pdf",
+      "tags": ["sections", "columns", "page-breaks"]
+    }
+  ]
+}
+```
+
+```bash
+bun run fidelity -- --manifest fidelity-cases.json --out /tmp/apex-fidelity/corpus
+```
+
+Use `--case complex-table,multi-section-columns` to run a subset. Use `--skip-editor` when diagnosing only the engine PDF.
+
+## Evidence produced
+
+Each run writes `fidelity-report.json`, `fidelity-report.html`, and `agent-review.md`. Every case contains:
+
+```text
+cases/<case-id>/
+├── engine/
+│   ├── generated.pdf
+│   ├── golden-report.json
+│   ├── generated/page-001.{ppm,png}
+│   └── reference/page-001.{ppm,png}
+├── editor/page-001.{ppm,png}
+├── analysis/
+│   ├── engine/page-001-{heatmap,overlay,alignedOverlay,hotspotGrid}.{ppm,png}
+│   └── editor/page-001-{heatmap,overlay,alignedOverlay,hotspotGrid}.{ppm,png}
+├── text/{semantic,reference,engine,editor}.txt
+└── contact-sheet.png
+```
+
+The JSON report keeps editor and engine results separate and records:
+
+- exact and thresholded changed-pixel ratios, MAE, and RMSE;
+- best translation within the configured search radius and aligned metrics;
+- ink bounding boxes, darkness-weighted centroids, and page coverage;
+- horizontal and vertical projection distance;
+- edge precision, recall, and F1;
+- ranked grid hotspots with changed-pixel ratio and local MAE;
+- page geometry, import structure, runtime warnings, and normalized text comparisons.
+
+## Read the visual artifacts
+
+The red/cyan overlay uses cyan for reference-only ink and red for candidate-only ink. Dark overlap indicates alignment. A consistent red/cyan shadow indicates translation. Expanding shadows toward the page edge indicate scale or page-geometry errors. Localized color around glyphs with matching rules and boxes usually indicates font shaping or rasterization.
+
+Inspect in this order:
+
+1. page count, dimensions, rotation, and margins;
+2. missing content and normalized text;
+3. tables, rowspans, columns, images, headers, and page breaks;
+4. best translation and ink bounds;
+5. hotspot grids and projection error;
+6. glyph rasterization only after structural geometry matches.
+
+## Exactness policy
+
+A page is exact only when page geometry, rotation, raster dimensions, and every pixel match. The suite must not weaken thresholds or substitute aligned metrics to make a case pass. If a reference cannot be committed for licensing or privacy reasons, keep the manifest and artifacts outside the repository and pass absolute paths at runtime.

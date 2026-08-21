@@ -8,6 +8,7 @@ const PUBLIC_PACKAGES = [
   ["docx", "@apexmed/docx"],
   ["engine", "@apexmed/engine"],
   ["fonts", "@apexmed/fonts"],
+  ["forms", "@apexmed/forms"],
   ["images", "@apexmed/images"],
   ["layout", "@apexmed/layout"],
   ["pdf", "@apexmed/pdf"],
@@ -25,8 +26,6 @@ type ChangesetsConfig = Readonly<{
 type PrereleaseState = Readonly<{
   mode: string
   tag: string
-  initialVersions: Readonly<Record<string, string>>
-  changesets: readonly string[]
 }>
 
 const config = await readJson<ChangesetsConfig>(".changeset/config.json")
@@ -46,11 +45,16 @@ const rootManifest = await readJson<{
 }>("package.json")
 const expectedNames = PUBLIC_PACKAGES.map(([, name]) => name).sort()
 const fixedNames = [...(config.fixed[0] ?? [])].sort()
-const localChangesets = (await readdir(".changeset"))
+const pendingChangesets = (await readdir(".changeset"))
   .filter((path) => path.endsWith(".md") && path !== "README.md")
   .map((path) => path.slice(0, -".md".length))
   .sort()
-const consumedChangesets = [...prerelease.changesets].sort()
+const consumedChangesets = (
+  await readdir(".changeset/pre").catch(() => [] as string[])
+)
+  .filter((path) => path.endsWith(".md"))
+  .map((path) => path.slice(0, -".md".length))
+  .sort()
 
 if (config.fixed.length !== 1 || !sameStrings(fixedNames, expectedNames)) {
   throw new Error(
@@ -66,9 +70,12 @@ if (expectedNames.some((name) => config.ignore.includes(name))) {
 if (prerelease.mode !== "pre" || prerelease.tag !== "next") {
   throw new Error("Changesets must remain in next prerelease mode")
 }
-if (!sameStrings(consumedChangesets, localChangesets)) {
+if (
+  pendingChangesets.some((id) => consumedChangesets.includes(id)) ||
+  consumedChangesets.length === 0
+) {
   throw new Error(
-    "Prerelease state must consume every local Changeset and no unknown Changesets"
+    "Prerelease changesets must live in .changeset/pre after versioning and remain unique from pending changesets"
   )
 }
 if (
@@ -143,13 +150,17 @@ for (const [directory, expectedName] of PUBLIC_PACKAGES) {
       `${manifest.name}: public package versions are not lockstep`
     )
   }
-  if (!prerelease.initialVersions[manifest.name]) {
-    throw new Error(`${manifest.name}: missing Changesets initial version`)
-  }
 }
 
-const initialChangesetPath = ".changeset/initial-prerelease-packaging.md"
-if (await Bun.file(initialChangesetPath).exists()) {
+const initialChangesetPath = consumedChangesets.includes(
+  "initial-prerelease-packaging"
+)
+  ? ".changeset/pre/initial-prerelease-packaging.md"
+  : ".changeset/initial-prerelease-packaging.md"
+if (!(await Bun.file(initialChangesetPath).exists())) {
+  throw new Error("Initial prerelease Changeset is missing")
+}
+{
   const source = await readFile(initialChangesetPath, "utf8")
   const frontmatter = source.match(/^---\n([\s\S]*?)\n---(?:\n|$)/u)?.[1]
   if (!frontmatter) {
@@ -169,18 +180,6 @@ if (await Bun.file(initialChangesetPath).exists()) {
     throw new Error(
       "Initial prerelease Changeset must patch the complete public package set"
     )
-  }
-  const changesetConsumed = prerelease.changesets.includes(
-    "initial-prerelease-packaging"
-  )
-  if (!changesetConsumed) {
-    for (const [, name] of PUBLIC_PACKAGES) {
-      if (prerelease.initialVersions[name] !== lockstepVersion) {
-        throw new Error(
-          `${name}: initial prerelease version does not match package version`
-        )
-      }
-    }
   }
 }
 

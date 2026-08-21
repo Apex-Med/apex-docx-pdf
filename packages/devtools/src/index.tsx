@@ -4,12 +4,13 @@ import type {
   LayoutTraceEvent,
   PageDisplayList,
   PageDisplayListPage,
+  SemanticImageMimeType,
 } from "@apexmed/core"
 import { useMemo, useState } from "react"
 
 export type DisplayListPreviewAsset = Readonly<{
   assetId: string
-  mimeType: "image/png" | "image/jpeg"
+  mimeType: SemanticImageMimeType
   bytes: Uint8Array
 }>
 
@@ -52,15 +53,26 @@ export type LayoutTraceViewerProps = Omit<DisplayListPreviewProps, "overlays"> &
     initialOverlays?: Partial<LayoutTraceOverlayVisibility>
   }>
 
-const DEFAULT_TRACE_OVERLAYS: LayoutTraceOverlayVisibility = Object.freeze({
+const HIDDEN_TRACE_OVERLAYS: LayoutTraceOverlayVisibility = Object.freeze({
   pageBounds: false,
-  contentBounds: true,
+  contentBounds: false,
   blockBounds: false,
   lineBounds: false,
   tableBounds: false,
   rowFragments: false,
   baselines: false,
   sourceNodeIds: false,
+  pageBreakReasons: false,
+  keepDecisions: false,
+  overflows: false,
+  clipping: false,
+  fontFallbacks: false,
+  approximations: false,
+})
+
+const DEFAULT_TRACE_OVERLAYS: LayoutTraceOverlayVisibility = Object.freeze({
+  ...HIDDEN_TRACE_OVERLAYS,
+  contentBounds: true,
   pageBreakReasons: true,
   keepDecisions: true,
   overflows: true,
@@ -150,7 +162,7 @@ export function DisplayListPreview({
                 (event) => event.pageNumber === page.pageNumber
               ) ?? []
             }
-            overlays={{ ...DEFAULT_TRACE_OVERLAYS, ...overlays }}
+            overlays={{ ...HIDDEN_TRACE_OVERLAYS, ...overlays }}
           />
         ))}
       </div>
@@ -268,7 +280,7 @@ function PreviewPage({
           placeholderHighlight={placeholderHighlight}
         />
       ))}
-      {tracePage ? (
+      {tracePage && anyTraceOverlayEnabled(overlays) ? (
         <TraceOverlay
           page={page}
           tracePage={tracePage}
@@ -482,6 +494,27 @@ function TraceOverlay({
   )
 }
 
+function anyTraceOverlayEnabled(
+  overlays: LayoutTraceOverlayVisibility
+): boolean {
+  return (
+    overlays.pageBounds ||
+    overlays.contentBounds ||
+    overlays.blockBounds ||
+    overlays.lineBounds ||
+    overlays.tableBounds ||
+    overlays.rowFragments ||
+    overlays.baselines ||
+    overlays.sourceNodeIds ||
+    overlays.pageBreakReasons ||
+    overlays.keepDecisions ||
+    overlays.overflows ||
+    overlays.clipping ||
+    overlays.fontFallbacks ||
+    overlays.approximations
+  )
+}
+
 function traceAnnotationLabel(event: LayoutTraceEvent): string {
   if (event.kind === "keep-decision")
     return `keep ${event.decision}: ${event.reason}`
@@ -620,13 +653,23 @@ function PreviewItem({
         fontSize={item.fontSize}
         fontWeight={item.fontWeight ?? 400}
         fontStyle={item.fontStyle ?? "normal"}
-        textLength={item.width > 0 ? item.width : undefined}
+        xmlSpace="preserve"
+        style={{ whiteSpace: "pre" }}
+        textLength={
+          item.width > 0 && !isWhitespaceOnlyGlyphText(item.text)
+            ? item.width
+            : undefined
+        }
         lengthAdjust="spacingAndGlyphs"
       >
         {item.text}
       </text>
     </g>
   )
+}
+
+function isWhitespaceOnlyGlyphText(text: string): boolean {
+  return text.length > 0 && /^[\t \u00a0\u200b]+$/u.test(text)
 }
 
 function displayItemKey(item: DisplayListItem): string {

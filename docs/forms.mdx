@@ -1,0 +1,56 @@
+---
+title: "Forms"
+description: "Bind template tags to the public @apexmed/forms headless model."
+---
+
+`@apexmed/forms` is the lockstep public package for questionnaire models that fill Apex DOCX templates. It does not parse Word, paginate, or emit PDF. The engine still owns compile and render.
+
+The published tarball is **headless**: types, walk/ops, validation, tag binding, and the Apex page adapter. React `FormBuilder` and `FormRuntime` ship from this repository's shadcn registry, not from an npm `./ui` export.
+
+## Install
+
+```bash
+bun add apex-docx-pdf@next @apexmed/forms@next
+```
+
+Install the UI by copying the `form-builder` and `form-runtime` registry items into the host app. Those files import the headless package plus TanStack Form and this workspace's UI primitives.
+
+## Map tags, then render
+
+```ts
+import {
+  answersToTemplateData,
+  bindingDiagnostics,
+  questionFromTag,
+  tagsFromForm,
+} from "@apexmed/forms"
+import { createDocxPdfEngine } from "apex-docx-pdf"
+
+const engine = await createDocxPdfEngine()
+const compiled = await engine.compile(templateBytes, {
+  unsupportedFeatures: "strict",
+})
+
+const tags = tagsFromForm(form)
+const diagnostics = bindingDiagnostics(form, {
+  valueSlugs: compiled.manifest.fields.map(({ path }) => path),
+  markers: [],
+  imagePaths: [],
+})
+
+const data = answersToTemplateData(form, answers)
+const result = await engine.render(compiled, data, {
+  locale: "en-ZA",
+  timeZone: "Africa/Johannesburg",
+})
+```
+
+Question keys must match template paths. Use `questionFromTag` when the DOCX already contains typed placeholders. Repeaters bind `{{#each}}` rows; conditions bind `{{#if}}`; dynamic images still require caller-owned PNG/JPEG bytes.
+
+Date answers must be offset-bearing ISO 8601 strings before the engine formatter runs. Boolean answers become `"Yes"` / `"No"` in tag-catalog mode (`answersToTagValues`) and stay booleans in `answersToTemplateData`.
+
+## What stays in the DOCX
+
+Keep page geometry, styles, numbering, tables, headers, and images in the template. The form only supplies values. Author placeholders with the [template language](/template-language) and validate the file with the shipped inspector before wiring a questionnaire.
+
+The reference playground editor can insert the same tags visually; that editor package is a workspace surface, not part of the lockstep npm set. See [editor embed](/editor-embed).

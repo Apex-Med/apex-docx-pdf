@@ -33,7 +33,7 @@ Inspect required family, static weight, and style tuples. The consumer must regi
 
 Use internal inline PNG/JPEG relationships. Avoid anchors/floating placement, crop, rotation, SVG, unsupported PNG/JPEG profiles, EXIF orientation other than 1, ICC conversion, and CMYK/YCCK. Dynamic images use the canonical tag and complete caller-owned bytes/dimensions.
 
-Only `nextPage` section breaks are supported. First/even headers and footers, continuous/odd/even section breaks, automatic header/footer list numbering, and arbitrary fields are unsupported. Keep header/footer distance plus content height within the corresponding body margin.
+Only `nextPage` section breaks are supported. First-page headers and footers are selected with `w:titlePg`; even-page headers and footers, continuous/odd/even section breaks, automatic header/footer list numbering, and arbitrary fields are unsupported. Keep header/footer distance plus content height within the corresponding body margin.
 
 ## Unsupported layout features
 
@@ -41,7 +41,7 @@ Stop instead of approximating:
 
 - percentage table widths, nested tables, table styles/themes, complex shading, or complete autofit;
 - floating/cropped/rotated/SVG or broadly converted images;
-- continuous, odd-page, or even-page sections and first/even headers/footers;
+- continuous, odd-page, or even-page sections and even-page headers/footers;
 - automatic header/footer numbering or arbitrary Word fields;
 - default tabs, non-left tabs, leaders, or missing explicit stops;
 - complex scripts, bidi, CFF, or variable-font axes;

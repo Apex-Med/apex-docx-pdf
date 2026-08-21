@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -11,7 +11,9 @@
       "!apps/web/src/routeTree.gen.ts",
       "!convex/_generated",
       "!**/dist",
-      "!**/.output"
+      "!**/.output",
+      "!.github/skills/impeccable",
+      "!.github/agents"
     ]
   },
   "formatter": {
@@ -40,11 +42,118 @@
       }
     },
     {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "packages/forms/tests/**",
+        "packages/editor/tests/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "complexity": {
+            "useOptionalChain": "off"
+          },
+          "suspicious": {
+            "noConfusingVoidType": "off",
+            "noNonNullAssertedOptionalChain": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/editor/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off",
+            "useTemplate": "off"
+          },
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/forms/src/**",
+        "packages/images/src/**",
+        "packages/docx/src/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUndeclaredEnvVars": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/forms/src/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["packages/ui/src/components/label.tsx"],
       "linter": {
         "rules": {
           "a11y": {
             "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/ui/src/components/group.tsx",
+        "packages/ui/src/components/input-group.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useKeyWithClickEvents": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/components/slider.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/hooks/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
           }
         }
       }

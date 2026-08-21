@@ -17,10 +17,14 @@
     "browser-determinism/**/*.mts",
     "check-browser-determinism.ts",
     "check-cross-runtime.ts",
+    "document-fidelity.ts",
+    "fidelity/**/*.ts",
     "check-packed-consumer.ts",
     "check-playground-smoke.ts",
+    "golden-docx-pdf.ts",
     "offline-font-configuration.ts",
     "runtime-core-suite.ts",
-    "runtime-render-smoke.ts"
+    "runtime-render-smoke.ts",
+    "tests/**/*.ts"
   ]
 }

@@ -653,6 +653,41 @@ describe("paragraph layout", () => {
     ).toEqual([twips(100), twips(300), twips(480)])
   })
 
+  test("uses the same zero-line-gap font metrics for empty and text lines", () => {
+    const typography = fakeTypography()
+    const zeroGapShaper: TextShaper = {
+      shape(input) {
+        return { ...typography.shaper.shape(input), lineGap: twips(0) }
+      },
+    }
+    const embeddedStyle = { ...style, fontFamily: "Test Sans" }
+    const empty = {
+      ...paragraph([], {}, "empty-zero-gap"),
+      paragraphMarkStyle: embeddedStyle,
+    }
+    const result = layoutDocument(
+      documentWith([
+        paragraph(
+          [{ text: "text", style: embeddedStyle }],
+          {},
+          "text-zero-gap"
+        ),
+        empty,
+      ]),
+      {
+        fonts: typography.registry,
+        shaper: zeroGapShaper,
+        includeTrace: true,
+      }
+    )
+
+    expect(
+      result.trace?.events
+        .filter((event) => event.kind === "line")
+        .map((event) => event.bounds.height)
+    ).toEqual([twips(200), twips(200)])
+  })
+
   test("fragments paragraphs over pages and honours explicit page breaks", () => {
     const flowing = paragraph(
       [{ text: "aa aa aa aa aa aa aa aa aa aa" }],
@@ -753,6 +788,84 @@ describe("paragraph layout", () => {
         blocks.map((block) => block.id)
       )
     ).toEqual(["•", "1", "a", "A", "i", "I"])
+  })
+
+  test("preserves authored bullet glyphs from numbering level text", () => {
+    const listed = paragraph(
+      [{ text: "Assessment" }],
+      { numbering: { definitionId: "list", level: 0 } },
+      "listed"
+    )
+    const result = layoutDocument(
+      numberedDocument(
+        [listed],
+        [
+          {
+            id: "list",
+            levels: [
+              numberingLevel(0, {
+                format: "bullet",
+                levelText: "●",
+                alignment: "left",
+              }),
+            ],
+          },
+        ]
+      ),
+      { metrics: fixedMetrics }
+    )
+    expect(labelsFor(result, ["listed"])).toEqual(["●"])
+  })
+
+  test("places hanging bullet labels inside table cells from the cell content origin", () => {
+    const listed = paragraph(
+      [{ text: "Assessment" }],
+      {
+        numbering: { definitionId: "list", level: 0 },
+        indentStart: twips(200),
+        firstLineIndent: twips(-100),
+      },
+      "listed"
+    )
+    const grid = table([["x"]])
+    const row = tableRow(grid)
+    const cell = tableCell(row)
+    const numberedTable: ResolvedTable = {
+      ...grid,
+      rows: [
+        {
+          ...row,
+          cells: [{ ...cell, blocks: [listed] }],
+        },
+      ],
+    }
+    const result = layoutDocument(
+      numberedDocument(
+        [numberedTable],
+        [
+          {
+            id: "list",
+            levels: [
+              numberingLevel(0, {
+                format: "bullet",
+                levelText: "●",
+                alignment: "left",
+                indentStart: twips(200),
+                firstLineIndent: twips(-100),
+              }),
+            ],
+          },
+        ]
+      ),
+      { metrics: fixedMetrics, includeTrace: true }
+    )
+    expect(labelsFor(result, ["listed"])).toEqual(["●"])
+    expect(
+      glyphRuns(result).find((run) => run.sourceNodeId === "listed")?.x
+    ).toBe(twips(220))
+    expect(
+      glyphRuns(result).find((run) => run.sourceNodeId === "listed-text-0")?.x
+    ).toBe(twips(320))
   })
 
   test("applies start values, multilevel legal formatting, and configured restarts", () => {
@@ -1000,6 +1113,27 @@ describe("paragraph layout", () => {
     )
   })
 
+  test("does not materialize a blank page for the terminal table-tail paragraph", () => {
+    const body = paragraph(
+      [{ text: "body" }],
+      { lineSpacing: { rule: "exact", value: twips(500) } },
+      "body"
+    )
+    const terminal = paragraph([{ text: "" }], {}, "terminal-empty")
+    const result = layoutDocument(
+      documentWith([body, terminal], { pageHeight: twips(800) }),
+      { metrics: fixedMetrics, includeTrace: true }
+    )
+    expect(result.displayList.pages).toHaveLength(1)
+    expect(
+      result.trace?.events.some(
+        (event) =>
+          event.kind === "page-break" &&
+          event.sourceNodeId.toString() === "terminal-empty"
+      )
+    ).toBe(false)
+  })
+
   test("degrades an oversized keep-with-next chain once with an explicit reason", () => {
     const blocks = [
       paragraph([{ text: "one" }], { keepWithNext: true }, "one"),
@@ -1068,6 +1202,209 @@ describe("paragraph layout", () => {
 })
 
 describe("table layout", () => {
+  test("responsive Fill tables consume the containing page column width", () => {
+    const base = table([["Label", "Value"]])
+    const responsive: ResolvedTable = {
+      ...base,
+      sizing: {
+        mode: "fill",
+        width: base.width,
+        columns: [
+          {
+            mode: "hug",
+            width: twips(400),
+            minWidth: null,
+            maxWidth: null,
+            allowMultiline: true,
+          },
+          {
+            mode: "fill",
+            width: twips(400),
+            minWidth: null,
+            maxWidth: null,
+            allowMultiline: true,
+          },
+        ],
+      },
+    }
+    const result = layoutDocument(documentWith([responsive]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    expect(
+      result.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { width: twips(1800) } })
+    expect(glyphRuns(result)[1]?.x).toBeGreaterThan(
+      glyphRuns(result)[0]?.x ?? 0
+    )
+  })
+
+  test("responsive Hug columns use the widest measured cell and honor max width", () => {
+    const base = table([
+      ["Widest", "x"],
+      ["n", "two"],
+    ])
+    const responsive: ResolvedTable = {
+      ...base,
+      sizing: {
+        mode: "hug",
+        width: base.width,
+        columns: [
+          {
+            mode: "hug",
+            width: twips(400),
+            minWidth: twips(200),
+            maxWidth: twips(500),
+            allowMultiline: true,
+          },
+          {
+            mode: "hug",
+            width: twips(400),
+            minWidth: null,
+            maxWidth: null,
+            allowMultiline: true,
+          },
+        ],
+      },
+    }
+    const result = layoutDocument(documentWith([responsive]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    expect(
+      result.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { width: twips(840) } })
+  })
+
+  test("treats atLeast row height as the complete authored row box", () => {
+    const border = {
+      style: "single" as const,
+      color: "#000000",
+      width: twips(20),
+      space: twips(0),
+    }
+    const base = table([["bounded"]], {
+      borders: {
+        top: border,
+        right: border,
+        bottom: border,
+        left: border,
+        insideHorizontal: border,
+        insideVertical: border,
+      },
+    })
+    const firstRow = tableRow(base)
+    const grid: ResolvedTable = {
+      ...base,
+      rows: [
+        {
+          ...firstRow,
+          height: { rule: "atLeast", value: twips(400) },
+          cells: firstRow.cells.map((cell) => ({ ...cell, blocks: [] })),
+        },
+      ],
+    }
+    const result = layoutDocument(documentWith([grid]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+
+    expect(
+      result.trace?.events.find((event) => event.kind === "table-row-fragment")
+    ).toMatchObject({ bounds: { height: twips(400) }, rowHeight: twips(400) })
+  })
+
+  test("offsets table paint, text, and trace geometry by authored indentation", () => {
+    const grid = table([["indented"]], { indentStart: twips(43) })
+    const result = layoutDocument(documentWith([grid]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+
+    expect(glyphRuns(result)[0]).toMatchObject({ x: twips(163) })
+    expect(
+      result.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { x: twips(143), width: twips(400) } })
+    expect(
+      result.trace?.events.find((event) => event.kind === "table-row-fragment")
+    ).toMatchObject({ bounds: { x: twips(143), width: twips(400) } })
+  })
+
+  test("centers and right-aligns table paint, text, and trace geometry", () => {
+    const centered = table([["centered"]], { alignment: "center" })
+    const centeredResult = layoutDocument(documentWith([centered]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    expect(glyphRuns(centeredResult)[0]).toMatchObject({ x: twips(820) })
+    expect(
+      centeredResult.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { x: twips(800), width: twips(400) } })
+    expect(
+      centeredResult.trace?.events.find(
+        (event) => event.kind === "table-row-fragment"
+      )
+    ).toMatchObject({ bounds: { x: twips(800), width: twips(400) } })
+
+    const right = table([["right"]], { alignment: "right" })
+    const rightResult = layoutDocument(documentWith([right]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    expect(glyphRuns(rightResult)[0]).toMatchObject({ x: twips(1520) })
+    expect(
+      rightResult.trace?.events.find((event) => event.kind === "table")
+    ).toMatchObject({ bounds: { x: twips(1500), width: twips(400) } })
+    expect(
+      rightResult.trace?.events.find(
+        (event) => event.kind === "table-row-fragment"
+      )
+    ).toMatchObject({ bounds: { x: twips(1500), width: twips(400) } })
+  })
+
+  test("uses direct cell padding while sibling cells inherit table padding", () => {
+    const base = table([["direct", "fallback"]])
+    const firstRow = tableRow(base)
+    const directPadding = {
+      top: twips(30),
+      right: twips(40),
+      bottom: twips(50),
+      left: twips(80),
+    }
+    const grid: ResolvedTable = {
+      ...base,
+      rows: [
+        {
+          ...firstRow,
+          cells: firstRow.cells.map((cell, index) =>
+            index === 0 ? { ...cell, cellPadding: directPadding } : cell
+          ),
+        },
+      ],
+    }
+
+    const result = layoutDocument(documentWith([grid]), {
+      metrics: fixedMetrics,
+      includeTrace: true,
+    })
+    const runs = glyphRuns(result)
+    expect(
+      new Set(
+        runs
+          .filter((run) => run.sourceNodeId === "cell-p-0-0-text-0")
+          .map((run) => run.x)
+      )
+    ).toEqual(new Set([twips(180)]))
+    expect(
+      new Set(
+        runs
+          .filter((run) => run.sourceNodeId === "cell-p-0-1-text-0")
+          .map((run) => run.x)
+      )
+    ).toEqual(new Set([twips(520)]))
+    expect(tableRow(grid).cells[1]?.cellPadding).toBeUndefined()
+  })
+
   test("lays out deterministic 2x2 geometry in normal paragraph flow", () => {
     const before = paragraph([{ text: "before" }], {}, "before")
     const grid = table([
@@ -1432,7 +1769,7 @@ describe("table layout", () => {
     expect(continuationHorizontals).toHaveLength(1)
   })
 
-  test("fails closed for conflicting semantic direct borders", () => {
+  test("resolves conflicting semantic direct borders to one stable edge", () => {
     const base = table([["a", "b"]])
     const row = base.rows[0] as ResolvedTable["rows"][number]
     const firstCell = tableCell(row)
@@ -1464,9 +1801,17 @@ describe("table layout", () => {
         },
       ],
     }
-    expect(() =>
-      layoutDocument(documentWith([conflicting]), { metrics: fixedMetrics })
-    ).toThrow("Conflicting direct borders")
+    const lines = layoutDocument(documentWith([conflicting]), {
+      metrics: fixedMetrics,
+    }).displayList.pages[0]?.items.filter(
+      (item) => item.type === "line" && item.x1 === item.x2
+    )
+    expect(lines).toHaveLength(1)
+    expect(lines?.[0]).toMatchObject({
+      type: "line",
+      width: twips(8),
+      color: "#000000",
+    })
   })
 
   test("applies exact/atLeast heights and top/center/bottom vertical alignment", () => {
@@ -1747,6 +2092,53 @@ describe("table layout", () => {
       result.trace?.events.some(
         (event) =>
           event.kind === "table-row-fragment" &&
+          (event.fragmentOffset > 0 || event.bounds.height < event.rowHeight)
+      )
+    ).toBe(false)
+  })
+
+  test("moves a row instead of leaving a padding-only leftover fragment", () => {
+    const padded = table([["abc"], ["row"]])
+    const first = tableRow(padded)
+    const second = tableRow(padded, 1)
+    // Default table padding is 20. A 3-glyph cell fits one 240-twip line, so
+    // natural row height is 280. A 488-twip page leaves 288 writable twips, so
+    // the second row has only 8 twips left after the first row — enough for
+    // part of the top padding, but not the first atomic line.
+    const result = layoutDocument(
+      documentWith(
+        [
+          {
+            ...padded,
+            rows: [first, second],
+          },
+        ],
+        { pageHeight: twips(488) }
+      ),
+      { metrics: fixedMetrics, includeTrace: true }
+    )
+    const fragments =
+      result.trace?.events.filter(
+        (event) =>
+          event.kind === "table-row-fragment" && event.sourceNodeId === "row-1"
+      ) ?? []
+    expect(result.displayList.pages).toHaveLength(2)
+    expect(fragments).toHaveLength(1)
+    expect(fragments[0]).toMatchObject({
+      pageNumber: 2,
+      fragmentOffset: twips(0),
+      rowHeight: twips(280),
+      bounds: expect.objectContaining({
+        y: twips(100),
+        height: twips(280),
+      }),
+    })
+    expect(fragments[0]).not.toHaveProperty("reason")
+    expect(
+      result.trace?.events.some(
+        (event) =>
+          event.kind === "table-row-fragment" &&
+          event.sourceNodeId === "row-1" &&
           (event.fragmentOffset > 0 || event.bounds.height < event.rowHeight)
       )
     ).toBe(false)
@@ -2267,6 +2659,64 @@ describe("Phase 6 images, sections, headers, footers, and page fields", () => {
     )
   })
 
+  test("uses first-page header/footer variants only on the first page of a section", () => {
+    const firstHeader = paragraph(
+      [{ text: "First header" }],
+      {},
+      "first-header"
+    )
+    const defaultHeader = paragraph(
+      [{ text: "Default header" }],
+      {},
+      "default-header"
+    )
+    const bodyBase = paragraph([], {}, "two-page-body")
+    const body: ResolvedParagraph = {
+      ...bodyBase,
+      children: [
+        required(paragraph([{ text: "One" }]).children[0], "Missing text"),
+        { type: "break", id: "page-break" as never, source, kind: "page" },
+        required(paragraph([{ text: "Two" }]).children[0], "Missing text"),
+      ],
+    }
+    const base = documentWith([body], {
+      headerDistance: twips(20),
+      margins: {
+        top: twips(320),
+        right: twips(100),
+        bottom: twips(100),
+        left: twips(100),
+      },
+      differentFirstPage: true,
+    })
+    const section = required(base.sections[0], "Missing section")
+    const result = layoutDocument({
+      ...base,
+      headers: [
+        { type: "header", id: "default", source, blocks: [defaultHeader] },
+        { type: "header", id: "first", source, blocks: [firstHeader] },
+      ],
+      sections: [
+        {
+          ...section,
+          defaultHeaderId: "default",
+          firstPageHeaderId: "first",
+        },
+      ],
+    })
+
+    expect(result.displayList.pages).toHaveLength(2)
+    const pageText = result.displayList.pages.map((page) =>
+      page.items
+        .filter((item) => item.type === "glyph-run")
+        .map((item) => (item.type === "glyph-run" ? item.text : ""))
+    )
+    expect(pageText[0]).toContain("First header")
+    expect(pageText[0]).not.toContain("Default header")
+    expect(pageText[1]).toContain("Default header")
+    expect(pageText[1]).not.toContain("First header")
+  })
+
   test("reserves exactly digitCount(maxPages) times the widest measured digit", () => {
     const digitMetrics: Phase1FontMetrics = {
       measureText(text) {
@@ -2471,6 +2921,105 @@ describe("Phase 6 images, sections, headers, footers, and page fields", () => {
           item.sourceNodeId === "default-footer-text-0"
       )
     ).toMatchObject({ baselineY: 3_232 })
+  })
+
+  test("uses the editor 1.35 line box for header table cells with unset line spacing", () => {
+    const insertedPadding = {
+      top: twips(0),
+      right: twips(108),
+      bottom: twips(0),
+      left: twips(108),
+    }
+    const insertedTable = (
+      rows: readonly (readonly string[])[]
+    ): ResolvedTable => {
+      const base = table(rows, { cellPadding: insertedPadding })
+      return {
+        ...base,
+        width: twips(1_600),
+        columnWidths: [twips(800), twips(800)],
+        rows: base.rows.map((row) => ({
+          ...row,
+          cells: row.cells.map((cell) => ({ ...cell, width: twips(800) })),
+        })),
+      }
+    }
+    const headerTable = insertedTable([["Page 2", "Page 3"]])
+    const page = {
+      pageWidth: twips(4_000),
+      pageHeight: twips(4_000),
+      headerDistance: twips(20),
+      footerDistance: twips(20),
+      margins: {
+        top: twips(800),
+        right: twips(100),
+        bottom: twips(800),
+        left: twips(100),
+      },
+    }
+    const bodyResult = layoutDocument(
+      documentWith([insertedTable([["Page 2", "Page 3"]])], page),
+      { metrics: fixedMetrics }
+    )
+    const base = documentWith([paragraph([{ text: "body" }], {}, "body")], page)
+    const section = required(base.sections[0], "Missing section")
+    const after = paragraph([{ text: "after" }], {}, "after-header")
+    const headerResult = layoutDocument(
+      {
+        ...base,
+        headers: [
+          { type: "header", id: "h", source, blocks: [headerTable, after] },
+        ],
+        sections: [{ ...section, defaultHeaderId: "h" }],
+      },
+      { metrics: fixedMetrics }
+    )
+    const headerGlyph = headerResult.displayList.pages[0]?.items.find(
+      (item) => item.type === "glyph-run" && item.text === "Page 2"
+    )
+    const afterGlyph = headerResult.displayList.pages[0]?.items.find(
+      (item) =>
+        item.type === "glyph-run" && item.sourceNodeId === "after-header-text-0"
+    )
+    const bodyGlyph = bodyResult.displayList.pages[0]?.items.find(
+      (item) => item.type === "glyph-run" && item.text === "Page 2"
+    )
+    expect(headerGlyph).toMatchObject({ x: twips(208), baselineY: twips(254) })
+    expect(afterGlyph).toMatchObject({ baselineY: twips(536) })
+    expect(bodyGlyph).toMatchObject({ baselineY: twips(992) })
+    const authored = {
+      ...headerTable,
+      rows: headerTable.rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => ({
+          ...cell,
+          blocks: cell.blocks.map((block) => ({
+            ...block,
+            properties: {
+              ...block.properties,
+              lineSpacing: { rule: "auto" as const, value240ths: 240 },
+            },
+          })),
+        })),
+      })),
+    }
+    const authoredResult = layoutDocument(
+      {
+        ...base,
+        headers: [
+          { type: "header", id: "h", source, blocks: [authored, after] },
+        ],
+        sections: [{ ...section, defaultHeaderId: "h" }],
+      },
+      { metrics: fixedMetrics }
+    )
+    expect(
+      authoredResult.displayList.pages[0]?.items.find(
+        (item) =>
+          item.type === "glyph-run" &&
+          item.sourceNodeId === "after-header-text-0"
+      )
+    ).toMatchObject({ baselineY: twips(452) })
   })
 
   test("shapes reusable embedded header text and decimal field glyphs only once", () => {
@@ -2894,5 +3443,63 @@ describe("bounded Word text controls", () => {
     expect(() => layoutDocument(documentWith([value]))).toThrow(
       "Word tab has no explicit left tab stop"
     )
+  })
+
+  test("flows multi-column body content and honors column breaks", () => {
+    const first = paragraph([{ text: "AAAA" }])
+    const withBreak: ResolvedParagraph = {
+      ...paragraph([{ text: "B" }]),
+      children: [
+        { type: "break", id: "col" as never, source, kind: "column" },
+        {
+          type: "text",
+          id: "b" as never,
+          source,
+          text: "BBBB",
+          style,
+        },
+      ],
+    }
+    const result = layoutDocument(
+      documentWith([first, withBreak], {
+        pageWidth: twips(2000),
+        pageHeight: twips(2000),
+        margins: {
+          top: twips(100),
+          right: twips(100),
+          bottom: twips(100),
+          left: twips(100),
+        },
+        columns: {
+          count: 2,
+          equalWidth: true,
+          space: twips(200),
+          separator: true,
+          widths: null,
+        },
+      }),
+      { metrics: fixedMetrics, includeTrace: true }
+    )
+    expect(result.displayList.pages).toHaveLength(1)
+    expect(
+      result.trace?.events.some(
+        (event) => event.reason === "manual-column-break"
+      )
+    ).toBe(true)
+    const page = result.displayList.pages[0]
+    const glyphs = page?.items.filter((item) => item.type === "glyph-run") ?? []
+    const a = glyphs.find((run) => run.text === "AAAA")
+    const b = glyphs.find((run) => run.text === "BBBB")
+    expect(a).toBeDefined()
+    expect(b).toBeDefined()
+    expect(Number(b?.x)).toBeGreaterThan(Number(a?.x))
+    expect(
+      page?.items.some(
+        (item) =>
+          item.type === "line" &&
+          item.x1 === item.x2 &&
+          Number(item.x1) > Number(a?.x ?? 0)
+      )
+    ).toBe(true)
   })
 })

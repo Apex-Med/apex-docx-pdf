@@ -14,8 +14,10 @@ import type {
   ParsedFontFace,
   ParsedGlyph,
 } from "./parser"
+import type { FontVariationOptions } from "./variation"
 
 const fontkitFaces = new WeakMap<ParsedFontFace, ReturnType<typeof create>>()
+const variationInstanceCache = new Map<string, ParsedFontFace>()
 
 function finiteMetric(value: number, name: string): number {
   if (!Number.isFinite(value)) {
@@ -52,6 +54,107 @@ function programKind(bytes: Uint8Array): FontProgramKind {
   )
 }
 
+function variationCacheKey(
+  base: ParsedFontFace,
+  settings: Readonly<Record<string, number>>
+): string {
+  const entries = Object.keys(settings)
+    .sort()
+    .map((tag) => `${tag}:${settings[tag]}`)
+    .join(",")
+  return `${base.postscriptName}\u0000${entries}`
+}
+
+function buildVariationSettings(
+  font: ReturnType<typeof create>,
+  options: FontVariationOptions
+): Readonly<Record<string, number>> | null {
+  const axes = font.variationAxes
+  if (!axes || Object.keys(axes).length === 0) return null
+  const settings: Record<string, number> = {}
+  if (options.wght !== undefined && axes.wght) {
+    settings.wght = Math.max(
+      axes.wght.min,
+      Math.min(axes.wght.max, options.wght)
+    )
+  }
+  if (options.ital !== undefined && axes.ital) {
+    settings.ital = Math.max(
+      axes.ital.min,
+      Math.min(axes.ital.max, options.ital)
+    )
+  }
+  return Object.keys(settings).length > 0 ? Object.freeze(settings) : null
+}
+
+function wrapFontkitFont(
+  font: ReturnType<typeof create>,
+  kind: FontProgramKind
+): ParsedFontFace {
+  const postscriptName = font.postscriptName
+  if (!postscriptName) {
+    throw new FontConfigurationError("The font must have a PostScript name")
+  }
+  const metrics = metricsOf(font)
+  const parsed: ParsedFontFace = Object.freeze({
+    postscriptName,
+    kind,
+    metrics,
+    hasGlyphForCodePoint(codePoint: number): boolean {
+      return font.hasGlyphForCodePoint(codePoint)
+    },
+    layout(
+      text: string,
+      _options: Readonly<{
+        direction: "ltr"
+        script: "latn"
+        language?: string
+      }>
+    ) {
+      const run = font.layout(text)
+      if (run.glyphs.length !== run.positions.length) {
+        throw new FontShapingError(
+          "fonts/shaping-boundary",
+          "fontkit returned mismatched glyph and position arrays"
+        )
+      }
+      let clusterStart = 0
+      const glyphs: ParsedGlyph[] = run.glyphs.map((glyph, index) => {
+        const position = run.positions[index]
+        if (!position) {
+          throw new FontShapingError(
+            "fonts/shaping-boundary",
+            "fontkit omitted a glyph position"
+          )
+        }
+        const unicode = String.fromCodePoint(...glyph.codePoints)
+        const clusterEnd = clusterStart + unicode.length
+        const parsedGlyph = Object.freeze({
+          glyphId: glyphId(glyph.id),
+          unicode,
+          clusterStart,
+          clusterEnd,
+          advanceX: position.xAdvance,
+          advanceY: position.yAdvance,
+          offsetX: position.xOffset,
+          offsetY: position.yOffset,
+        })
+        clusterStart = clusterEnd
+        return parsedGlyph
+      })
+      if (glyphs.map((glyph) => glyph.unicode).join("") !== text) {
+        throw new FontShapingError(
+          "fonts/shaping-boundary",
+          "fontkit did not expose a lossless left-to-right Latin cluster mapping"
+        )
+      }
+      return Object.freeze({ glyphs: Object.freeze(glyphs) })
+    },
+  })
+  fontkitFaces.set(parsed, font)
+  return parsed
+}
+
 function metricsOf(font: ReturnType<typeof create>): FontFaceMetrics {
   const unitsPerEm = finiteMetric(font.unitsPerEm, "unitsPerEm")
   if (!Number.isSafeInteger(unitsPerEm) || unitsPerEm <= 0) {
@@ -85,71 +188,39 @@ export const fontkitParserAdapter: FontParserAdapter = Object.freeze({
   parse(bytes: Uint8Array, requestedPostscriptName?: string): ParsedFontFace {
     const kind = programKind(bytes)
     const font = create(bytes, requestedPostscriptName ?? null)
-    const postscriptName = font.postscriptName ?? requestedPostscriptName
-    if (!postscriptName) {
-      throw new FontConfigurationError("The font must have a PostScript name")
-    }
-    const metrics = metricsOf(font)
-    const parsed: ParsedFontFace = Object.freeze({
-      postscriptName,
-      kind,
-      metrics,
-      hasGlyphForCodePoint(codePoint: number): boolean {
-        return font.hasGlyphForCodePoint(codePoint)
-      },
-      layout(
-        text: string,
-        _options: Readonly<{
-          direction: "ltr"
-          script: "latn"
-          language?: string
-        }>
-      ) {
-        // Latin-only, LTR input is enforced before this documented layout call.
-        const run = font.layout(text)
-        if (run.glyphs.length !== run.positions.length) {
-          throw new FontShapingError(
-            "fonts/shaping-boundary",
-            "fontkit returned mismatched glyph and position arrays"
-          )
-        }
-        let clusterStart = 0
-        const glyphs: ParsedGlyph[] = run.glyphs.map((glyph, index) => {
-          const position = run.positions[index]
-          if (!position) {
-            throw new FontShapingError(
-              "fonts/shaping-boundary",
-              "fontkit omitted a glyph position"
-            )
-          }
-          const unicode = String.fromCodePoint(...glyph.codePoints)
-          const clusterEnd = clusterStart + unicode.length
-          const parsed = Object.freeze({
-            glyphId: glyphId(glyph.id),
-            unicode,
-            clusterStart,
-            clusterEnd,
-            advanceX: position.xAdvance,
-            advanceY: position.yAdvance,
-            offsetX: position.xOffset,
-            offsetY: position.yOffset,
-          })
-          clusterStart = clusterEnd
-          return parsed
-        })
-        if (glyphs.map((glyph) => glyph.unicode).join("") !== text) {
-          throw new FontShapingError(
-            "fonts/shaping-boundary",
-            "fontkit did not expose a lossless left-to-right Latin cluster mapping"
-          )
-        }
-        return Object.freeze({ glyphs: Object.freeze(glyphs) })
-      },
-    })
-    fontkitFaces.set(parsed, font)
-    return parsed
+    return wrapFontkitFont(font, kind)
   },
 })
+
+/**
+ * Apply OpenType variation axes to a parsed face using fontkit `getVariation`.
+ * Returns the base face when no variation axes apply.
+ */
+export function getFontVariation(
+  baseFace: ParsedFontFace,
+  options: FontVariationOptions = {}
+): ParsedFontFace {
+  const font = fontkitFaces.get(baseFace)
+  if (!font?.getVariation) return baseFace
+  const settings = buildVariationSettings(font, options)
+  if (!settings) return baseFace
+  const cacheKey = variationCacheKey(baseFace, settings)
+  const cached = variationInstanceCache.get(cacheKey)
+  if (cached) return cached
+  try {
+    const varied = font.getVariation(settings)
+    const parsed = wrapFontkitFont(varied, baseFace.kind)
+    variationInstanceCache.set(cacheKey, parsed)
+    return parsed
+  } catch {
+    return baseFace
+  }
+}
+
+/** Clear variation instance cache (tests). */
+export function clearFontVariationCacheForTests(): void {
+  variationInstanceCache.clear()
+}
 
 /** Rewrites a TrueType program to the exact sorted glyph set used by one PDF. */
 export const fontkitSubsetAdapter: FontSubsetAdapter = Object.freeze({

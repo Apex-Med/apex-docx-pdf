@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Public `@apexmed/forms` headless questionnaire model, tag binding, Apex adapter, and workspace/registry FormBuilder plus FormRuntime UI.
+- Package-shipped `bind-apex-form` agent skill for mapping form answers onto DOCX template tags.
+
+### Fixed
+
+- Editor PDF export now loads the full offline six-family static catalog (via package assets or Vite-bundled `?url` imports) instead of falling back to Inter 400/500/600/700, so Thin–Black weights keep their own embedded faces.
+- Layout skips OpenType `wght` variation when the matched static face already has the requested weight, preserving exact Medium/Semibold/Black outlines in PDF.
+
+### Added
+
+- Six-family offline editor catalog with all published static weights for Inter, Instrument Sans, Instrument Serif, Geist, Geist Mono, and Bricolage Grotesque, plus a named weight slider that snaps only to each family's real Thin-through-Black inventory.
 - Bounded date/time formatter patterns: `date` now defaults to `dd-MM-yyyy`, explicit tokens can reorder the date or include 24-hour/12-hour time, and the generated playground form preserves the selected time precision in the explicit render time zone.
 - Engine compatibility version `0.0.0-phase.8`, forcing persisted render caches to miss across the current formatter, font-subsetting, table-rendering, and trace-output changes instead of reusing `phase.7` artifacts.
 - Phase 1 core vertical slice for a constrained DOCX profile: package validation, main-document paragraphs and text runs, typed inline value tags, deterministic layout, diagnostics, and searchable PDF output using built-in Helvetica.
@@ -24,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Multi-page searchable tables and deterministic PDF geometry, including source-linked fills and strokes. Styled line output resets dash state, uses round caps for dots, applies deterministic dash patterns, and represents double borders as two strokes.
 - Phase 6 engine version `0.0.0-phase.6`: static relationship-owned inline PNG/JPEG images with explicit positive dimensions, bounded decoding, stable source links, deterministic content-hash deduplication, PDF image XObjects, and PNG alpha soft masks.
 - Multiple deterministic `nextPage` sections with exact portrait/landscape page geometry and per-page PDF `MediaBox` values, inherited default headers/footers, and exact edge-relative header/footer distances (720 twips when absent).
+- Section-scoped first-page headers and footers through `w:titlePg`, including editor Insert menu authoring and DOCX/PDF round-tripping.
 - Template values, safe formatters, and bounded paragraph blocks in reusable headers and footers, plus global decimal `PAGE` and `NUMPAGES` fields materialized after pagination from a fixed maximum-page digit reservation.
 - Binary-safe testkit validation that follows classic xref offsets and declared stream lengths, checks image resources and upright transforms without scanning binary payloads as PDF syntax, and extracts searchable per-page text from workspace PDFs.
 - Phase 7 engine version `0.0.0-phase.7` with browser-visible engine and font-registry hashes for deterministic cache partitioning.
@@ -63,7 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Not yet complete
 
 - Non-canonical image tags; image URL fetching; anchored/floating, cropped, rotated, or SVG images; tagged-PDF accessibility metadata; broad image-profile/color conversion; percentage table widths, nested tables, table styles/themes, complex shading, complete Word autofit, complex-script shaping, variable-font axis instantiation, and CFF PDF embedding remain unsupported.
-- Continuous, odd-page, or even-page section breaks; first/even header variants; automatic numbering in headers/footers; and general Word field evaluation.
+- Continuous, odd-page, or even-page section breaks; even-page header variants; automatic numbering in headers/footers; and general Word field evaluation.
 - Broad licensed Microsoft Word and Google Docs-exported fixture coverage.
 - A persistent, authenticated hosted service. The current hosted playground is deliberately local-only, and the npm package set remains prerelease software.
 

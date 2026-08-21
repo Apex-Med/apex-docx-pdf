@@ -32,7 +32,7 @@ Use `bunx --bun` when a one-off package runner is required.
 
 To format supported files, run `bun run format`. Before submitting, run every check CI expects, including the Mintlify documentation check:
 
-Biome 2.5.7 owns linting and treats warnings as failures. Prettier remains the formatter; do not use Biome's formatter or reintroduce ESLint configuration.
+Biome 2.5.9 owns linting and treats warnings as failures. Prettier remains the formatter; do not use Biome's formatter or reintroduce ESLint configuration.
 
 ```bash
 bun run format:check

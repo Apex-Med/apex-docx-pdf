@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { normaliseDocxBytes, parseDocx } from "../src"
+import { normaliseDocxBytes, parseDocx, serializeDocx } from "../src"
 import { buildOneParagraphDocx } from "./helpers/docx-fixture"
 
 const STYLES_RELATIONSHIP =
@@ -19,6 +19,22 @@ function codes(result: {
   return result.diagnostics.map((entry) => entry.code)
 }
 
+function paddingValues(
+  padding:
+    | Readonly<{ top: number; right: number; bottom: number; left: number }>
+    | null
+    | undefined
+) {
+  return padding === null || padding === undefined
+    ? null
+    : {
+        top: Number(padding.top),
+        right: Number(padding.right),
+        bottom: Number(padding.bottom),
+        left: Number(padding.left),
+      }
+}
+
 function tableDocument(
   properties: string,
   grid: string,
@@ -30,7 +46,107 @@ function tableDocument(
 const COMPLETE_MARGIN = `<w:tcMar><w:top w:w="72.4" w:type="dxa"/><w:left w:w="72.4" w:type="dxa"/><w:bottom w:w="72.4" w:type="dxa"/><w:right w:w="72.4" w:type="dxa"/></w:tcMar>`
 
 describe("Word-authored table compatibility", () => {
-  test("maps inert styles, left alignment, look metadata, fractional measures, margins, and direct shading", () => {
+  test("preserves authored table indentation through normalisation and round-trip serialization", () => {
+    const result = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: tableDocument(
+          `<w:tblW w:w="1000" w:type="dxa"/><w:jc w:val="left"/><w:tblInd w:w="43.2" w:type="dxa"/>`,
+          `<w:gridCol w:w="1000"/>`,
+          `<w:tc><w:p><w:r><w:t>Indented</w:t></w:r></w:p></w:tc>`
+        ),
+      })
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const table = result.value.sections[0]?.blocks[0]
+    expect(table?.type).toBe("table")
+    if (table?.type !== "table") return
+    expect(Number(table.indentStart)).toBe(43)
+    expect(table.alignment ?? "left").toBe("left")
+
+    const roundTrip = normaliseDocxBytes(serializeDocx(result.value))
+    expect(roundTrip.ok).toBe(true)
+    if (!roundTrip.ok) return
+    const roundTripTable = roundTrip.value.sections[0]?.blocks[0]
+    expect(roundTripTable?.type).toBe("table")
+    if (roundTripTable?.type !== "table") return
+    expect(Number(roundTripTable.indentStart)).toBe(43)
+    expect(roundTripTable.alignment ?? "left").toBe("left")
+  })
+
+  test("preserves center and right table justification through normalisation and round-trip serialization", () => {
+    const centered = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: tableDocument(
+          `<w:tblW w:w="1000" w:type="dxa"/><w:jc w:val="center"/>`,
+          `<w:gridCol w:w="1000"/>`,
+          `<w:tc><w:p><w:r><w:t>Centered</w:t></w:r></w:p></w:tc>`
+        ),
+      })
+    )
+    expect(centered.ok).toBe(true)
+    expect(centered.diagnostics).toEqual([])
+    if (!centered.ok) return
+    const centeredTable = centered.value.sections[0]?.blocks[0]
+    expect(centeredTable?.type).toBe("table")
+    if (centeredTable?.type !== "table") return
+    expect(centeredTable.alignment).toBe("center")
+
+    const centeredRoundTrip = normaliseDocxBytes(serializeDocx(centered.value))
+    expect(centeredRoundTrip.ok).toBe(true)
+    if (!centeredRoundTrip.ok) return
+    const centeredOut = centeredRoundTrip.value.sections[0]?.blocks[0]
+    expect(centeredOut?.type).toBe("table")
+    if (centeredOut?.type !== "table") return
+    expect(centeredOut.alignment).toBe("center")
+
+    const right = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: tableDocument(
+          `<w:tblW w:w="1000" w:type="dxa"/><w:jc w:val="end"/>`,
+          `<w:gridCol w:w="1000"/>`,
+          `<w:tc><w:p><w:r><w:t>Right</w:t></w:r></w:p></w:tc>`
+        ),
+      })
+    )
+    expect(right.ok).toBe(true)
+    expect(right.diagnostics).toEqual([])
+    if (!right.ok) return
+    const rightTable = right.value.sections[0]?.blocks[0]
+    expect(rightTable?.type).toBe("table")
+    if (rightTable?.type !== "table") return
+    expect(rightTable.alignment).toBe("right")
+
+    const rightRoundTrip = normaliseDocxBytes(serializeDocx(right.value))
+    expect(rightRoundTrip.ok).toBe(true)
+    if (!rightRoundTrip.ok) return
+    const rightOut = rightRoundTrip.value.sections[0]?.blocks[0]
+    expect(rightOut?.type).toBe("table")
+    if (rightOut?.type !== "table") return
+    expect(rightOut.alignment).toBe("right")
+  })
+
+  test("keeps unknown table justification fail-closed", () => {
+    const result = parseDocx(
+      buildOneParagraphDocx({
+        documentXml: tableDocument(
+          `<w:tblW w:w="1000" w:type="dxa"/><w:jc w:val="both"/>`,
+          `<w:gridCol w:w="1000"/>`,
+          `<w:tc><w:p/></w:tc>`
+        ),
+      })
+    )
+    expect(result.ok).toBe(false)
+    expect(codes(result)).toContain("DOCX_UNSUPPORTED_TABLE_PROPERTY")
+    expect(
+      result.diagnostics.some((entry) =>
+        entry.message.includes("Table alignment 'both'")
+      )
+    ).toBe(true)
+  })
+
+  test("maps inert styles, left alignment, look metadata, fractional measures, per-cell margins, and direct shading", () => {
     const grid = `<w:gridCol w:w="333.46"/><w:gridCol w:w="333.46"/><w:gridCol w:w="333.46"/><w:tblGridChange w:id="7"><w:tblGrid><w:gridCol w:w="333.46"/><w:gridCol w:w="333.46"/><w:gridCol w:w="333.46"/></w:tblGrid></w:tblGridChange>`
     const cell = (fill: string, border = "") =>
       `<w:tc><w:tcPr>${COMPLETE_MARGIN}${border}<w:shd w:val="clear" w:fill="${fill}"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc>`
@@ -63,11 +179,27 @@ describe("Word-authored table compatibility", () => {
         ])
       )
     ).toEqual({
-      top: 72,
-      right: 72,
-      bottom: 72,
-      left: 72,
+      top: 0,
+      right: 115,
+      bottom: 0,
+      left: 115,
     })
+    expect(
+      table.rows[0]?.cells.map((cell) =>
+        cell.cellPadding === null || cell.cellPadding === undefined
+          ? null
+          : Object.fromEntries(
+              Object.entries(cell.cellPadding).map(([key, value]) => [
+                key,
+                Number(value),
+              ])
+            )
+      )
+    ).toEqual([
+      { top: 72, right: 72, bottom: 72, left: 72 },
+      { top: 72, right: 72, bottom: 72, left: 72 },
+      { top: 72, right: 72, bottom: 72, left: 72 },
+    ])
     expect(Number(table.rows[0]?.height?.value)).toBe(201)
     expect(table.rows[0]?.cells.map((cell) => cell.fillColor)).toEqual([
       null,
@@ -95,16 +227,66 @@ describe("Word-authored table compatibility", () => {
     expect(codes(result)).toContain("DOCX_CONTENT_LOSS")
     for (const fragment of [
       "visual formatting outside",
-      "Table alignment",
       "tblLook cannot",
       "tblGridChange",
       "Theme cell shading",
-      "Direct cell margins can be mapped",
     ]) {
       expect(
         result.diagnostics.some((entry) => entry.message.includes(fragment))
       ).toBe(true)
     }
+  })
+
+  test("preserves distinct complete margins on each cell without approximation", () => {
+    const margin = (value: number) =>
+      `<w:tcMar><w:top w:w="${value}" w:type="dxa"/><w:left w:w="${value + 1}" w:type="dxa"/><w:bottom w:w="${value + 2}" w:type="dxa"/><w:right w:w="${value + 3}" w:type="dxa"/></w:tcMar>`
+    const cell = (value: number) =>
+      `<w:tc><w:tcPr>${margin(value)}</w:tcPr><w:p/></w:tc>`
+    const result = normaliseDocxBytes(
+      buildOneParagraphDocx({
+        documentXml: tableDocument(
+          `<w:tblCellMar><w:top w:w="10" w:type="dxa"/><w:left w:w="11" w:type="dxa"/><w:bottom w:w="12" w:type="dxa"/><w:right w:w="13" w:type="dxa"/></w:tblCellMar>`,
+          `<w:gridCol w:w="500"/><w:gridCol w:w="500"/>`,
+          `${cell(20)}${cell(30)}`
+        ),
+      })
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain(
+      "DOCX_TABLE_CELL_PADDING_APPROXIMATED"
+    )
+    if (!result.ok) return
+    const table = result.value.sections[0]?.blocks[0]
+    expect(table?.type).toBe("table")
+    if (table?.type !== "table") return
+    expect(
+      table.rows[0]?.cells.map((cell) => paddingValues(cell.cellPadding))
+    ).toEqual([
+      { top: 20, right: 23, bottom: 22, left: 21 },
+      { top: 30, right: 33, bottom: 32, left: 31 },
+    ])
+    expect(paddingValues(table.cellPadding)).toEqual({
+      top: 10,
+      right: 13,
+      bottom: 12,
+      left: 11,
+    })
+
+    const roundTrip = normaliseDocxBytes(serializeDocx(result.value))
+    expect(roundTrip.ok).toBe(true)
+    if (!roundTrip.ok) return
+    const roundTripTable = roundTrip.value.sections[0]?.blocks[0]
+    expect(roundTripTable?.type).toBe("table")
+    if (roundTripTable?.type !== "table") return
+    expect(
+      roundTripTable.rows[0]?.cells.map((cell) =>
+        paddingValues(cell.cellPadding)
+      )
+    ).toEqual([
+      { top: 20, right: 23, bottom: 22, left: 21 },
+      { top: 30, right: 33, bottom: 32, left: 31 },
+    ])
   })
 
   test("rejects malformed fractional measures", () => {
@@ -161,7 +343,7 @@ describe("Word-authored table compatibility", () => {
     expect(laboratory.rows[0]?.cells[1]?.borders.top?.style).toBe("none")
   })
 
-  test("fails closed when adjacent direct borders conflict", () => {
+  test("warns and resolves when adjacent direct borders conflict", () => {
     const result = parseDocx(
       buildOneParagraphDocx({
         documentXml: tableDocument(
@@ -172,7 +354,7 @@ describe("Word-authored table compatibility", () => {
       })
     )
 
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
     expect(
       result.diagnostics.some((entry) =>
         entry.message.includes("Adjacent direct cell borders conflict")

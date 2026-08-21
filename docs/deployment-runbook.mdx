@@ -17,15 +17,31 @@ git status --short
 
 `bun run ci` includes formatting, Biome linting, TypeScript checks, the Bun test suite, the explicit seeded property/fuzz gate, exact Bun/Node/Chromium render parity, the real-application Chromium playground and automated axe smoke, Mintlify validation, release-configuration validation, the production build, and package validation. Review the worktree after the gate; a green build does not authorize deployment or publication.
 
-## 2. Required public configuration
+## 2. Required configuration
 
-The web build reads only public values:
+The web build reads these public values:
 
-| Variable          | Required for                  | Value                                                                      |
-| ----------------- | ----------------------------- | -------------------------------------------------------------------------- |
-| `VITE_CONVEX_URL` | Opt-in persistence            | The deployed Convex client URL. Omit it to keep the playground local-only. |
-| `VITE_DOCS_URL`   | Canonical documentation links | The deployed Mintlify site origin, without a trailing slash.               |
-| `VITE_SITE_URL`   | Canonical application origin  | The deployed web origin, without a trailing slash.                         |
+| Variable                     | Required for                   | Value                                                                      |
+| ---------------------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| `VITE_CONVEX_URL`            | Opt-in persistence             | The deployed Convex client URL. Omit it to keep the playground local-only. |
+| `VITE_DOCS_URL`              | Canonical documentation links  | The deployed Mintlify site origin, without a trailing slash.               |
+| `VITE_SITE_URL`              | Canonical application origin   | The deployed web origin, without a trailing slash.                         |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Signed-in `/app` and `/editor` | Clerk publishable key (`pk_test_…` or `pk_live_…`).                        |
+
+The server runtime also requires this secret. Never place it in a `VITE_*` variable or ship it to the browser:
+
+| Variable           | Required for                      | Value                                          |
+| ------------------ | --------------------------------- | ---------------------------------------------- |
+| `CLERK_SECRET_KEY` | Clerk middleware and route guards | Clerk secret key (`sk_test_…` or `sk_live_…`). |
+
+Clerk Dashboard must allow each deployed origin and the OAuth callback:
+
+- allowed origins: `http://localhost:3000`, the production site origin, verified aliases, and Preview deployment URLs
+- redirect URLs: `https://<origin>/sso-callback`
+- sign-in and sign-up: `/sign-in`
+- Google OAuth enabled if the custom sign-in flow offers Continue with Google
+
+This web-layer Clerk gate does not replace Convex identity. Persistence remains an anonymous session seam unless a later change maps Clerk users into Convex.
 
 Never place secrets in a `VITE_*` variable. The anonymous Convex session demonstrates isolation, not production authentication or tenant security.
 
@@ -45,9 +61,11 @@ Add or update each public value explicitly for Preview and Production as appropr
 bunx vercel@latest env add VITE_CONVEX_URL preview
 bunx vercel@latest env add VITE_DOCS_URL preview
 bunx vercel@latest env add VITE_SITE_URL preview
+bunx vercel@latest env add VITE_CLERK_PUBLISHABLE_KEY preview
+bunx vercel@latest env add CLERK_SECRET_KEY preview
 ```
 
-Repeat for `production` only after the production values are known. Do not copy a development Convex URL into Production and do not infer a domain or account from local state.
+Repeat for `production` only after the production values are known. Do not copy a development Convex URL or Clerk test keys into Production and do not infer a domain or account from local state.
 
 ## 4. Deploy a Preview
 

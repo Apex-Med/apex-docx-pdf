@@ -119,12 +119,13 @@ describe("template inspection", () => {
     ])
     expect(BUNDLED_FONT_PROFILE.families).toEqual([
       "Inter",
-      "Bricolage Grotesque",
       "Instrument Sans",
       "Instrument Serif",
+      "Geist",
       "Geist Mono",
+      "Bricolage Grotesque",
     ])
-    expect(BUNDLED_FONT_PROFILE.catalogVersion).toBe("apex-offline-ttf/v2")
+    expect(BUNDLED_FONT_PROFILE.catalogVersion).toBe("apex-offline-ttf/v3")
     expect(BUNDLED_FONT_PROFILE.uploadedEmbeddedFonts).toBe(false)
     expect(BUNDLED_FONT_PROFILE.aliases).toEqual([
       "Arial → Inter",

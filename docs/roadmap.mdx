@@ -28,7 +28,7 @@ Phases 1–8 form the current implemented renderer, local-only reference applica
 - Multiple deterministic `nextPage` sections with portrait/landscape page geometry and matching per-page PDF `MediaBox` values.
 - Inherited default headers/footers with exact edge-relative distances (720-twip defaults), static images, reusable template values/formatters/paragraph blocks, and global decimal `PAGE`/`NUMPAGES` fields.
 - Binary-safe workspace-PDF validation that follows classic xref offsets and stream lengths, validates upright text/image resources, and extracts searchable per-page text.
-- Explicitly excluded: non-canonical image tags, image fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, tagged-PDF accessibility metadata, continuous/odd/even breaks, first/even header variants, automatic header/footer numbering, and arbitrary fields.
+- Explicitly excluded: non-canonical image tags, image fetches, anchors/floating placement, crop, rotation, SVG, broad image profile/color conversion, tagged-PDF accessibility metadata, continuous/odd/even breaks, even-page header variants, automatic header/footer numbering, and arbitrary fields.
 
 ## Phase 7 — Implemented; hardening ongoing
 
@@ -49,6 +49,6 @@ Local evidence is implemented: hostile-input tests, a reproducible fast-check pr
 
 ### Phase 10 — Release preparation
 
-The current npm prerelease is published: all 11 packages are available at `0.1.0-next.1`, registry-only installation and imports pass, registry signatures verify, and the installed umbrella contains its agent instructions, context, skills, references, and template inspector. Every package remains bound to the protected GitHub trusted publisher. A future automated prerelease must still prove the GitHub OIDC provenance path; stable release remains gated on the complete licensed editor fixture corpus and a separate stability decision.
+The current npm prerelease is `0.1.0-next.2` and includes `@apexmed/forms` in the lockstep set, plus a `bind-apex-form` agent skill. Registry-only installation, signature audit, and a provenance-bearing OIDC publish remain the post-merge publication checklist. Stable release remains gated on the complete licensed editor fixture corpus and a separate stability decision.
 
 Each feature must enter through the staged architecture. Current focused tests and hosted smoke do not establish broad Microsoft Word fixture coverage, full Bun/Node/browser equivalence, broad image/color-profile equivalence, production authentication, persistent SaaS operation, or production readiness.

@@ -11,11 +11,11 @@ Phases 1–8 now form a working renderer, local-only reference application, and 
   The supported profile remains intentionally bounded. Canonical dynamic image
   values require explicit bytes and dimensions; image fetches, anchors/floating
   placement, crop, rotation, SVG, broad image profile/color conversion,
-  continuous/odd/even section breaks, first/even headers, automatic
-  header/footer numbering, nested tables, complete Word autofit, complex-script
-  shaping, and CFF embedding are not implemented. Phase 7 is not a broad Word,
-  cross-runtime, production-authentication, or production-readiness claim. The
-  hosted playground is verified, but it is not a persistent SaaS,
+  continuous/odd/even section breaks, even-page headers, automatic header/footer
+  numbering, nested tables, complete Word autofit, complex-script shaping, and
+  CFF embedding are not implemented. Phase 7 is not a broad Word, cross-runtime,
+  production-authentication, or production-readiness claim. The hosted
+  playground is verified, but it is not a persistent SaaS,
   production-authentication, operational-SLO, or broad compatibility claim.
 </Warning>
 
@@ -33,6 +33,9 @@ Phases 1–8 now form a working renderer, local-only reference application, and 
   </Card>
   <Card title="Template language" icon="braces" href="/template-language">
     Learn value paths, safe formatters, paragraph/table-row blocks, and limits.
+  </Card>
+  <Card title="Bind a form" icon="list-todo" href="/forms">
+    Map questionnaire answers onto template tags with `@apexmed/forms`.
   </Card>
   <Card title="Feature status" icon="list-checks" href="/supported-features">
     See exactly what the current renderer supports and what it rejects.

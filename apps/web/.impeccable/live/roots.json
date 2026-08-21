@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "appRoot": "/Users/craig/coding-projects/apex-docx-pdf/apps/web",
+  "repoRoot": "/Users/craig/coding-projects/apex-docx-pdf",
+  "contextRoot": "/Users/craig/coding-projects/apex-docx-pdf/apps/web",
+  "sessionRoot": "/Users/craig/coding-projects/apex-docx-pdf/apps/web/.impeccable/live",
+  "productPath": "/Users/craig/coding-projects/apex-docx-pdf/apps/web/PRODUCT.md",
+  "designPath": "/Users/craig/coding-projects/apex-docx-pdf/apps/web/DESIGN.md",
+  "resolvedFrom": "cwd"
+}

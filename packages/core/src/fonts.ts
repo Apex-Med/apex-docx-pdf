@@ -98,6 +98,14 @@ export type ShapeTextInput = Readonly<{
   fontSize: Twip
   direction: "ltr"
   language?: string
+  /**
+   * Optional OpenType variation axes (e.g. `wght`) so variable fonts can
+   * produce metrics that match non-static CSS weights such as 500/600.
+   */
+  variation?: Readonly<{
+    wght?: number
+    ital?: number
+  }>
 }>
 
 export type ShapedGlyph = Readonly<{
