@@ -17,6 +17,6 @@
   },
   "devDependencies": {
     "@apexmed/pdf": "workspace:*",
-    "typescript": "^6"
+    "typescript": "^7"
   }
 }
