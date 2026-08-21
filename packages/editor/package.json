@@ -7,12 +7,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/craig-bredenkamp/apex-docx-pdf.git",
+    "url": "git+https://github.com/Apex-Med/apex-docx-pdf.git",
     "directory": "packages/editor"
   },
-  "homepage": "https://github.com/craig-bredenkamp/apex-docx-pdf#readme",
+  "homepage": "https://github.com/Apex-Med/apex-docx-pdf#readme",
   "bugs": {
-    "url": "https://github.com/craig-bredenkamp/apex-docx-pdf/issues"
+    "url": "https://github.com/Apex-Med/apex-docx-pdf/issues"
   },
   "keywords": [
     "docx",

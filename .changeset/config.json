@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config@4.0.0/schema.json",
   "changelog": [
     "@changesets/changelog-github",
-    { "repo": "craig-bredenkamp/apex-docx-pdf" }
+    { "repo": "Apex-Med/apex-docx-pdf" }
   ],
   "commit": false,
   "fixed": [

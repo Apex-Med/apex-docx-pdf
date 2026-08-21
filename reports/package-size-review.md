@@ -6,19 +6,19 @@ All 12 prepared packages are in lockstep at `0.1.0-next.2`:
 
 | Package                |  Packed bytes | Packed budget | Unpacked bytes | Unpacked budget |
 | ---------------------- | ------------: | ------------: | -------------: | --------------: |
-| `apex-docx-pdf`        |        20,697 |        24,000 |         58,138 |          65,000 |
-| `@apexmed/browser`     |        16,775 |        18,000 |         62,017 |          70,000 |
-| `@apexmed/core`        |        25,787 |        28,000 |         97,122 |         110,000 |
-| `@apexmed/devtools`    |        19,949 |        21,000 |         74,732 |          80,000 |
-| `@apexmed/docx`        |       179,786 |       200,000 |        903,911 |       1,000,000 |
-| `@apexmed/engine`      |        25,446 |        28,000 |         98,603 |         110,000 |
-| `@apexmed/fonts`       |     5,526,415 |     5,800,000 |     11,218,250 |      11,500,000 |
-| `@apexmed/forms`       |        65,195 |        75,000 |        301,145 |         340,000 |
-| `@apexmed/images`      |        51,450 |        58,000 |        214,100 |         240,000 |
-| `@apexmed/layout`      |        91,863 |       105,000 |        431,546 |         480,000 |
-| `@apexmed/pdf`         |        34,770 |        40,000 |        140,175 |         165,000 |
-| `@apexmed/template`    |        50,731 |        52,000 |        234,600 |         260,000 |
-| **Public package set** | **6,108,864** | **6,700,000** | **13,834,339** |  **15,500,000** |
+| `apex-docx-pdf`        |        20,689 |        24,000 |         58,114 |          65,000 |
+| `@apexmed/browser`     |        16,767 |        18,000 |         61,993 |          70,000 |
+| `@apexmed/core`        |        25,780 |        28,000 |         97,098 |         110,000 |
+| `@apexmed/devtools`    |        19,918 |        21,000 |         74,708 |          80,000 |
+| `@apexmed/docx`        |       179,776 |       200,000 |        903,887 |       1,000,000 |
+| `@apexmed/engine`      |        25,434 |        28,000 |         98,579 |         110,000 |
+| `@apexmed/fonts`       |     5,526,395 |     5,800,000 |     11,218,226 |      11,500,000 |
+| `@apexmed/forms`       |        65,185 |        75,000 |        301,121 |         340,000 |
+| `@apexmed/images`      |        51,438 |        58,000 |        214,076 |         240,000 |
+| `@apexmed/layout`      |        91,853 |       105,000 |        431,522 |         480,000 |
+| `@apexmed/pdf`         |        34,761 |        40,000 |        140,151 |         165,000 |
+| `@apexmed/template`    |        50,720 |        52,000 |        234,576 |         260,000 |
+| **Public package set** | **6,108,716** | **6,700,000** | **13,834,051** |  **15,500,000** |
 
 The fonts tarball accounts for 11,063,599 asset bytes. Its generated catalog inventory contains the six-family static TrueType catalog across Bricolage Grotesque, Geist, Geist Mono, Instrument Sans, Instrument Serif, and Inter. The tarball gate separately requires catalog provenance plus each family's OFL file.
 
