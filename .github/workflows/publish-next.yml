@@ -37,8 +37,6 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Install npm with trusted-publisher OIDC
-        run: npm install -g npm@latest
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Install Chromium
@@ -58,6 +56,7 @@ jobs:
             sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG}"
           fi
           unset NODE_AUTH_TOKEN
+          npm install -g npm@latest
           npm --version
           for package in core docx fonts images layout template pdf engine browser devtools forms apex-docx-pdf; do
             directory="packages/$package/dist"
