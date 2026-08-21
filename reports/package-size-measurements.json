@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
-  "measuredAt": "2026-08-21T00:09:02.117Z",
+  "measuredAt": "2026-08-21T04:44:10.432Z",
   "basis": "npm pack --dry-run measurements from the current publishable dist directories",
   "packages": {
     "apex-docx-pdf": {
       "directory": "packages/apex-docx-pdf/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 20697,
-      "unpackedBytes": 58138,
+      "packedBytes": 20689,
+      "unpackedBytes": 58114,
       "entryCount": 21,
       "javascriptBytes": 191,
       "declarationBytes": 124,
@@ -18,14 +18,14 @@
         "maxPackedBytes": 24000,
         "maxUnpackedBytes": 65000
       },
-      "remainingPackedBytes": 3303,
-      "remainingUnpackedBytes": 6862
+      "remainingPackedBytes": 3311,
+      "remainingUnpackedBytes": 6886
     },
     "@apexmed/browser": {
       "directory": "packages/browser/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 16775,
-      "unpackedBytes": 62017,
+      "packedBytes": 16767,
+      "unpackedBytes": 61993,
       "entryCount": 10,
       "javascriptBytes": 11861,
       "declarationBytes": 5464,
@@ -36,14 +36,14 @@
         "maxPackedBytes": 18000,
         "maxUnpackedBytes": 70000
       },
-      "remainingPackedBytes": 1225,
-      "remainingUnpackedBytes": 7983
+      "remainingPackedBytes": 1233,
+      "remainingUnpackedBytes": 8007
     },
     "@apexmed/core": {
       "directory": "packages/core/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 25787,
-      "unpackedBytes": 97122,
+      "packedBytes": 25780,
+      "unpackedBytes": 97098,
       "entryCount": 6,
       "javascriptBytes": 10942,
       "declarationBytes": 35802,
@@ -54,14 +54,14 @@
         "maxPackedBytes": 28000,
         "maxUnpackedBytes": 110000
       },
-      "remainingPackedBytes": 2213,
-      "remainingUnpackedBytes": 12878
+      "remainingPackedBytes": 2220,
+      "remainingUnpackedBytes": 12902
     },
     "@apexmed/devtools": {
       "directory": "packages/devtools/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 19949,
-      "unpackedBytes": 74732,
+      "packedBytes": 19918,
+      "unpackedBytes": 74708,
       "entryCount": 6,
       "javascriptBytes": 16630,
       "declarationBytes": 2304,
@@ -72,14 +72,14 @@
         "maxPackedBytes": 21000,
         "maxUnpackedBytes": 80000
       },
-      "remainingPackedBytes": 1051,
-      "remainingUnpackedBytes": 5268
+      "remainingPackedBytes": 1082,
+      "remainingUnpackedBytes": 5292
     },
     "@apexmed/docx": {
       "directory": "packages/docx/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 179786,
-      "unpackedBytes": 903911,
+      "packedBytes": 179776,
+      "unpackedBytes": 903887,
       "entryCount": 6,
       "javascriptBytes": 275857,
       "declarationBytes": 12634,
@@ -90,14 +90,14 @@
         "maxPackedBytes": 200000,
         "maxUnpackedBytes": 1000000
       },
-      "remainingPackedBytes": 20214,
-      "remainingUnpackedBytes": 96089
+      "remainingPackedBytes": 20224,
+      "remainingUnpackedBytes": 96113
     },
     "@apexmed/engine": {
       "directory": "packages/engine/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 25446,
-      "unpackedBytes": 98603,
+      "packedBytes": 25434,
+      "unpackedBytes": 98579,
       "entryCount": 6,
       "javascriptBytes": 26242,
       "declarationBytes": 620,
@@ -108,14 +108,14 @@
         "maxPackedBytes": 28000,
         "maxUnpackedBytes": 110000
       },
-      "remainingPackedBytes": 2554,
-      "remainingUnpackedBytes": 11397
+      "remainingPackedBytes": 2566,
+      "remainingUnpackedBytes": 11421
     },
     "@apexmed/fonts": {
       "directory": "packages/fonts/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 5526415,
-      "unpackedBytes": 11218250,
+      "packedBytes": 5526395,
+      "unpackedBytes": 11218226,
       "entryCount": 84,
       "javascriptBytes": 42728,
       "declarationBytes": 6079,
@@ -126,14 +126,14 @@
         "maxPackedBytes": 5800000,
         "maxUnpackedBytes": 11500000
       },
-      "remainingPackedBytes": 273585,
-      "remainingUnpackedBytes": 281750
+      "remainingPackedBytes": 273605,
+      "remainingUnpackedBytes": 281774
     },
     "@apexmed/forms": {
       "directory": "packages/forms/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 65195,
-      "unpackedBytes": 301145,
+      "packedBytes": 65185,
+      "unpackedBytes": 301121,
       "entryCount": 6,
       "javascriptBytes": 76275,
       "declarationBytes": 22106,
@@ -144,14 +144,14 @@
         "maxPackedBytes": 75000,
         "maxUnpackedBytes": 340000
       },
-      "remainingPackedBytes": 9805,
-      "remainingUnpackedBytes": 38855
+      "remainingPackedBytes": 9815,
+      "remainingUnpackedBytes": 38879
     },
     "@apexmed/images": {
       "directory": "packages/images/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 51450,
-      "unpackedBytes": 214100,
+      "packedBytes": 51438,
+      "unpackedBytes": 214076,
       "entryCount": 6,
       "javascriptBytes": 56262,
       "declarationBytes": 5488,
@@ -162,14 +162,14 @@
         "maxPackedBytes": 58000,
         "maxUnpackedBytes": 240000
       },
-      "remainingPackedBytes": 6550,
-      "remainingUnpackedBytes": 25900
+      "remainingPackedBytes": 6562,
+      "remainingUnpackedBytes": 25924
     },
     "@apexmed/layout": {
       "directory": "packages/layout/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 91863,
-      "unpackedBytes": 431546,
+      "packedBytes": 91853,
+      "unpackedBytes": 431522,
       "entryCount": 6,
       "javascriptBytes": 127656,
       "declarationBytes": 2680,
@@ -180,14 +180,14 @@
         "maxPackedBytes": 105000,
         "maxUnpackedBytes": 480000
       },
-      "remainingPackedBytes": 13137,
-      "remainingUnpackedBytes": 48454
+      "remainingPackedBytes": 13147,
+      "remainingUnpackedBytes": 48478
     },
     "@apexmed/pdf": {
       "directory": "packages/pdf/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 34770,
-      "unpackedBytes": 140175,
+      "packedBytes": 34761,
+      "unpackedBytes": 140151,
       "entryCount": 6,
       "javascriptBytes": 37472,
       "declarationBytes": 872,
@@ -198,14 +198,14 @@
         "maxPackedBytes": 40000,
         "maxUnpackedBytes": 165000
       },
-      "remainingPackedBytes": 5230,
-      "remainingUnpackedBytes": 24825
+      "remainingPackedBytes": 5239,
+      "remainingUnpackedBytes": 24849
     },
     "@apexmed/template": {
       "directory": "packages/template/dist",
       "version": "0.1.0-next.2",
-      "packedBytes": 50731,
-      "unpackedBytes": 234600,
+      "packedBytes": 50720,
+      "unpackedBytes": 234576,
       "entryCount": 6,
       "javascriptBytes": 64352,
       "declarationBytes": 2803,
@@ -216,19 +216,19 @@
         "maxPackedBytes": 52000,
         "maxUnpackedBytes": 260000
       },
-      "remainingPackedBytes": 1269,
-      "remainingUnpackedBytes": 25400
+      "remainingPackedBytes": 1280,
+      "remainingUnpackedBytes": 25424
     }
   },
   "aggregate": {
-    "packedBytes": 6108864,
-    "unpackedBytes": 13834339,
+    "packedBytes": 6108716,
+    "unpackedBytes": 13834051,
     "budget": {
       "maxPackedBytes": 6700000,
       "maxUnpackedBytes": 15500000
     },
-    "remainingPackedBytes": 591136,
-    "remainingUnpackedBytes": 1665661
+    "remainingPackedBytes": 591284,
+    "remainingUnpackedBytes": 1665949
   },
   "fontCatalog": {
     "families": [

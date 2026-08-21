@@ -80,7 +80,7 @@ if (
 }
 if (
   config.changelog[0] !== "@changesets/changelog-github" ||
-  config.changelog[1]?.repo !== "craig-bredenkamp/apex-docx-pdf"
+  config.changelog[1]?.repo !== "Apex-Med/apex-docx-pdf"
 ) {
   throw new Error(
     "Changesets must generate GitHub-linked package changelogs for the version workflow"

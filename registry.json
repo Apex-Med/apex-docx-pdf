@@ -1,7 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry.json",
   "name": "apexmed",
-  "homepage": "https://github.com/craig-bredenkamp/apex-docx-pdf",
+  "homepage": "https://github.com/Apex-Med/apex-docx-pdf",
   "items": [
     {
       "name": "form-builder",
