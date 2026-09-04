@@ -55,6 +55,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tsup": "8.5.1",
-    "typescript": "^6"
+    "typescript": "^7"
   }
 }
